@@ -1,0 +1,35 @@
+---
+/**
+ * Drobečky — vizuální i jako BreadcrumbList JSON-LD. Starý web neměl ani jedno.
+ */
+import { safeJsonLd } from '../lib/jsonld';
+import { SITE_URL } from '../lib/seo';
+
+interface Crumb { label: string; href?: string }
+interface Props { items: Crumb[] }
+const { items } = Astro.props;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'BreadcrumbList',
+	itemListElement: [{ label: 'Home', href: '/' }, ...items].map((c, i) => ({
+		'@type': 'ListItem',
+		position: i + 1,
+		name: c.label,
+		...(c.href ? { item: new URL(c.href, SITE_URL).toString() } : {}),
+	})),
+};
+---
+<nav aria-label="Breadcrumb" class="mb-4 text-sm text-ink-400">
+	<ol class="flex flex-wrap items-center gap-1.5">
+		<li><a href="/" class="hover:text-white">Home</a></li>
+		{items.map((c) => (
+			<li class="flex items-center gap-1.5">
+				<span aria-hidden="true">/</span>
+				{c.href ? <a href={c.href} class="hover:text-white">{c.label}</a>
+				        : <span class="text-ink-200">{c.label}</span>}
+			</li>
+		))}
+	</ol>
+</nav>
+<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} />

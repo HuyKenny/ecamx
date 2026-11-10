@@ -1,0 +1,75 @@
+---
+/**
+ * Rozcestník zemí.
+ *
+ * **Proč vzniká:** každá stránka `/country/{kód}/` měla drobeček „Countries"
+ * bez odkazu a `/country/` dávalo 404 z catch-allu — stejná díra, jakou do
+ * 19. 8. mělo `/site/`. Tohle je oprava té díry, ne nová sekce.
+ *
+ * Počty jsou jen ty, které už nese faseta (země z feedu). Modelky bez země
+ * se nikam nepřipisují, proto součet nesedí na počet všech živých — a to je
+ * správně, ne chyba.
+ */
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { FACETS, MODELS, countryName } from '../../lib/data';
+import { countriesHubSeo, SITE_URL, fmt } from '../../lib/seo';
+import { safeJsonLd } from '../../lib/jsonld';
+
+const countries = [...FACETS.countries].sort((a, b) => b.count - a.count);
+const withCountry = countries.reduce((sum, c) => sum + c.count, 0);
+const seo = countriesHubSeo(countries.length, withCountry);
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: 'Live cams by country',
+	description: seo.description,
+	url: `${SITE_URL}/country/`,
+	mainEntity: {
+		'@type': 'ItemList',
+		numberOfItems: countries.length,
+		itemListElement: countries.map((c, i) => ({
+			'@type': 'ListItem',
+			position: i + 1,
+			name: countryName(c.slug),
+			url: `${SITE_URL}/country/${c.slug}/`,
+		})),
+	},
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+	<Breadcrumbs items={[{ label: 'Countries' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Live cams by country</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{fmt(withCountry)} of the {fmt(MODELS.length)} models live right now say which country
+		they broadcast from — here they are, grouped by it. Models who do not list a country
+		are still in every other grid, just not on these pages.
+	</p>
+
+	<ul class="mt-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+		{countries.map((c) => (
+			<li>
+				<a href={`/country/${c.slug}/`} class="pill flex w-full justify-between">
+					<span>{countryName(c.slug)}</span>
+					<span class="text-ink-400 tabular-nums">{fmt(c.count)}</span>
+				</a>
+			</li>
+		))}
+	</ul>
+
+	<section class="mt-10" aria-labelledby="browse-h">
+		<h2 id="browse-h" class="mb-3 text-lg font-bold">Browse another way</h2>
+		<div class="flex flex-wrap gap-2">
+			<a href="/girls/" class="pill">Cam girls</a>
+			<a href="/guys/" class="pill">Guys</a>
+			<a href="/couples/" class="pill">Couples</a>
+			<a href="/trans/" class="pill">Trans</a>
+			<a href="/cams/" class="pill">All categories</a>
+			<a href="/site/" class="pill">Cam sites compared</a>
+			<a href="/models/" class="pill">A–Z directory</a>
+		</div>
+	</section>
+</Layout>

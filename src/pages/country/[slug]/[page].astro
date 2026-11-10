@@ -1,0 +1,29 @@
+---
+/** Země, stránka 2+. */
+import GridPage from '../../../components/GridPage.astro';
+import { FACETS, allInCountry, countryName, countryPhrase, gridWindow } from '../../../lib/data';
+import { GRID, gridPageCount } from '../../../lib/paging';
+
+export function getStaticPaths() {
+	const out = [];
+	for (const c of FACETS.countries) {
+		const pages = gridPageCount(allInCountry(c.slug).length, GRID);
+		for (let n = 2; n <= pages; n++) {
+			out.push({ params: { slug: c.slug, page: String(n) }, props: { facet: c } });
+		}
+	}
+	return out;
+}
+
+const { facet } = Astro.props;
+const name = countryName(facet.slug);
+const win = gridWindow(allInCountry(facet.slug), Number(Astro.params.page), GRID);
+---
+<GridPage
+	heading={`${name} Sex Cams`}
+	base={`/country/${facet.slug}/`}
+	win={win}
+	visible={GRID.visible}
+	crumbs={[{ label: name, href: `/country/${facet.slug}/` }]}
+	countLabel={`models from ${countryPhrase(name)}`}
+/>

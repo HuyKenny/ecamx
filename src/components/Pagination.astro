@@ -1,0 +1,63 @@
+---
+/**
+ * Stránkování mřížek. Za poslední kartou do 18. 8. nebylo nic — homepage
+ * hlásila 8 168 živých modelek a ukazovala 30, zbytek katalogu byl pro
+ * návštěvníka nedosažitelný.
+ *
+ * Stránkuje se SEGMENTEM v cestě (`/cams/bbw/2/`), ne query parametrem:
+ * robots.txt má `Disallow: /*?`, takže `?page=2` by crawler nikdy nenavštívil
+ * a odkazy na hlubší stránky by byly slepé.
+ *
+ * `base` je URL stránky 1 (s koncovým lomítkem) — stránka 1 zůstává na své
+ * původní adrese a `/1/` se negeneruje, aby nevznikla druhá URL s týmž obsahem.
+ */
+import { fmt } from '../lib/seo';
+
+interface Props {
+	base: string;
+	/**
+	 * Prefix stránek 2+, když se liší od `base`. Homepage je `/` na stránce 1,
+	 * ale `/page/2/` dál — bez tohohle by odkaz mířil na `/2/`.
+	 */
+	pageBase?: string;
+	page: number;
+	pages: number;
+	from: number;
+	to: number;
+	total: number;
+	/** Popis toho, co se počítá — „live cams", „models from Colombia". */
+	label?: string;
+}
+const { base, pageBase = base, page, pages, from, to, total, label = 'live cams' } = Astro.props;
+
+const href = (n: number) => (n <= 1 ? base : `${pageBase}${n}/`);
+
+/**
+ * Okno čísel kolem aktuální stránky. Vypsat všech 46 stránek homepage by byl
+ * odkazový sklad; první a poslední jsou vždy vidět, ať se dá skočit na konec.
+ */
+const window = 2;
+const nums: number[] = [];
+for (let n = 1; n <= pages; n++) {
+	if (n === 1 || n === pages || Math.abs(n - page) <= window) nums.push(n);
+}
+---
+{pages > 1 && (
+	<nav class="mt-8 flex flex-col items-center gap-3" aria-label="Pagination">
+		<p class="text-sm text-ink-400">
+			Showing {fmt(from)}–{fmt(to)} of {fmt(total)} {label}
+		</p>
+		<div class="flex flex-wrap items-center justify-center gap-1.5">
+			{page > 1 && <a href={href(page - 1)} rel="prev" class="pill">‹ Prev</a>}
+			{nums.map((n, i) => (
+				<>
+					{i > 0 && n - nums[i - 1] > 1 && <span class="px-1 text-ink-600">…</span>}
+					{n === page
+						? <span class="pill bg-accent text-white" aria-current="page">{n}</span>
+						: <a href={href(n)} class="pill">{n}</a>}
+				</>
+			))}
+			{page < pages && <a href={href(page + 1)} rel="next" class="pill">Next ›</a>}
+		</div>
+	</nav>
+)}

@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ecamx",
+  "compatibility_date": "2026-08-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // POZOR (poučka z vian/docs/DEPLOYMENT.md): @astrojs/cloudflare v14 negeneruje
+  // deploy z tohoto souboru. Build vyrobí dist/server/wrangler.json (sloučený
+  // config) a deployuje/preview se TEN:
+  //   astro build && wrangler deploy -c dist/server/wrangler.json
+  // Blok env.production se do generovaného configu nepropíše → vše na top-level.
+  "routes": [
+    { "pattern": "ecamx.com", "custom_domain": true },
+    { "pattern": "www.ecamx.com", "custom_domain": true }
+  ],
+
+  "assets": { "binding": "ASSETS" },
+
+  // Registry modelek NEMÁ binding — čte/zapisuje se jen při buildu přes KV REST
+  // API (viz docs/DECISIONS.md D3), takže Worker k němu za běhu nepotřebuje přístup.
+
+  "observability": { "enabled": true }
+}

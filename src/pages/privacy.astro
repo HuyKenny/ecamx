@@ -1,0 +1,152 @@
+---
+import TextPage from '../layouts/TextPage.astro';
+import { THUMBNAIL_HOSTS, NETWORK_LABELS, FACETS } from '../lib/data';
+---
+<TextPage
+	title="Privacy Policy | eCamx"
+	description="What eCamx collects (almost nothing), what third-party cam platforms collect when you view an embedded stream, and how to control it."
+	heading="Privacy Policy"
+	updated="19 August 2026"
+>
+	<p>
+		Short version: eCamx is a static website. We do not ask you to register and
+		we do not run advertising trackers. We do use Google Analytics to count
+		visits, which sets a cookie — and if you are in the EU, the EEA or the UK,
+		nothing analytics-related loads until you press <em>Accept &amp; continue</em>
+		on the notice at the top. The embedded players from cam platforms are a
+		different story — read on.
+	</p>
+
+	<h2>What eCamx collects</h2>
+	<ul>
+		<li>
+			<strong>No account data.</strong> There is nothing to sign up for.
+		</li>
+		<li>
+			<strong>Google Analytics.</strong> We use Google Analytics 4 (measurement
+			ID <code>G-JSSZP2XFBL</code>) to see how many people visit, which pages
+			they open, and which parts of the site people actually use — which cam
+			site and which button a click went to, whether a player was started, and
+			whether a listing looked empty. It sets its own cookies in your browser
+			and sends Google the page URL, your approximate location, and basic device
+			and browser details. Per Google's documentation, Analytics 4 does not log
+			or store IP addresses. <strong>Google Signals is switched off</strong> on
+			this property, so your activity here is never joined to a Google account
+			or used to build an advertising profile. We do not use Analytics for
+			advertising or remarketing, we do not combine it with any other data, and
+			we only ever look at aggregate numbers. See
+			<a href="https://policies.google.com/privacy" rel="nofollow noopener" target="_blank">Google's privacy policy</a>.
+			If you would rather not be counted, any content blocker or Google's own
+			<a href="https://tools.google.com/dlpage/gaoptout" rel="nofollow noopener" target="_blank">opt-out add-on</a>
+			stops it, and the rest of the site keeps working normally.
+		</li>
+		<li>
+			<strong>Your choice about analytics.</strong> Visitors in the EU, the EEA
+			and the UK are asked first: the notice at the top of the page offers
+			<em>Accept &amp; continue</em> and <em>Essential only</em>, both the same
+			size, and <strong>until you pick one, the Google Analytics library is not
+			loaded at all</strong> — no cookie, no request, not even a cookieless one.
+			Choosing <em>Essential only</em> keeps the whole site working; the only
+			difference is that we do not count your visit. The choice is remembered in
+			your browser's local storage under <code>ecamx-consent</code> and in a
+			cookie of the same name, so clearing site data asks again. Outside those
+			regions Analytics loads with the disclosure above and the opt-out options
+			in it; we work out which case applies from your browser's time zone, and
+			when we cannot read it we treat you as needing to be asked.
+		</li>
+		<li>
+			<strong>Counting clicks on our own server.</strong> When you press a button
+			that leaves for a cam site, the request passes through
+			<code>ecamx.com/go/…</code> on our own server, and we count it there as
+			well as in your browser. The reason is honest and worth stating: content
+			blockers stop the Google Analytics library for a large share of visitors,
+			so browser-side counting alone tells us far less than it looks. The
+			server-side count carries the cam site's name and which button was pressed
+			— never the page you came from, and never your IP address. It uses a random
+			identifier we store in a cookie called <code>ecamx_cid</code> so that
+			repeat clicks from one browser are not counted as new people; it is not
+			linked to anything else and it tells us nothing about who you are.
+			<strong>This follows the same choice as above:</strong> if you picked
+			<em>Essential only</em>, or you are in the EU, the EEA or the UK and have
+			not chosen, the server sends nothing and stores no identifier.
+		</li>
+		<li>
+			<strong>One local preference.</strong> If you dismiss the age notice, that
+			choice is stored in your browser's local storage so it stays dismissed.
+			It never leaves your device and we cannot read it.
+		</li>
+		<li>
+			<strong>Standard server logs.</strong> Our host, Cloudflare, processes
+			request metadata (IP address, user agent, requested URL) to serve the site
+			and protect it from abuse. See
+			<a href="https://www.cloudflare.com/privacypolicy/" rel="nofollow noopener" target="_blank">Cloudflare's privacy policy</a>.
+		</li>
+	</ul>
+
+	<h2>What third parties collect</h2>
+	<p>
+		This is the part that matters. When a page loads, your browser connects
+		directly to the cam platform that hosts the stream and to its image servers.
+		Those connections are between you and them — eCamx is not in the middle and
+		cannot see or control what they do.
+	</p>
+	<p>
+		Those platforms will typically set their own cookies, log your IP address,
+		and may track you across sites. They are:
+	</p>
+	<ul>
+		{FACETS.networks.map((n) => <li>{NETWORK_LABELS[n.slug]}</li>)}
+	</ul>
+	<p>
+		Thumbnail images load from their content delivery networks, including
+		{' '}{THUMBNAIL_HOSTS.slice(0, 6).join(', ')} and similar hosts. If you click
+		through to a platform, that platform's privacy policy governs everything that
+		happens next.
+	</p>
+
+	<h3>Third-party scripts</h3>
+	<p>
+		Apart from Google Analytics above, eCamx loads no third-party script. Until
+		28 August 2026 Amateur.tv model pages ran a player script from cdn.a00s.net;
+		it is gone, and those pages now show a preview image and a link instead.
+	</p>
+
+	<h3>BongaCams player</h3>
+	<p>
+		BongaCams model pages play the stream in our own video player, which fetches
+		the video directly from BongaCams' content delivery network
+		(<strong>bcvcdn.com</strong>). If the address we hold has expired, your
+		browser asks our server for a fresh one and that request passes your IP
+		address on to BongaCams, the same as loading any image from them would.
+	</p>
+
+	<h2>Affiliate links</h2>
+	<p>
+		Links from eCamx to cam platforms carry an affiliate identifier. If you sign
+		up or spend money there, we may receive a commission. The identifier tells
+		the platform the visit came from us; it does not tell us who you are.
+		You pay nothing extra.
+	</p>
+
+	<h2>Your rights</h2>
+	<p>
+		Under the GDPR and similar laws you have the right to access, correct, and
+		erase personal data held about you, and to object to its processing. Since we
+		hold no personal data beyond transient server logs, in practice there is
+		usually nothing for us to return or delete — but you are welcome to ask at
+		<a href="mailto:info@ecamx.com">info@ecamx.com</a>. For data held by a
+		cam platform, you must contact that platform directly.
+	</p>
+
+	<h2>Blocking third-party content</h2>
+	<p>
+		If you would rather not connect to the cam platforms at all, block
+		third-party cookies and iframes in your browser settings, or use a content
+		blocker. The directory pages will still work; the embedded players will not.
+	</p>
+
+	<h2>Changes</h2>
+	<p>
+		We will update the date at the top of this page when this policy changes.
+	</p>
+</TextPage>

@@ -1,0 +1,206 @@
+---
+/**
+ * „Tvoje modelky" — osobní stránka.
+ *
+ * **Je `noindex` a není v sitemapě**, a to schválně: pro crawlera je prázdná
+ * (obsah je v `localStorage` konkrétního prohlížeče), takže indexovat ji nemá co.
+ * Hodnotu má výhradně pro vracejícího se návštěvníka.
+ *
+ * Co tu dělá to, co jedna cam síť neumí: **„její pokoj na Chaturbate je zhasnutý,
+ * ale právě teď vysílá na CamSodě."** Sítě navzájem nevidí; my držíme všech sedm
+ * a máme spočítané, které nicky patří k sobě (`src/lib/cross-network.ts`).
+ *
+ * Živý stav se bere existujícím `/api/online/[network]`, jen pro sítě, které
+ * v seznamu opravdu jsou. **Žádná nová dynamická route** — nová route pod
+ * `/api/` by ukrajovala z okna rate limitu, který chrání vydělávající `/go/`
+ * (D49, past 51).
+ *
+ * Zemi a dvojče si stránka bere z **indexu finderu** (`/search/idx.txt`,
+ * 123 kB brotli, cachovaný a často už stažený). První verze vkládala katalog
+ * přímo do HTML a měla by **~1 MB** — 13 000 řádků × 8 polí. Index má přesně
+ * ta data a je společný, takže se nemá co rozejít (D24).
+ *
+ * **Rozvrh tu zatím není:** `hours` v indexu nejsou a `usualHours()` dnes mlčí
+ * u 100 % katalogu (max 7 vzorků z 12). Až se rozsvítí (~26.–27. 8.), přidá se
+ * samostatným souborem `/search/hours.txt`, ne nafouknutím téhle stránky.
+ */
+import Layout from '../layouts/Layout.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import { SITE_NAME } from '../lib/seo';
+---
+<Layout
+	title={`Your models | ${SITE_NAME}`}
+	description="The cam models you follow, and which of the seven sites each one is live on right now."
+	noindex={true}
+>
+	<Breadcrumbs items={[{ label: 'Your models' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Your models</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		Follow a model once and we watch every cam site we cover for her. No account, nothing
+		leaves your browser — the list lives on this device only.
+	</p>
+
+	{/*
+	  Prázdný stav i seznam jsou v HTML od začátku a přepíná se mezi nimi třídou
+	  na <html> z blokujícího skriptu — nic se nezjevuje po dopadu stránky, takže
+	  CLS zůstává 0 (past 52).
+	*/}
+	<div class="watch-empty mt-8 max-w-2xl rounded border border-ink-800 bg-ink-900 p-5">
+		<h2 class="text-lg font-bold">You are not following anyone yet</h2>
+		<p class="mt-2 text-sm leading-relaxed text-ink-200">
+			Open any model's page and press <strong>Follow</strong>. She will show up here with
+			the site she is live on — and when her usual room is dark but she is broadcasting
+			somewhere else under the same name, this page will point you at the live one.
+			No cam site can do that, because none of them can see the others.
+		</p>
+		<p class="mt-4 flex flex-wrap gap-2 text-sm">
+			<a href="/finder/" class="pill">Find a model by name</a>
+			<a href="/girls/" class="pill">Browse who is live now</a>
+		</p>
+	</div>
+
+	<div class="watch-list mt-6" data-watch-page>
+		<p class="text-sm text-ink-400" data-watch-status role="status" aria-live="polite">Loading your list…</p>
+		<ul class="mt-3 space-y-2" data-watch-rows></ul>
+		<p class="mt-6 text-xs text-ink-500">
+			Live status is checked against the cam sites when you open this page. Everything
+			else — where she also streams, when we usually see her online — is from our own
+			measurement, refreshed every two hours.
+		</p>
+	</div>
+
+	<script>
+		import { liveFor, readWatch, watchedNetworks, toggleWatch } from '../lib/watchlist';
+		import { loadIndex, slugifyNick, type Idx } from '../lib/search-index-client';
+
+		const list = readWatch();
+		const status = document.querySelector<HTMLElement>('[data-watch-status]')!;
+		const out = document.querySelector<HTMLUListElement>('[data-watch-rows]')!;
+
+		function add(parent: HTMLElement, ...bits: Array<string | Node>): void {
+			for (const b of bits) parent.appendChild(typeof b === 'string' ? document.createTextNode(b) : b);
+		}
+		function link(href: string, text: string, cls: string): HTMLAnchorElement {
+			const a = document.createElement('a');
+			a.href = href; a.textContent = text; a.className = cls;
+			return a;
+		}
+
+		async function render(): Promise<void> {
+			if (!list.length) { status.textContent = ''; return; }
+			status.textContent = `Checking ${list.length} model${list.length === 1 ? '' : 's'} against the cam sites…`;
+
+			// Index je „nice to have": bez něj stránka pořád ukáže, kdo je live —
+			// jen neřekne zemi ani „vysílá jinde".
+			let idx: Idx | null = null;
+			try { idx = await loadIndex(); } catch { idx = null; }
+
+			const nets = watchedNetworks(list);
+			// Dvojče může být na síti, kterou jinak nesledujeme — bez ní by se
+			// „vysílá jinde" nikdy nedozvěděli.
+			const twinRows = new Map<string, number>();
+			if (idx) {
+				for (const w of list) {
+					const row = idx.rowOfPage(w.page);
+					if (row < 0) continue;
+					const twin = idx.twins(row)[0];
+					if (twin === undefined) continue;
+					twinRows.set(w.page, twin);
+					const tn = idx.network(twin);
+					if (!nets.includes(tn)) nets.push(tn);
+				}
+			}
+
+			// Stahování, dedup a 60s cache jsou v `liveFor()` — tentýž kód používá
+			// odznak v hlavičce, takže se feed nestáhne dvakrát na jedné stránce.
+			const slugs = [...new Set([
+				...list.map((w) => slugifyNick(w.username)),
+				...[...twinRows.values()].map((r) => slugifyNick(idx!.nick(r))),
+			])];
+			const live = await liveFor(nets, slugs);
+			const viewersOf = (net: string, nick: string) => live.viewers(net, slugifyNick(nick));
+
+			// Živé první — kdo tuhle stránku otevře, chce vidět, na co kliknout.
+			const ordered = [...list].sort((a, b) =>
+				(viewersOf(a.network, a.username) !== undefined ? 0 : 1)
+				- (viewersOf(b.network, b.username) !== undefined ? 0 : 1));
+
+			out.replaceChildren();
+			let liveCount = 0;
+			for (const w of ordered) {
+				const li = document.createElement('li');
+				li.className = 'watch-row';
+				add(li, link(`/live/${w.page}/`, w.username, 'watch-nick'));
+
+				const viewers = viewersOf(w.network, w.username);
+				const badge = document.createElement('span');
+				if (viewers !== undefined) {
+					liveCount++;
+					badge.className = 'badge bg-live';
+					badge.textContent = viewers ? `Live · ${viewers.toLocaleString('en-US')} watching` : 'Live';
+				} else if (live.truncated(w.network)) {
+					// Feed dohlédne jen na prvních N pokojů; chybět v něm
+					// neznamená být offline (D11).
+					badge.className = 'badge bg-ink-700';
+					badge.textContent = 'Live at last check';
+				} else {
+					badge.className = 'badge bg-ink-700';
+					badge.textContent = 'Offline';
+				}
+				add(li, ' ', badge);
+
+				const row = idx ? idx.rowOfPage(w.page) : -1;
+				const meta = document.createElement('span');
+				meta.className = 'watch-meta';
+				const bits = [row >= 0 ? idx!.networkLabel(row) : w.network];
+				if (row >= 0 && idx!.country(row)) bits.push(idx!.country(row));
+				meta.textContent = bits.join(' · ');
+				add(li, ' ', meta);
+
+				// Tohle je celý smysl téhle stránky: jedna síť to říct neumí.
+				const twin = twinRows.get(w.page);
+				if (viewers === undefined && twin !== undefined && idx) {
+					const tLive = viewersOf(idx.network(twin), idx.nick(twin));
+					if (tLive !== undefined) {
+						add(li, ' ', link(
+							`/live/${idx.page(twin)}/`,
+							`live now on ${idx.networkLabel(twin)} →`,
+							'watch-elsewhere',
+						));
+					}
+				}
+
+				if (viewers !== undefined) {
+					add(li, ' ', link(
+						`/go/${w.network}/${encodeURIComponent(w.username)}/?p=watchlist`,
+						'Chat →', 'watch-cta',
+					));
+				}
+
+				const drop = document.createElement('button');
+				drop.type = 'button';
+				drop.className = 'watch-drop';
+				drop.textContent = 'Unfollow';
+				drop.addEventListener('click', () => {
+					toggleWatch({ page: w.page, network: w.network, username: w.username });
+					li.remove();
+					if (!out.children.length) location.reload();
+				});
+				add(li, ' ', drop);
+				out.appendChild(li);
+			}
+
+			// Jedna sledovaná modelka je běžný stav, a „None of your 1 are live"
+			// je věta, kterou by nikdo nenapsal.
+			const none = list.length === 1
+				? 'She is not live right now'
+				: `None of your ${list.length} are live right now`;
+			status.textContent = liveCount
+				? `${liveCount} of your ${list.length} are live right now.`
+				: `${none} — we check again whenever you open this page.`;
+		}
+
+		void render();
+	</script>
+</Layout>

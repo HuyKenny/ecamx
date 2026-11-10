@@ -1,0 +1,36 @@
+node_modules/
+dist/
+.astro/
+.wrangler/
+
+# runtime secrets — nikdy do gitu (viz ~/ai/CLAUDE.md)
+.dev.vars
+.env
+!.dev.vars.example
+!.env.example
+
+# generováno syncem při buildu
+src/data/*.json
+!src/data/.gitkeep
+
+# sestavuje scripts/build-redirects.ts ze seed/legacy-redirects.txt + gone.json
+public/_redirects
+
+# píše sync: které modelky u nás mají stránku (záchranné karty, D68)
+public/live-pages.json
+public/indexable-pages.txt
+# mapa přesměrování jako shardy pro Worker (píše sync, D76)
+public/gone/
+
+# velké exporty z WP (jednorázový seed) — drží se lokálně, ne v gitu
+seed/models-seed.tsv
+seed/terms.tsv
+# runtime stav — v produkci žije v Cloudflare KV, ne v gitu
+seed/registry.json
+# Druhá polovina registry (přesměrování) — stejný důvod: lokální stav, ne zdroj.
+seed/registry-gone.json
+seed/facets-published.json
+
+.DS_Store
+*.log
+worker-configuration.d.ts

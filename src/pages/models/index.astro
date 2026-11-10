@@ -1,0 +1,40 @@
+---
+/**
+ * Rozcestník abecedního adresáře. Existuje kvůli sirotkům: 18. 8. nemělo
+ * 6 102 ze 14 000 stránek modelek nikde na webu odkaz (4 849 z toho archiv,
+ * který přitom posíláme do sitemapy jako indexovatelný). Mřížky ukazují jen
+ * živé modelky, takže archiv nemohly odkázat nikdy — a stránkování mřížek to
+ * neřeší. Adresář to řeší konstrukcí: každá stránka modelky je pod svým
+ * písmenem. Viz docs/DECISIONS.md D33.
+ */
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { MODEL_LETTERS, MODELS_BY_LETTER, MODEL_PAGES, META } from '../../lib/data';
+import { SITE_NAME, fmt } from '../../lib/seo';
+
+const total = MODEL_PAGES.length;
+const letters = MODEL_LETTERS.map((l) => ({ letter: l, count: MODELS_BY_LETTER.get(l)!.length }));
+---
+<Layout
+	title={`All Cam Models A–Z – ${fmt(total)} Profiles | ${SITE_NAME}`}
+	description={`Browse every cam model profile on eCamx alphabetically — ${fmt(total)} performers from ${META.networks.length} cam sites, live and recently live.`}
+>
+	<Breadcrumbs items={[{ label: 'All models' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">All Cam Models A–Z</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		Every performer with a profile on eCamx — {fmt(total)} in total, across
+		{META.networks.length} cam sites. Pick a letter to see the models whose name starts
+		with it; each profile shows whether she is live right now and who is streaming instead
+		when she isn't.
+	</p>
+
+	<div class="mt-6 flex flex-wrap gap-2">
+		{letters.map((l) => (
+			<a href={`/models/${l.letter}/`} class="pill">
+				<span class="font-semibold uppercase">{l.letter}</span>
+				<span class="ml-1 text-ink-400">{fmt(l.count)}</span>
+			</a>
+		))}
+	</div>
+</Layout>

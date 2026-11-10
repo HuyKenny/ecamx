@@ -1,0 +1,165 @@
+---
+/**
+ * „Sites like {síť}" — nejlepší poměr objemu a obtížnosti na celém webu:
+ * „sites like chaturbate" 748/měs + „websites like chaturbate" 340 při **KD 21**,
+ * plus „chaturbate alternatives" 321 při KD 0 (Ahrefs US, 19. 8. 2026).
+ *
+ * **Existuje jen pro sítě, kde je poptávka změřená a text napsaný ručně** —
+ * dnes tedy jediná URL. Sedm variant vygenerovaných z jedné šablony by byla
+ * sedmkrát tatáž stránka, což je přesně ta duplicita, kterou tenhle web
+ * v jiných sekcích hlídá.
+ *
+ * Čím se to liší od stovky affiliate blogů se stejným titulkem: **čísla jsou
+ * naše a živá.** Kdo píše „Site X has thousands of models", opisuje tiskovku;
+ * my počítáme, co je online právě teď, a když síť něco nezveřejňuje, napíšeme
+ * to místo abychom tam dali nulu.
+ */
+import Layout from '../../../layouts/Layout.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import { FACETS, NETWORK_LABELS, MODELS, type NetworkId } from '../../../lib/data';
+import { NETWORK_REVIEWS } from '../../../content/networks';
+import { ALTERNATIVES_FOR, COMPARE_WITH_CHATURBATE } from '../../../content/network-compare';
+import { networkStats } from '../../../lib/network-stats';
+import { alternativesSeo, SITE_URL, fmt, approx } from '../../../lib/seo';
+import { safeJsonLd } from '../../../lib/jsonld';
+
+export function getStaticPaths() {
+	// Gated: jen sítě z `ALTERNATIVES_FOR` (dnes jediná). Sedm variant jedné
+	// šablony by byla sedmkrát tatáž stránka.
+	return ALTERNATIVES_FOR.map((id) => ({ params: { network: id }, props: { network: id } }));
+}
+
+const { network } = Astro.props;
+const label = NETWORK_LABELS[network];
+const stats = networkStats();
+const self = stats.find((s) => s.id === network)!;
+// Řadí se podle toho, kolik je jich živých — ne podle výše provize.
+const others = stats.filter((s) => s.id !== network && COMPARE_WITH_CHATURBATE[s.id]);
+const seo = alternativesSeo(label, others.length, MODELS.length);
+
+const faq = [
+	{
+		q: `What is the closest alternative to ${label}?`,
+		a: `${NETWORK_LABELS.camsoda} runs the same free-to-watch, tip-funded format, so nothing about ` +
+			`how you watch changes — it is simply smaller. We currently see ${fmt(stats.find((s) => s.id === 'camsoda')?.online ?? 0)} ` +
+			`models live there against ${fmt(self.online)} on ${label}.`,
+	},
+	{
+		q: `Is any cam site bigger than ${label}?`,
+		a: `Not among the ${stats.length} we track. ${label} has more models online than the other ` +
+			`${stats.length - 1} networks combined — we count ${fmt(self.online)} of ${fmt(MODELS.length)} live right now.`,
+	},
+	{
+		q: `Do the same models appear on more than one cam site?`,
+		a: `Often. We match nicknames across all ${stats.length} networks and currently find ` +
+			`${fmt(self.alsoElsewhere)} ${label} models broadcasting under the same name somewhere else. ` +
+			`A shared nickname is not proof of a shared person, so we say where the profiles agree and where they do not.`,
+	},
+];
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'FAQPage',
+	mainEntity: faq.map((f) => ({
+		'@type': 'Question',
+		name: f.q,
+		acceptedAnswer: { '@type': 'Answer', text: f.a },
+	})),
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+	<Breadcrumbs items={[
+		{ label: 'Cam sites', href: '/site/' },
+		{ label, href: `/site/${network}/` },
+		{ label: 'Alternatives' },
+	]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{others.length} sites like {label}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		Every list like this one tells you a site is "great" without saying how big it is
+		or who broadcasts there. We track all {stats.length} of these networks every two
+		hours, so the numbers below are counted, not quoted — and where a site keeps
+		something to itself, we say so instead of printing a zero.
+	</p>
+
+	<div class="mt-6 overflow-x-auto">
+		<table class="w-full min-w-[42rem] border-collapse text-sm">
+			<thead>
+				<tr class="border-b border-ink-800 text-left text-ink-400">
+					<th class="py-2 pr-4 font-medium">Site</th>
+					<th class="py-2 pr-4 font-medium">Live now</th>
+					<th class="py-2 pr-4 font-medium">Not women</th>
+					<th class="py-2 font-medium">Pick it when</th>
+				</tr>
+			</thead>
+			<tbody>
+				<tr class="border-b border-ink-800/60 bg-ink-900/40 align-top">
+					<td class="py-3 pr-4 font-medium text-white">{label} <span class="text-xs text-ink-500">(the one you know)</span></td>
+					<td class="py-3 pr-4 tabular-nums">{fmt(self.online)}</td>
+					<td class="py-3 pr-4 tabular-nums">
+						{Math.round((self.online - self.genders.female) / self.online * 100)}%
+					</td>
+					<td class="py-3 text-ink-300">{NETWORK_REVIEWS[network].bestFor}</td>
+				</tr>
+				{others.map((s) => (
+					<tr class="border-b border-ink-800/60 align-top">
+						<td class="py-3 pr-4">
+							<a href={`/site/${s.id}/`} class="font-medium text-white underline">{NETWORK_LABELS[s.id]}</a>
+						</td>
+						<td class="py-3 pr-4 tabular-nums">{fmt(s.online)}</td>
+						<td class="py-3 pr-4 tabular-nums">
+							{Math.round((s.online - s.genders.female) / s.online * 100)}%
+						</td>
+						<td class="py-3 text-ink-300">{COMPARE_WITH_CHATURBATE[s.id]!.insteadWhen}</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</div>
+
+	<p class="mt-3 text-xs text-ink-500">
+		Counted from our own sync of all {stats.length} networks, refreshed every two hours.
+		"Not women" is the share of live rooms listed as men, couples or trans performers —
+		it is the single number that most changes which site you should open.
+	</p>
+
+	{others.map((s) => (
+		<section class="mt-10 max-w-3xl" aria-labelledby={`alt-${s.id}`}>
+			<h2 id={`alt-${s.id}`} class="mb-1 text-xl font-bold">
+				{NETWORK_LABELS[s.id]} instead of {label}
+			</h2>
+			<p class="mb-3 text-sm text-ink-500">
+				{fmt(s.online)} live now
+				{s.medianViewers != null
+					? ` · median room has ${fmt(s.medianViewers)} watching`
+					: ' · viewer counts not published'}
+				{' '}· {fmt(s.alsoElsewhere)} of them also broadcast elsewhere under the same name
+			</p>
+			{COMPARE_WITH_CHATURBATE[s.id]!.body.map((para) => (
+				<p class="mb-3 text-sm leading-relaxed text-ink-200">{para}</p>
+			))}
+			<p class="text-sm">
+				<a href={`/site/${s.id}/`} class="text-accent underline">
+					{NETWORK_LABELS[s.id]} review and what it costs →
+				</a>
+			</p>
+		</section>
+	))}
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="faq-h">
+		<h2 id="faq-h" class="mb-3 text-xl font-bold">Questions people actually ask</h2>
+		<dl class="space-y-4 text-sm leading-relaxed">
+			{faq.map((f) => (
+				<div>
+					<dt class="font-medium text-white">{f.q}</dt>
+					<dd class="mt-1 text-ink-200">{f.a}</dd>
+				</div>
+			))}
+		</dl>
+	</section>
+
+	<p class="mt-10 text-sm">
+		<a href="/site/" class="text-accent underline">All {stats.length} sites compared side by side →</a>
+	</p>
+</Layout>

@@ -1,0 +1,78 @@
+---
+/**
+ * 18 U.S.C. § 2257 statement.
+ *
+ * Podstata: eCamx nic nenatáčí ani nehostuje. Všechny streamy běží v iframu
+ * na doméně příslušné cam sítě a záznamy podle §2257 vede ta síť, ne my.
+ * Tenhle text to musí říct jasně a odkázat na compliance stránky sítí.
+ */
+import TextPage from '../layouts/TextPage.astro';
+import { NETWORK_LABELS } from '../lib/data';
+
+const NETWORK_COMPLIANCE: Array<[string, string]> = [
+	['chaturbate', 'https://chaturbate.com/legal/2257/'],
+	['camsoda', 'https://www.camsoda.com/2257'],
+	['cam4', 'https://www.cam4.com/legal/2257'],
+	['amateur', 'https://www.amateur.tv/legal'],
+	['bongacams', 'https://bongacams.com/legal-2257'],
+	['xlovecam', 'https://www.xlovecam.com/en/page/2257'],
+	['livejasmin', 'https://www.livejasmin.com/en/page/2257'],
+];
+---
+<TextPage
+	title="18 U.S.C. 2257 Compliance Statement | eCamx"
+	description="eCamx is a link directory and does not produce or host any visual content. Records required by 18 U.S.C. 2257 are maintained by the originating cam platforms."
+	heading="18 U.S.C. § 2257 Compliance Statement"
+	updated="16 August 2026"
+>
+	<p>
+		<strong>eCamx does not produce, create, host, or store any visual depictions
+		of actual or simulated sexually explicit conduct.</strong>
+	</p>
+
+	<h2>What eCamx actually is</h2>
+	<p>
+		eCamx is a directory. Every live stream shown on this website is delivered
+		directly from a third-party webcam platform through an embedded player
+		hosted on that platform's own servers. No video, image, or recording is
+		stored on eCamx infrastructure. Thumbnail images are loaded directly from
+		the originating platform's content delivery network and are not copied,
+		cached, or re-hosted by us.
+	</p>
+
+	<h2>Where the records are held</h2>
+	<p>
+		Because eCamx is not a producer of any content within the meaning of
+		18 U.S.C. § 2257 and 28 C.F.R. § 75, the record-keeping obligations for the
+		material accessible through this site rest with the platform that produces
+		and transmits it. Each platform below maintains its own age verification
+		and record-keeping compliance:
+	</p>
+	<ul>
+		{NETWORK_COMPLIANCE.map(([id, url]) => (
+			<li>
+				<a href={url} rel="nofollow noopener" target="_blank">
+					{NETWORK_LABELS[id]} — 2257 compliance statement
+				</a>
+			</li>
+		))}
+	</ul>
+
+	<h2>Age of performers</h2>
+	<p>
+		All platforms indexed by eCamx require every broadcaster to verify that they
+		are at least 18 years of age before they may stream. We rely on those
+		verification processes. eCamx operates a zero-tolerance policy toward any
+		depiction of minors.
+	</p>
+
+	<h2>Reporting a concern</h2>
+	<p>
+		If you believe any content reachable through this site involves a minor or
+		a non-consenting individual, report it immediately — both to us at
+		<a href="mailto:info@ecamx.com">info@ecamx.com</a> and directly to the
+		platform hosting the stream, which is identified on every listing page.
+		We will remove the listing on receipt and without waiting for the outcome
+		of any investigation.
+	</p>
+</TextPage>

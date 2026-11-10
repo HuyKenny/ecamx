@@ -1,0 +1,370 @@
+name: Sync and deploy
+
+# Denní obnova katalogu. Cam feedy vrací jen právě online modelky, takže bez
+# pravidelného běhu web zamrzne. Registry v KV drží stabilitu profilových URL
+# napříč běhy (viz docs/DECISIONS.md D3).
+#
+# Proč GitHub Actions a ne Workers Builds: napojení repa na Workers Builds je
+# OAuth flow v dashboardu, který nejde nastavit skriptem. Tohle jde.
+on:
+  schedule:
+    # **Pětkrát denně — rozpočet, ne rozmar.** 28. 8. 2026 GitHub odmítl
+    # spustit job: „recent account payments have failed or your spending limit
+    # needs to be increased". Změřeno na skutečné spotřebě za srpen:
+    #
+    #   ecamx   181 běhů × ~9,8 min = ~1 782 min
+    #   rankizo 114 běhů × ~1,6 min =   ~186 min
+    #   rankmat  39 běhů × ~1,6 min =    ~64 min
+    #   ────────────────────────────────────────
+    #   celkem                        ~2 032 min proti free limitu 2 000
+    #
+    # Limit je na ÚČET, ne na repo, takže ecamx musí zůstat kolem 1 500 min
+    # a nechat místo ostatním i pushům (každý push je taky běh).
+    # Běh trvá ~12,6 min → **4 běhy denně = ~1 512 min měsíčně**.
+    #
+    # Zvažoval jsem místo toho zmenšit web (rychlejší build, víc běhů) a vyšlo
+    # to hůř: 5 běhů denně by vyžadovalo katalog 13 000 stránek a stálo
+    # ~1 770 min, tedy VÍC než 4 běhy s plným katalogem 17 000. Stránka, která
+    # neexistuje, navíc nemůže nikdy začít vydělávat — kdežto o hodinu starší
+    # karta pořád vede na stránku, která umí říct „právě dovysílala" a nabídnout
+    # profil. Proto se šetří na četnosti, ne na obsahu.
+    #
+    # Kdo tenhle interval mění, ať se nejdřív podívá na `gh api
+    # /repos/HuyKenny/{repo}/actions/runs` u všech tří soukromých rep. Viz D65.
+    #
+    # **23. 9. 2026: ze tří běhů na dva.** Rozhoduje rozpočet minut, protože
+    # záložní deploy z Maliny se ruší (D76) — bez něj je jediná pojistka proti
+    # scénáři ze srpna (vyčerpané minuty → GitHub joby vypne) dostatek rezervy.
+    # Změřeno: projekce při třech bězích 1 548 z 2 000, tedy ~450 min rezervy
+    # pro rankizo, rankmat a pushe. Dva běhy dávají ~1 000 a rezervu dvojnásobnou.
+    #
+    # Stárnutí stránky bolí mnohem míň než v srpnu: od D67/D68 si mřížka dotáhne
+    # živé karty z živého feedu, když je build starší tří hodin — za týden se to
+    # stalo 63×. Dvanáctihodinová mezera tedy nezpůsobí mrtvé karty, jen pomalejší
+    # zakládání stránek novým modelkám. Viz D72.
+    #
+    # **Prahy hlídačů musí jít nahoru spolu s tímhle číslem** (past 113):
+    # normální mezera je teď 12 h, a protože GitHub plánované běhy odkládá
+    # (naměřeno 2–5 h), stáří běžně vystoupá na ~15 h. `bin/ecamx-deploy-watch.py`
+    # proto kickuje na 16 h a hlásí na 18 h, `bin/ecamx-pi-deploy.sh` staví
+    # od 16 h. Kdo hne cronem, ať srovná i tyhle tři.
+    # **10. 11. 2026: repo je VEŘEJNÉ → minuty Actions zdarma**, rozpočet minut
+    # (D65, past 101) už nebrzdí. Zpátky na dva běhy, na které jsou nastavené
+    # prahy hlídačů (kick 16 h / poplach 18 h, past 130). Logy jsou veřejné:
+    # nic z feedů ani klíčů nevypisovat.
+    - cron: '0 3,15 * * *'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    # Ruční kontrolní skripty CI nespouští, takže jejich změna nemá co nasazovat
+    # — a každý zbytečný běh je deset minut z rozpočtu (D65).
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'scripts/check-grid.mjs'
+      - 'scripts/check-card-taps.mjs'
+      - 'scripts/check-hls-player.mjs'
+      - 'scripts/check-redirects.ts'
+
+concurrency:
+  group: deploy
+  # **Rozdělaný běh se ruší.** Dřív ne, aby se nezahodil rozdělaný deploy —
+  # jenže při sérii pushů (28. 8. jich bylo osm) se tím propálilo osm plných
+  # běhů po deseti minutách, a platí se za ně z účtu sdíleného třemi repy.
+  # Novější běh nese novější data, takže se o nic nepřichází. Viz D65.
+  cancel-in-progress: true
+
+# Workflow žádné GitHub API nevolá — výchozí oprávnění (typicky zápis do repa)
+# je zbytečná plocha, kdyby některá akce byla kompromitovaná.
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # Build roste s počtem modelek: ~9 000 stránek trvá na Malině 3,5 min,
+    # na runneru míň. Strop je 14 000 stránek, takže rezerva je velká — ale
+    # když se do timeoutu nevejde, patří snížit MAX_MODEL_PAGES, ne timeout.
+    timeout-minutes: 45
+    steps:
+      # Akce jsou připnuté na SHA, ne na tag: tag se dá přesunout, a tenhle
+      # workflow drží dvacet secretů včetně nasazovacího tokenu Cloudflare.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Stáhne 7 cam API a zapíše src/data/*.json. Selže hlasitě, když některá
+      # síť vrátí míň modelek než minExpected — radši spadlý build než prázdný web.
+      - name: Sync catalogue
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CHATURBATE_AFFILIATE: ${{ secrets.CHATURBATE_AFFILIATE }}
+          CHATURBATE_TOUR: ${{ secrets.CHATURBATE_TOUR }}
+          CHATURBATE_TRACK: ${{ secrets.CHATURBATE_TRACK }}
+          CAMSODA_AFFILIATE: ${{ secrets.CAMSODA_AFFILIATE }}
+          CAM4_SID: ${{ secrets.CAM4_SID }}
+          CAM4_AID: ${{ secrets.CAM4_AID }}
+          CAM4_RP: ${{ secrets.CAM4_RP }}
+          AMATEUR_API_KEY: ${{ secrets.AMATEUR_API_KEY }}
+          AMATEUR_LANG: ${{ secrets.AMATEUR_LANG }}
+          BONGACAMS_USER_ID: ${{ secrets.BONGACAMS_USER_ID }}
+          XLOVE_AFFILIATE_ID: ${{ secrets.XLOVE_AFFILIATE_ID }}
+          XLOVE_API_KEY: ${{ secrets.XLOVE_API_KEY }}
+          LIVEJASMIN_USERID: ${{ secrets.LIVEJASMIN_USERID }}
+          LIVEJASMIN_API_KEY: ${{ secrets.LIVEJASMIN_API_KEY }}
+          LIVEJASMIN_PSPROGRAM: ${{ secrets.LIVEJASMIN_PSPROGRAM }}
+          # CrakRevenue = jedno API pro stripchat, streamate, mfc a imlive (D54).
+          # API klíč potřebuje JEN sync; do buildu (PUBLIC_*) nesmí, jinak ho
+          # Vite zapeče do nasazeného bundlu.
+          CRAKREVENUE_TOKEN: ${{ secrets.CRAKREVENUE_TOKEN }}
+          CRAKREVENUE_API_KEY: ${{ secrets.CRAKREVENUE_API_KEY }}
+          CRAKREVENUE_AFF_ID: ${{ secrets.CRAKREVENUE_AFF_ID }}
+        run: node --experimental-strip-types scripts/sync-cams.ts
+
+      # **Typecheck si musí VYROBIT všechno, co je gitignorované.** Do 7. 9.
+      # 2026 v CI neběžel vůbec a na `main` tiše ležela TS2339
+      # v `/api/online/[network].ts`. Když jsem ho přidal, spadl třikrát —
+      # a ani jednou na kódu, vždycky na tom, co má lokálně a CI ne:
+      #
+      #   1. `@types/node` v projektu vůbec nebyl a TS si ho půjčoval
+      #      z `node_modules` v rootu workspace, který CI neklonuje (past 124),
+      #   2. `src/lib/data.ts` importuje `src/data/*.json` → musí být PO syncu
+      #      katalogu, a `import.meta.env` typuje `astro/client` přes
+      #      `.astro/types.d.ts` → `astro sync`,
+      #   3. `import { env } from 'cloudflare:workers'` deklaruje
+      #      `worker-configuration.d.ts`, který je v `.gitignore` a vyrábí ho
+      #      `wrangler types`.
+      #
+      # Fail-fast se tím skoro neztrácí: sync trvá ~1 min, kdežto prerender
+      # ~9 min. Pozor na jména — `pnpm sync` je sync KATALOGU,
+      # `pnpm exec astro sync` generuje typy.
+      - name: Typecheck
+        run: |
+          pnpm exec wrangler types
+          pnpm exec astro sync
+          pnpm exec tsc --noEmit
+
+      # Sestaví _redirects (legacy mapa + modelky, kterým zanikla stránka).
+      # `pnpm build` má na tohle prebuild hook, ale spoléhat se v CI na
+      # pre/post skripty pnpm je zbytečně křehké — radši explicitní krok.
+      - name: Build redirects
+        run: node --experimental-strip-types scripts/build-redirects.ts
+
+      # Affiliate ID musí do buildu přes PUBLIC_* — prerenderer @astrojs/cloudflare
+      # běží ve workerd sandboxu, kde process.env není.
+      # POZOR: sem NEPATŘÍ PUBLIC_XLOVE_API_KEY ani PUBLIC_LIVEJASMIN_API_KEY.
+      # Build je nečte (grep v src/ je nenajde) — potřebuje je jen runtime
+      # endpoint /api/online/, a ten je bere z Worker secrets pod názvy BEZ
+      # prefixu. S prefixem je Vite jen zapekl do nasazeného Worker bundlu,
+      # takže je nešlo rotovat bez rebuildu a šly vytáhnout z kódu Workeru.
+      - name: Build
+        env:
+          PUBLIC_CHATURBATE_AFFILIATE: ${{ secrets.CHATURBATE_AFFILIATE }}
+          PUBLIC_CHATURBATE_TOUR: ${{ secrets.CHATURBATE_TOUR }}
+          PUBLIC_CHATURBATE_TRACK: ${{ secrets.CHATURBATE_TRACK }}
+          PUBLIC_CAMSODA_AFFILIATE: ${{ secrets.CAMSODA_AFFILIATE }}
+          PUBLIC_CAM4_SID: ${{ secrets.CAM4_SID }}
+          PUBLIC_CAM4_AID: ${{ secrets.CAM4_AID }}
+          PUBLIC_CAM4_RP: ${{ secrets.CAM4_RP }}
+          # POZOR: `PUBLIC_AMATEUR_API_KEY` ani `PUBLIC_AMATEUR_WIDGET_ID` sem
+          # NEPATŘÍ. Build je nepotřebuje (widget je od 28. 8. pryč a odkaz se
+          # skládá až ve Workeru ze secretu) a `import.meta.env` se z buildu
+          # zapéká do nasazeného bundlu — ten klíč je zároveň credential
+          # k feedu Amateur.tv. Hlídá guard v `check-links.ts`. Viz D63.
+          PUBLIC_BONGACAMS_USER_ID: ${{ secrets.BONGACAMS_USER_ID }}
+          PUBLIC_XLOVE_AFFILIATE_ID: ${{ secrets.XLOVE_AFFILIATE_ID }}
+          PUBLIC_LIVEJASMIN_USERID: ${{ secrets.LIVEJASMIN_USERID }}
+          PUBLIC_LIVEJASMIN_PSPROGRAM: ${{ secrets.LIVEJASMIN_PSPROGRAM }}
+          # Jen affiliate ID — to je ve veřejné URL. Token ani API klíč sem NE.
+          PUBLIC_CRAKREVENUE_AFF_ID: ${{ secrets.CRAKREVENUE_AFF_ID }}
+        run: pnpm build
+
+      # Pojistka proti limitu free plánu (20 000 souborů na deployment).
+      # **Tenhle strop už nehlídá Cloudflare, ale MINUTY.** Účet má
+      # `workers_paid` (ověřeno v API 7. 9. 2026), kde je limit 100 000 souborů
+      # na verzi, ne 20 000 jako na free. Zavazující je rozpočet GitHub Actions:
+      # 2 000 min/měs na účet, dělený s rankizo a rankmat (past 101). Změřeno na
+      # 12 bězích: medián 11,8 min při 18 199 souborech, tedy ~33 ms na soubor.
+      # 30 000 souborů ≈ 19 min/běh ≈ 1 900 min/měs při třech bězích denně —
+      # a to je u hranice, za kterou GitHub v srpnu joby vypnul.
+      - name: Check asset count
+        run: |
+          n=$(find dist/client -type f | wc -l)
+          echo "souborů: $n"
+          if [ "$n" -gt 30000 ]; then
+            echo "::error::$n souborů — běh by přerostl rozpočet minut Actions (ne limit Cloudflare, ten je 100 000). Sniž MAX_MODEL_PAGES."
+            exit 1
+          fi
+
+      # Rozbité interní odkazy, kolize stránka/redirect, přetečený _redirects
+      # a noindex URL v sitemapě. Všechno chyby, které nasazený web neprozradí.
+      #
+      # Secrets tu MUSÍ být: guard hledá jejich HODNOTY ve vygenerovaných
+      # souborech (`dist/client/**` i `dist/server/**`). Bez nich by neměl co
+      # porovnávat a tiše by hlásil „v prostředí není co hledat" — přesně ta
+      # falešná jistota, kvůli které 28. 8. ležel klíč k feedu Amateur.tv ve
+      # zdroji 274 stránek. Skript hodnoty nikam nevypisuje, jen porovnává.
+      - name: Check links, redirects and sitemap
+        env:
+          AMATEUR_API_KEY: ${{ secrets.AMATEUR_API_KEY }}
+          AMATEUR_WIDGET_ID: ${{ secrets.AMATEUR_WIDGET_ID }}
+          XLOVE_API_KEY: ${{ secrets.XLOVE_API_KEY }}
+          LIVEJASMIN_API_KEY: ${{ secrets.LIVEJASMIN_API_KEY }}
+          CRAKREVENUE_TOKEN: ${{ secrets.CRAKREVENUE_TOKEN }}
+          CRAKREVENUE_API_KEY: ${{ secrets.CRAKREVENUE_API_KEY }}
+          GA4_MP_API_SECRET: ${{ secrets.GA4_MP_API_SECRET }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: node --experimental-strip-types scripts/check-links.ts
+
+      # Iframe na cestě z EasyList = Chrome ho označí za reklamu a po 4 MB
+      # přenosu sám odstraní (Heavy Ad Intervention). Přesně tak se 16. 8.
+      # nasadil rozbitý přehrávač, viz docs/DECISIONS.md D13.
+      - name: Check blocklists (players must not be ad-tagged)
+        run: node --experimental-strip-types scripts/check-blocklists.ts
+
+      # Web bez affiliate odkazů vypadá funkčně, ale nevydělává — hlídat.
+      # Od přechodu na first-party /go/ už affiliate URL ve HTML NEJSOU (o to
+      # šlo: klíč Amateur.tv tam ležel na 582 stránkách). Staticky se tedy
+      # kontroluje, že každá síť má odchozí odkazy, a skutečný cíl se ověřuje
+      # po nasazení proti běžícímu Workeru — to je silnější než dřív.
+      - name: Check outbound links exist
+        run: |
+          fail=0
+          # Seznam sítí se BERE Z BUILDU, ne z ručně psaného výčtu. Dvě lekce
+          # z 26. 8.: (1) vypnutá síť (MyFreeCams) tady zůstala a shodila deploy,
+          # (2) síť, která zrovna nemá živé pokoje (ImLive jich má kolem stovky),
+          # tu nemá co dělat — výpadek jedné sítě nesmí zastavit vydávání oprav
+          # (past 57). Kontroluje se INVARIANT: co je v katalogu, musí mít
+          # odchozí odkaz. Když v katalogu není, není co kontrolovat.
+          for n in $(node -e "
+            const f=require('./src/data/facets.json');
+            console.log((f.networks||[]).map(x=>x.slug).join(' '));
+          "); do
+            c=$(grep -rlF "/go/$n/" dist/client --include='*.html' | wc -l)
+            echo "$n: $c stránek"
+            [ "$c" -eq 0 ] && { echo "::error::síť $n je v katalogu, ale nikde na ni nevede odchozí odkaz"; fail=1; }
+          done
+          exit $fail
+
+      # Veřejné repo: žádná hodnota klíče nesmí být v repu ani v dist/ (statika
+      # i bundle Workeru, past 95/96). Vypisují se jen NÁZVY.
+      - name: Secret check (repo + dist)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          AMATEUR_API_KEY: ${{ secrets.AMATEUR_API_KEY }}
+          XLOVE_API_KEY: ${{ secrets.XLOVE_API_KEY }}
+          LIVEJASMIN_API_KEY: ${{ secrets.LIVEJASMIN_API_KEY }}
+          CRAKREVENUE_TOKEN: ${{ secrets.CRAKREVENUE_TOKEN }}
+          CRAKREVENUE_API_KEY: ${{ secrets.CRAKREVENUE_API_KEY }}
+          MALINA_WARM_TOKEN: ${{ secrets.MALINA_WARM_TOKEN }}
+        run: python3 scripts/verify_no_secrets.py
+
+      - name: Deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: pnpm exec wrangler deploy -c dist/server/wrangler.json
+
+      # Runnery běží v americkém datacentru. Dřív odsud chodilo 403 a mylně se to
+      # svádělo na WAF pravidlo "Block mimo EU" — to je ale vypnuté od 20. 2. 2026.
+      # Skutečný viník byl Bot Fight Mode (source=botFight v security events),
+      # vypnutý 16. 8. 2026; nahradil ho rate limit na /api/online/*.
+      # Proto smoke test od té doby smí selhat naostro a 403 nepovoluje.
+      # Od 7. 11. 2026 ale runner (AS8075) stopuje BotWall WAF → posílá se
+      # hlavička x-malina-warm, kterou WAF propouští (stejně jako cron.yml).
+      - name: Smoke test
+        env:
+          WARM: ${{ secrets.MALINA_WARM_TOKEN }}
+        run: |
+          sleep 10
+          UA="ecamx-ci/1.0 (+https://github.com/HuyKenny/ecamx)"
+          curl() { command curl -H "x-malina-warm: $WARM" "$@"; }
+          fail=0
+          for p in / /cams/ /terms/ /sitemap.xml /api/online/chaturbate/; do
+            code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com$p")
+            echo "$p → $code"
+            [ "$code" = "200" ] || { echo "::error::$p vrátilo $code"; fail=1; }
+          done
+
+          # **Catch-all routa.** Statické stránky obsluhuje assets layer PŘED
+          # Workerem, takže se sem dostane jen to, co soubor nemá — a to je
+          # přesně cesta, kterou výše uvedené URL netestují. Náhodný nick musí
+          # skončit na rozcestníku (D53: zaniklá stránka nesmí vrátit 404),
+          # kdežto něco, co nick ani není, musí 404 pořád — jinak by web
+          # odpovídal 200 na cokoli a Google to přečte jako soft 404.
+          slug="ecamx-ci-smoke-$RANDOM"
+          code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com/live/$slug/")
+          loc=$(curl -sI -A "$UA" "https://ecamx.com/live/$slug/" | grep -i '^location:' | tr -d '\r')
+          echo "/live/$slug/ → $code $loc"
+          [ "$code" = "302" ] || { echo "::error::catch-all na neznámý nick vrátil $code (čeká se 302 na rozcestník)"; fail=1; }
+
+          code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com/live/@@@/")
+          echo "/live/@@@/ → $code"
+          [ "$code" = "404" ] || { echo "::error::cesta, která není nick, vrátila $code (čeká se 404 — jinak je z webu soft 404)"; fail=1; }
+          exit $fail
+
+      # Nejdůležitější guard celého pipeline: ověřuje PENÍZE. Každá síť musí
+      # z /go/ přesměrovat na svou affiliate URL se správným markerem. Když
+      # chybí secret nebo se rozbije builder, tady to spadne — dřív se to
+      # poznalo až na výplatě.
+      #
+      # Čte se hlavička Location, NE `%{redirect_url}`: to se v CI u části sítí
+      # vracelo prázdné (a lokálně ne), takže guard hlásil chybu, kterou web
+      # neměl. Zároveň se loguje stavový kód, ať je příští selhání čitelné.
+      - name: Verify /go/ redirects earn money
+        env:
+          WARM: ${{ secrets.MALINA_WARM_TOKEN }}
+        run: |
+          UA="MalinaCron/1.0 (ecamx deploy guard)"
+          curl() { command curl -H "x-malina-warm: $WARM" "$@"; }
+          fail=0
+          # Dvě volání schválně: jedno na kód, jedno na hlavičku. Skládat obojí
+          # z jednoho výstupu znamená parsovat, a to je u guardu na peníze
+          # zbytečné riziko.
+          probe() {   # $1 = URL → nastaví $CODE a $LOC
+            CODE=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "$1")
+            LOC=$(curl -s -A "$UA" -D- -o /dev/null --max-time 30 "$1" \
+                  | grep -i '^location:' | sed 's/^[Ll]ocation: //' | tr -d '\r')
+          }
+          check() {
+            probe "https://ecamx.com/go/$1/$2/?p=card"
+            # Chvíli po deployi může Worker ještě propagovat — jedna oprava zdarma.
+            if [ "$CODE" != "302" ]; then sleep 5; probe "https://ecamx.com/go/$1/$2/?p=card"; fi
+            case "$LOC" in
+              *"$3"*) echo "  ✓ $1 ($CODE) → ${LOC:0:70}" ;;
+              *) echo "::error::$1 vrátilo $CODE a Location '${LOC:0:90}' — čekal jsem marker '$3'"; fail=1 ;;
+            esac
+          }
+          check chaturbate testuser 'chaturbate.com/in/?tour='
+          check camsoda    testuser 'camsoda.com/testuser?id='
+          check cam4       testuser 'cam4.com/testuser?sid='
+          check bongacams  testuser 'bongacams.com/track?c='
+          check xlovecam   testuser 'id_affilie='
+          check livejasmin testuser 'rpwmct.com/?params[psid]='
+          check amateur    testuser 'amateur.tv/testuser?a='
+          # Neplatné vstupy nesmí nikdy přesměrovat.
+          for bad in "neexistuje/x" "chaturbate/../etc" "chaturbate/$(printf 'a%.0s' $(seq 1 70))"; do
+            probe "https://ecamx.com/go/$bad/"
+            [ "$CODE" = "404" ] || { echo "::error::/go/$bad vrátilo $CODE, čekám 404"; fail=1; }
+          done
+          exit $fail
+
+      # Nezávislé ověření, že nasazená verze je opravdu ta nová — nezávisí na WAF.
+      - name: Verify deployment via API
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          curl -s --max-time 30 \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/ecamx/deployments" \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['success'], d.get('errors'); dep=d['result']['deployments'][0]; print('nasazeno:', dep['created_on'])"

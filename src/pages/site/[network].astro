@@ -1,0 +1,191 @@
+---
+/**
+ * Recenze cam sítě. Komerčně nejcennější typ stránky — „chaturbate review"
+ * a spol. mají reálný nákupní záměr, na rozdíl od profilů modelek.
+ *
+ * Stránka zároveň dolinkovává profily z dané sítě (viz sekce na konci) — bez
+ * toho zůstávaly stovky profilů bez jediného příchozího odkazu.
+ */
+import Layout from '../../layouts/Layout.astro';
+import ModelCard from '../../components/ModelCard.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import {
+	FACETS, allOnNetwork, gridWindow, NETWORK_LABELS, MODEL_PAGES, outTargetFor, type NetworkId,
+} from '../../lib/data';
+import Pagination from '../../components/Pagination.astro';
+import { NETWORK_GRID } from '../../lib/paging';
+import { goLink } from '../../lib/affiliate';
+import { safeJsonLd } from '../../lib/jsonld';
+import { networkSeo, SITE_URL, fmt } from '../../lib/seo';
+import { NETWORK_REVIEWS } from '../../content/networks';
+import { ALTERNATIVES_FOR } from '../../content/network-compare';
+import { TOKEN_RATES } from '../../content/token-rates';
+
+export function getStaticPaths() {
+	return FACETS.networks.map((n) => ({ params: { network: n.slug }, props: { facet: n } }));
+}
+
+const { facet } = Astro.props;
+const id = facet.slug as keyof typeof NETWORK_REVIEWS;
+const label = NETWORK_LABELS[facet.slug];
+const review = NETWORK_REVIEWS[id];
+const VISIBLE = NETWORK_GRID.visible;
+// Do HTML jde 3× víc karet, než se ukáže. Rezerva je skrytá a klientský kód
+// z ní doplňuje, když nějakou kartu zhasne kvůli offline stavu — jinak by
+// mřížka po odfiltrování zůstala poloprázdná (viz Layout.astro, [data-grid]).
+const win = gridWindow(allOnNetwork(facet.slug), 1, NETWORK_GRID);
+const models = win.items;
+const seo = networkSeo(label, facet.count);
+
+// Nejsledovanější modelka sítě jako cíl CTA — deeplink potřebuje konkrétní nick.
+// Nejsledovanější modelka z buildu jako výchozí cíl. Za dvě hodiny už nemusí
+// vysílat, proto `data-cta-retarget` — klientský živý stav ho po kontrole
+// přesměruje na první kartu, která opravdu běží (viz Layout.astro).
+const cta = models[0] ? goLink(models[0].network, models[0].username, 'network') : null;
+
+/**
+ * Rozcestník na stránky modelek téhle sítě. Dřív se vypisovaly všechny, což
+ * při 781 profilech šlo — při 15 000 stránkách by to byl odkazový sklad na
+ * tisíce položek. Bereme jen indexovatelné a shora omezeně; zbytek si crawler
+ * najde přes bloky „podobné" na samotných stránkách modelek.
+ */
+const NETWORK_INDEX_LIMIT = 200;
+const networkProfiles = MODEL_PAGES
+	.filter((p) => p.network === facet.slug && p.indexable)
+	.sort((a, b) => (b.seen - a.seen) || a.page.localeCompare(b.page))
+	.slice(0, NETWORK_INDEX_LIMIT)
+	.sort((a, b) => a.page.localeCompare(b.page));
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'CollectionPage',
+			name: `${label} Live Cams`,
+			description: seo.description,
+			url: `${SITE_URL}/site/${facet.slug}/`,
+		},
+		{
+			'@type': 'FAQPage',
+			mainEntity: [
+				{
+					'@type': 'Question',
+					name: `Is ${label} free?`,
+					acceptedAnswer: { '@type': 'Answer', text: review.free.join(' ') },
+				},
+				{
+					'@type': 'Question',
+					name: `How does ${label} charge?`,
+					acceptedAnswer: { '@type': 'Answer', text: review.howItWorks[0] },
+				},
+				{
+					'@type': 'Question',
+					name: `Who is ${label} best for?`,
+					acceptedAnswer: { '@type': 'Answer', text: review.bestFor },
+				},
+			],
+		},
+	],
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	{/* Do 19. 8. mířil tenhle drobeček na `/cams/`, tedy na KATEGORIE, ačkoli se
+	    jmenoval „Cam sites" — a rodič `/site/` přitom vůbec neexistoval, takže
+	    zkrácení URL dalo 404. Platí to i pro BreadcrumbList v JSON-LD. */}
+	<Breadcrumbs items={[{ label: 'Cam sites', href: '/site/' }, { label }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{label} Review — {fmt(facet.count)} Cams Live Now</h1>
+	<p class="mt-2 max-w-3xl text-lg text-ink-200">{review.tagline}</p>
+
+	{cta && (
+		<p class="mt-4">
+			<a
+				href={cta} rel="nofollow sponsored noopener" target={outTargetFor(facet.slug)}
+				class="btn-cta" data-cta-retarget
+			>Open {label} →</a>
+		</p>
+	)}
+
+	<div class="card-grid mt-8" data-grid data-visible={VISIBLE}>
+		{models.map((m, i) => (
+			<ModelCard
+				model={m}
+				eager={i < 10}
+				reserve={i >= VISIBLE}
+			/>
+		))}
+	</div>
+
+	<Pagination
+		base={`/site/${facet.slug}/`}
+		page={win.page} pages={win.pages}
+		from={win.from} to={win.to} total={win.total}
+		label={`models on ${label}`}
+	/>
+
+	<div class="prose-ecamx mt-12 max-w-3xl space-y-4 text-ink-200">
+		{review.intro.map((p) => <p>{p}</p>)}
+
+		<h2>How {label} works</h2>
+		<ul>{review.howItWorks.map((p) => <li>{p}</li>)}</ul>
+
+		<h2>What you get for free</h2>
+		<ul>{review.free.map((p) => <li>{p}</li>)}</ul>
+
+		<h2>Best for</h2>
+		<p>{review.bestFor}</p>
+
+		<h2>What to watch out for</h2>
+		<p>{review.watchOut}</p>
+
+		<h2>Verdict</h2>
+		<p>{review.verdict}</p>
+
+		<p class="text-sm text-ink-400">
+			Reviewed {review.updated}. eCamx earns a commission if you sign up through
+			our links — it costs you nothing and does not change what we write.
+		</p>
+	</div>
+
+	{networkProfiles.length > 0 && (
+		<section class="mt-12" aria-labelledby="profiles">
+			<h2 id="profiles" class="mb-3 text-lg font-bold">
+				Regular {label} models on eCamx ({networkProfiles.length})
+			</h2>
+			<div class="flex flex-wrap gap-x-3 gap-y-1 text-sm text-ink-400">
+				{networkProfiles.map((p) => (
+					<a href={`/live/${p.page}/`} class="hover:text-white hover:underline">{p.displayName}</a>
+				))}
+			</div>
+		</section>
+	)}
+
+	<section class="mt-10" aria-labelledby="others">
+		<h2 id="others" class="mb-3 text-lg font-bold">Compare with other cam sites</h2>
+		<div class="flex flex-wrap gap-2">
+			{FACETS.networks.filter((n) => n.slug !== facet.slug).map((n) => (
+				<a href={`/site/${n.slug}/`} class="pill">
+					{NETWORK_LABELS[n.slug]} <span class="text-ink-400">{n.count}</span>
+				</a>
+			))}
+			<a href="/site/" class="pill">All {FACETS.networks.length} compared →</a>
+		</div>
+		{/* Odkazy vznikají jen tam, kde ta stránka opravdu existuje — jinak by
+		    `check-links.ts` spadl, a spadl by právem. */}
+		{(ALTERNATIVES_FOR.includes(facet.slug as NetworkId) || TOKEN_RATES[facet.slug as NetworkId]) && (
+			<p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+				{ALTERNATIVES_FOR.includes(facet.slug as NetworkId) && (
+					<a href={`/site/${facet.slug}/alternatives/`} class="text-accent underline">
+						Sites like {label} — compared with live numbers →
+					</a>
+				)}
+				{TOKEN_RATES[facet.slug as NetworkId] && (
+					<a href={`/site/${facet.slug}/tokens/`} class="text-accent underline">
+						What {label} tokens cost →
+					</a>
+				)}
+			</p>
+		)}
+	</section>
+</Layout>

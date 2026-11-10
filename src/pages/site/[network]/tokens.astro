@@ -1,0 +1,229 @@
+---
+/**
+ * Kolik stojí tokeny — kalkulačka a převodní tabulka.
+ *
+ * Tři měřené dotazy, jedna stránka (Ahrefs US, 19. 8. 2026):
+ * „chaturbate token calculator" 288/měs KD 5 · „chaturbate tokens to dollars"
+ * 104 **KD 0** · „how much is 1000 tokens on chaturbate" 50 KD 2. CPC $11,
+ * tedy nákupní záměr.
+ *
+ * **Nosičem obsahu je předpočítaná tabulka, ne JavaScript.** Kdo hledá
+ * „how much is 1000 tokens", musí odpověď vidět ve výsledku vyhledávání a na
+ * stránce bez kliknutí; políčko s okamžitým přepočtem je UX navrch a stránka
+ * bez něj funguje celá.
+ *
+ * **URL vznikne jen pro síť, která má v `token-rates.ts` ověřené ceny.**
+ * Ani jedna ze sedmi sítí ceny veřejně nevystavuje (ověřeno: login/403/404),
+ * takže je musí opsat člověk z přihlášeného účtu. Do té doby stránka
+ * neexistuje — prázdná kalkulačka je horší než žádná.
+ */
+import Layout from '../../../layouts/Layout.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import { NETWORK_LABELS, type NetworkId } from '../../../lib/data';
+import { NETWORK_REVIEWS } from '../../../content/networks';
+import {
+	TOKEN_RATES, LADDER, perToken, cheapestFor, smallestBundlePrice, approxRange,
+} from '../../../content/token-rates';
+import { SITE_NAME, SITE_URL, fmt } from '../../../lib/seo';
+import { safeJsonLd } from '../../../lib/jsonld';
+
+export function getStaticPaths() {
+	return Object.keys(TOKEN_RATES).map((id) => ({
+		params: { network: id },
+		props: { network: id as NetworkId },
+	}));
+}
+
+const { network } = Astro.props;
+const label = NETWORK_LABELS[network];
+const rates = TOKEN_RATES[network]!;
+const { min, max } = perToken(rates);
+/**
+ * **Ceny v tabulce jsou skutečné nákupy, ne násobek kurzu.**
+ *
+ * První verze počítala `tokeny × nejlepší kurz` a u „100 tokenů" vyšlo $8,00 —
+ * číslo aritmeticky správné a přitom nekoupitelné, protože ten kurz platí jen
+ * v tisícovém balíčku. Tady se skládají reálné balíčky, takže sloupec „best
+ * price" je cena, kterou opravdu zaplatíš, a druhý sloupec ukazuje, o kolik se
+ * přeplácí při nákupu po nejmenším balíčku.
+ */
+/**
+ * Nad tímhle množstvím už ověřené balíčky nedávají realistickou odpověď: velké
+ * balíčky existují, jen se na jejich ceně zdroje neshodly. Řádek pak ukazuje
+ * rozpětí, ne číslo — falešná přesnost je horší než přiznané „přibližně".
+ */
+const VERIFIED_UP_TO = Math.max(...rates.bundles.map((b) => b.tokens)) * 2;
+const ladder = LADDER.map((t) => ({
+	tokens: t,
+	verified: t <= VERIFIED_UP_TO,
+	best: cheapestFor(rates, t),
+	small: smallestBundlePrice(rates, t),
+	approx: approxRange(rates, t),
+}));
+/** Titulek: `unit` je z dat malými písmeny, ve nadpisu by to vypadalo jako chyba. */
+const Unit = rates.unit.charAt(0).toUpperCase() + rates.unit.slice(1);
+const checked = new Date(`${rates.checkedOn}T00:00:00Z`).toLocaleDateString('en-GB', {
+	day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+});
+
+const faq = [
+	{
+		q: `How much is 1,000 ${rates.unit} on ${label}?`,
+		// Rozpětí, ne číslo: na ceně tisícového balíčku se zdroje neshodly
+		// ($79,99 vs $90,99), takže tvrdit jedno z nich by byla falešná přesnost
+		// právě u dotazu, kvůli kterému stránka existuje. Horní hranice je ale
+		// JISTÁ — tolik stojí opakovaný nákup největšího ověřeného balíčku.
+		a: `Between $${approxRange(rates, 1000).min.toFixed(2)} and ` +
+			`$${approxRange(rates, 1000).max.toFixed(2)}. The upper figure is certain: that is what ` +
+			`${1000 / rates.bundles[rates.bundles.length - 1].tokens} of the ` +
+			`${fmt(rates.bundles[rates.bundles.length - 1].tokens)}-token bundles cost. The lower one is ` +
+			`what the bigger bundles work out to if the listings we found are right — ${label} does not ` +
+			`publish those prices to anyone who is not signed in, and the listings disagree on them. ` +
+			`Checked ${checked}.`,
+	},
+	{
+		q: `What is one ${rates.unit.replace(/s$/, '')} worth in dollars on ${label}?`,
+		a: `Between $${rates.perTokenRange.min.toFixed(2)} and $${rates.perTokenRange.max.toFixed(2)}. ` +
+			`There is no single rate: the price per ${rates.unit.replace(/s$/, '')} falls as the bundle ` +
+			`gets bigger, and it only applies if you buy that much at once.`,
+	},
+	{
+		q: `Do you need ${rates.unit} to watch ${label}?`,
+		a: NETWORK_REVIEWS[network].free[0],
+	},
+];
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'FAQPage',
+	mainEntity: faq.map((f) => ({
+		'@type': 'Question',
+		name: f.q,
+		acceptedAnswer: { '@type': 'Answer', text: f.a },
+	})),
+};
+
+const title = `${label} Token Calculator – ${Unit} to Dollars | ${SITE_NAME}`;
+const description = `What ${label} ${rates.unit} cost in real money: every bundle, the price per ` +
+	`${rates.unit.replace(/s$/, '')}, and a table from 1 to 5,000. Checked ${checked}.`;
+---
+<Layout title={title} description={description}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+	<Breadcrumbs items={[
+		{ label: 'Cam sites', href: '/site/' },
+		{ label, href: `/site/${network}/` },
+		{ label: `${label} tokens` },
+	]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{label} {rates.unit} to dollars</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		One {rates.unit.replace(/s$/, '')} costs between
+		{' '}<strong class="text-white">${min.toFixed(3)}</strong> and
+		{' '}<strong class="text-white">${max.toFixed(3)}</strong> — there is no single rate,
+		because bigger bundles are cheaper. The table below shows what each amount
+		<em>actually</em> costs to buy, not the rate multiplied out: at small amounts you
+		cannot get the bulk price, so the difference is what you overpay.
+	</p>
+
+	<section class="mt-8 max-w-3xl" aria-labelledby="table-h">
+		<h2 id="table-h" class="mb-3 text-xl font-bold">What {rates.unit} are worth</h2>
+		<div class="overflow-x-auto">
+			<table class="w-full min-w-[24rem] border-collapse text-sm">
+				<thead>
+					<tr class="border-b border-ink-800 text-left text-ink-400">
+						<th class="py-2 pr-4 font-medium">{Unit}</th>
+						<th class="py-2 pr-4 font-medium">What it costs</th>
+						<th class="py-2 font-medium">How we know</th>
+					</tr>
+				</thead>
+				<tbody>
+					{ladder.map((row) => (
+						<tr class="border-b border-ink-800/60">
+							<td class="py-2 pr-4 tabular-nums">{fmt(row.tokens)}</td>
+							<td class="py-2 pr-4 tabular-nums text-ink-200">
+								{row.verified
+									? <>${row.best.usd.toFixed(2)}{row.best.tokens > row.tokens && (
+											<span class="ml-1 text-xs text-ink-500">(for {fmt(row.best.tokens)})</span>
+										)}</>
+									: <>${row.approx.min.toFixed(2)}–${row.approx.max.toFixed(2)}</>}
+							</td>
+							<td class="py-2 text-xs text-ink-500">
+								{row.verified
+									? 'bundle price, two sources agree'
+									: `low end if the larger bundles cost what the listings say; high end is what repeating the ${fmt(rates.bundles[rates.bundles.length - 1].tokens)}-pack costs for certain`}
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="bundles-h">
+		<h2 id="bundles-h" class="mb-3 text-xl font-bold">
+			The bundles we can confirm
+		</h2>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			{label} sells larger bundles than these — every listing we checked mentions them —
+			but no two of those listings quote the same price for any of them, so we do not
+			print a number we cannot stand behind. What is below is what two independent
+			sources state identically.
+		</p>
+		<div class="overflow-x-auto">
+			<table class="w-full min-w-[24rem] border-collapse text-sm">
+				<thead>
+					<tr class="border-b border-ink-800 text-left text-ink-400">
+						<th class="py-2 pr-4 font-medium">Bundle</th>
+						<th class="py-2 pr-4 font-medium">Price</th>
+						<th class="py-2 font-medium">Per {rates.unit.replace(/s$/, '')}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{rates.bundles.map((b) => (
+						<tr class="border-b border-ink-800/60">
+							<td class="py-2 pr-4 tabular-nums">
+								{fmt(b.tokens)}
+								{b.note && <span class="ml-2 text-xs text-ink-500">{b.note}</span>}
+							</td>
+							<td class="py-2 pr-4 tabular-nums text-ink-200">${b.usd.toFixed(2)}</td>
+							<td class="py-2 tabular-nums text-ink-200">${(b.usd / b.tokens).toFixed(3)}</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+		<p class="mt-3 text-xs text-ink-500">
+			Checked <strong>{checked}</strong>. {rates.provenance} Cam sites also run
+			first-purchase promotions, so treat this as the shape of the pricing, not a quote —
+			the checkout page is the only place with your final price.
+		</p>
+		<p class="mt-2 text-xs text-ink-500">
+			Sources:{' '}
+			{rates.sources.map((src, i) => (
+				<>
+					{i > 0 && ' · '}
+					<a href={src.url} rel="nofollow noopener" target="_blank" class="underline">
+						{src.label}
+					</a>
+					{' '}({src.date})
+				</>
+			))}
+		</p>
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="faq-h">
+		<h2 id="faq-h" class="mb-3 text-xl font-bold">Questions people ask</h2>
+		<dl class="space-y-4 text-sm leading-relaxed">
+			{faq.map((f) => (
+				<div>
+					<dt class="font-medium text-white">{f.q}</dt>
+					<dd class="mt-1 text-ink-200">{f.a}</dd>
+				</div>
+			))}
+		</dl>
+	</section>
+
+	<p class="mt-10 text-sm">
+		<a href={`/site/${network}/`} class="text-accent underline">{label} review — how tipping actually works →</a>
+	</p>
+</Layout>

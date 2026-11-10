@@ -1,0 +1,59 @@
+---
+import TextPage from '../layouts/TextPage.astro';
+import { META, FACETS, NETWORK_LABELS } from '../lib/data';
+import { fmt } from '../lib/seo';
+---
+<TextPage
+	title="About eCamx | Live Cam Directory"
+	description={`What eCamx is, how it works, and why it aggregates ${FACETS.networks.length} cam sites into one directory.`}
+	heading="About eCamx"
+>
+	<p>
+		eCamx is a live cam directory. It pulls the models who are broadcasting right
+		now from {FACETS.networks.length} major webcam platforms and puts them in a
+		single grid, so you can browse across all of them instead of keeping seven
+		tabs open.
+	</p>
+
+	<h2>How it works</h2>
+	<p>
+		Once a day we fetch the public feeds from each platform, clean up the
+		messy category labels they use, and rebuild the whole site as static pages.
+		That is why it loads quickly and why there is nothing to sign up for.
+		Who is online updates in your browser when the page loads.
+	</p>
+	<p>
+		Right now the directory covers <strong>{fmt(META.modelCount)} models</strong> across
+		{' '}{FACETS.categories.length} categories and {FACETS.countries.length} countries.
+	</p>
+
+	<h2>The platforms we cover</h2>
+	<ul>
+		{FACETS.networks.map((n) => (
+			<li>
+				<a href={`/site/${n.slug}/`}>{NETWORK_LABELS[n.slug]}</a>
+				{' '}— {fmt(n.count)} models in the current index
+			</li>
+		))}
+	</ul>
+
+	<h2>What we are not</h2>
+	<p>
+		We do not run any of these platforms, we do not employ or represent any
+		performer, and we host no video. Every stream plays through the originating
+		platform's own player. If you spend money, you spend it there, not here.
+	</p>
+
+	<h2>How it pays for itself</h2>
+	<p>
+		Links out to the platforms carry an affiliate code. If you sign up or spend
+		money after clicking through, we get a commission at no extra cost to you.
+		That is the entire business model — no ads, no paywall, no data selling.
+	</p>
+
+	<h2>Get in touch</h2>
+	<p>
+		Broken listing, wrong data, or a removal request? See the
+		<a href="/contact/">contact page</a>.
+	</p>
+</TextPage>

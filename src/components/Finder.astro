@@ -1,0 +1,510 @@
+---
+/**
+ * Hledání modelky podle jména napříč 7 sítěmi.
+ *
+ * **Bez JS to není prázdná stránka.** Statický fallback (písmena, kategorie,
+ * země, sítě) je v HTML od začátku a vyhledávací pole se odkrývá až skriptem —
+ * stejný vzor jako `.consent-only` v Layoutu. Crawler tedy dostane obsah, ne
+ * shell, což při stavu indexace (jediná indexovaná stránka) není detail.
+ *
+ * **Žádný `<form>` a žádné `?q=`.** `public/_headers` posílá
+ * `form-action 'none'`, takže odeslání formuláře by CSP zablokovala, a
+ * `robots.txt` má `Disallow: /*?`, takže by výsledky stejně nikdo neindexoval.
+ * Stav filtrů jde do hashe — dá se sdílet, na server se nedostane.
+ *
+ * **CLS 0:** input i chipy jsou staticky v HTML, výsledky mají rezervovanou
+ * výšku a **řádky nemají obrázky** (u offline modelky by náhled lhal a Cam4 má
+ * v URL podepsanou expiraci — D33).
+ */
+import { FACETS, MODEL_LETTERS, NETWORK_LABELS, countryName, topCategories } from '../lib/data';
+
+const cats = topCategories(18);
+const countries = FACETS.countries.slice(0, 14);
+---
+<div class="finder" data-finder>
+	{/*
+	  **Blok je v HTML od začátku a NIC se neodkrývá.** První verze měla
+	  `hidden` a odkrýval ho engine — naměřeno CLS **0,2724**, protože se celý
+	  nástroj (pole + filtry + výsledky) vsunul nad zbytek stránky. Je to
+	  přesně ta chyba, kterou tenhle web řešil u věkové lišty (D29).
+
+	  Bez JS zůstane pole `disabled` a stavová řádka to řekne — místo je
+	  rezervované, takže se nic neposune, ať skript naskočí nebo ne.
+	*/}
+	<div class="finder-box" data-finder-box>
+		<label for="finder-q" class="sr-only">Search cam models by name</label>
+		<input
+			id="finder-q" type="search" autocomplete="off" autocapitalize="off"
+			spellcheck="false" enterkeyhint="search"
+			placeholder="Type a model's name — e.g. lilyflowers"
+			class="finder-input"
+			disabled
+			data-finder-input
+		/>
+		<div class="finder-filters" data-finder-filters>
+			<button type="button" class="chip is-on" data-f="live">Live now</button>
+			<button type="button" class="chip" data-f="twin">On 2+ sites</button>
+			<button type="button" class="chip" data-f="g:female">Women</button>
+			<button type="button" class="chip" data-f="g:male">Men</button>
+			<button type="button" class="chip" data-f="g:trans">Trans</button>
+			<button type="button" class="chip" data-f="g:couple">Couples</button>
+			<select class="chip" data-f="net" aria-label="Cam site">
+				<option value="">Any site</option>
+				{Object.entries(NETWORK_LABELS).map(([id, label]) => (
+					<option value={id}>{label}</option>
+				))}
+			</select>
+			<select class="chip" data-f="cc" aria-label="Country">
+				<option value="">Any country</option>
+				{FACETS.countries.map((c) => (
+					<option value={c.slug}>{countryName(c.slug)}</option>
+				))}
+			</select>
+		</div>
+		<p class="finder-status" data-finder-status role="status" aria-live="polite">
+			Search needs JavaScript — the links below work without it.
+		</p>
+		{/* Pevná výška + placeholder uvnitř: řádky placeholder nahradí, takže
+		    kontejner nikdy nemění výšku a CLS zůstává 0. */}
+		<ol class="finder-results" data-finder-results>
+			<li class="finder-placeholder">
+				Type any part of a nickname — first name, a fragment, whatever you remember.
+				You do not need to know which of the {FACETS.networks.length} sites she is on.
+			</li>
+		</ol>
+		{/* Tlačítko má rezervované místo, jinak by ho jeho zobrazení posunulo. */}
+		<div class="finder-foot">
+			<button type="button" class="btn-ghost" hidden data-finder-more>Show more</button>
+		</div>
+	</div>
+
+	{/* Statická cesta pro crawlera i pro návštěvníka bez JS. */}
+	<div class="finder-fallback" data-finder-fallback>
+		<h2 class="mb-2 text-lg font-bold">Browse instead</h2>
+		<p class="mb-3 text-sm text-ink-400">
+			By first letter of the name:
+		</p>
+		<div class="mb-5 flex flex-wrap gap-1.5">
+			{MODEL_LETTERS.map((l) => (
+				<a href={`/models/${l}/`} class="pill">{l.toUpperCase()}</a>
+			))}
+		</div>
+		<p class="mb-3 text-sm text-ink-400">By what she streams:</p>
+		<div class="mb-5 flex flex-wrap gap-1.5">
+			{cats.map((c) => <a href={`/cams/${c.slug}/`} class="pill">{c.label}</a>)}
+			<a href="/cams/" class="pill">All categories →</a>
+		</div>
+		<p class="mb-3 text-sm text-ink-400">By where she is:</p>
+		<div class="mb-5 flex flex-wrap gap-1.5">
+			{countries.map((c) => (
+				<a href={`/country/${c.slug}/`} class="pill">{countryName(c.slug)}</a>
+			))}
+		</div>
+		<p class="mb-3 text-sm text-ink-400">By site:</p>
+		<div class="flex flex-wrap gap-1.5">
+			{FACETS.networks.map((n) => (
+				<a href={`/site/${n.slug}/`} class="pill">{NETWORK_LABELS[n.slug]}</a>
+			))}
+			<a href="/site/" class="pill">Compare all →</a>
+		</div>
+	</div>
+</div>
+
+<script>
+	/**
+	 * Engine finderu. Načte se jen na téhle stránce; index až po dopadu stránky
+	 * (idle), takže na první vykreslení nemá vliv.
+	 */
+	import { loadIndex, type Idx, type IdxMeta } from '../lib/search-index-client';
+	import { readWatch } from '../lib/watchlist';
+
+	const root = document.querySelector<HTMLElement>('[data-finder]');
+	if (root) {
+		const box = root.querySelector<HTMLElement>('[data-finder-box]')!;
+		const input = root.querySelector<HTMLInputElement>('[data-finder-input]')!;
+		const filters = root.querySelector<HTMLElement>('[data-finder-filters]')!;
+		const status = root.querySelector<HTMLElement>('[data-finder-status]')!;
+		const list = root.querySelector<HTMLOListElement>('[data-finder-results]')!;
+		const more = root.querySelector<HTMLButtonElement>('[data-finder-more]')!;
+		const fallback = root.querySelector<HTMLElement>('[data-finder-fallback]')!;
+
+		// Nic se neodkrývá (CLS) — jen se povolí pole a přepíše se hláška pro
+		// návštěvníka bez JS. Stavová řádka má pevnou výšku, takže ani tohle
+		// nic neposune.
+		input.disabled = false;
+		status.textContent = 'Type a name, or use the filters.';
+
+		const PAGE = 60;
+		let meta: IdxMeta | null = null;
+		let idx: Idx | null = null;
+		let blob = '';        // nicky oddělené \n, tak jak přišly
+		let lower = '';       // tentýž blob lowercase — hledá se v něm
+		let starts: Int32Array = new Int32Array(0);
+		let cols: Uint8Array = new Uint8Array(0);
+		let twinOf: Int32Array = new Int32Array(0);   // řádek → index skupiny (+1), 0 = žádná
+		let live: Map<string, number> | null = null;  // slug → diváci (z /api/online/)
+		let liveTruncated = new Set<string>();        // sítě, kde feed nedohlédl na konec
+		let shown = PAGE;
+		let loading = false;
+
+		const state = { q: '', live: true, twin: false, gender: '', net: '', cc: '' };
+
+		/**
+		 * Předvybraný filtr z hashe (`/finder/#net=chaturbate&cc=co`). Odkazy na
+		 * něj vedou z filtru mřížky, když si člověk chce přidat víc podmínek
+		 * (D58). **Hash, ne `?`** — dotazové parametry má `robots.txt` zakázané
+		 * (`Disallow: /*?`), takže by z toho vznikaly URL, které crawler nesmí
+		 * ani navštívit. Hodnoty se ověřují proti tomu, co index opravdu zná;
+		 * co nezná, se ignoruje.
+		 */
+		function stateFromHash(): void {
+			const hash = location.hash.replace(/^#/, '');
+			if (!hash) return;
+			for (const part of hash.split('&')) {
+				const [k, raw] = part.split('=');
+				const v = decodeURIComponent(raw ?? '').toLowerCase();
+				if (!v || !/^[a-z0-9-]{1,24}$/.test(v)) continue;
+				if (k === 'net') state.net = v;
+				else if (k === 'cc') state.cc = v;
+				else if (k === 'g') state.gender = v;
+				else if (k === 'twin') state.twin = v === '1';
+				else if (k === 'live') state.live = v === '1';
+			}
+		}
+		stateFromHash();
+
+		/**
+		 * Srovnat UI se stavem. Bez tohohle by po prokliku z filtru mřížky
+		 * (`/finder/#net=chaturbate`) filtr platil, ale v selectu by stálo
+		 * „Any site" — člověk by pak nechápal, proč vidí jen jednu síť.
+		 */
+		function paintFilters(): void {
+			for (const b of filters.querySelectorAll<HTMLElement>('button[data-f]')) {
+				const f = b.dataset.f!;
+				if (f === 'live') b.classList.toggle('is-on', state.live);
+				else if (f === 'twin') b.classList.toggle('is-on', state.twin);
+				else if (f.startsWith('g:')) b.classList.toggle('is-on', f === `g:${state.gender}`);
+			}
+			for (const sel of filters.querySelectorAll<HTMLSelectElement>('select[data-f]')) {
+				if (sel.dataset.f === 'net') sel.value = state.net;
+				if (sel.dataset.f === 'cc') sel.value = state.cc;
+			}
+		}
+		paintFilters();
+		// S filtrem z hashe má smysl načíst index hned — člověk sem přišel
+		// s hotovým dotazem, ne aby ho psal.
+		if (state.net || state.cc || state.gender || state.twin) {
+			void load().then(render);
+		}
+		/** Kdo je už sledovaný — načte se jednou, tlačítka si to jen přečtou. */
+		const watched = new Set(readWatch().map((w) => w.page));
+
+		/** Tentýž slugify jako sync a `src/lib/search-index.ts`. */
+		function slugify(s: string): string {
+			return s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96);
+		}
+
+		/** Obojí umí modul — tady zůstává jen tenký alias, ať se nemění render. */
+		const pageOf = (row: number, _nick: string) => idx!.page(row);
+
+		const nickAt = (row: number) => idx!.nick(row);
+
+		/** `append()` se v Astro typech sráží s jiným `append` — tohle je jednoznačné. */
+		function add(parent: HTMLElement, ...bits: Array<string | Node>): void {
+			for (const b of bits) {
+				parent.appendChild(typeof b === 'string' ? document.createTextNode(b) : b);
+			}
+		}
+
+		async function load() {
+			if (meta || loading) return;
+			loading = true;
+			status.textContent = 'Loading the index…';
+			try {
+				// Parsování formátu je v `src/lib/search-index-client.ts` — čte ho
+				// i `/my/`, takže dvě kopie znalosti formátu vzniknout nemohou (D24).
+				idx = await loadIndex();
+				meta = idx.meta;
+				blob = '';                 // nicky se čtou přes `idx.nick(row)`
+				lower = idx.lower;
+				starts = idx.starts;
+				cols = idx.cols;
+				// Lokální mapa řádek → skupina dvojčat. Není to znalost formátu,
+				// jen index nad `meta.tw` pro rychlý test ve filtru.
+				twinOf = new Int32Array(meta.rows);
+				meta.tw.forEach((group, gi) => { for (const r of group) twinOf[r] = gi + 1; });
+				status.textContent = '';
+				render();
+				// Živý stav až po prvním vykreslení: výsledky nesmí čekat na síť.
+				void refreshLive();
+			} catch (e) {
+				// Tiše degradovat na statické procházení — stejná filozofie jako
+				// u živého stavu v Layoutu.
+				meta = null;
+				status.textContent = 'Search is unavailable right now — browse by letter below instead.';
+				fallback.scrollIntoView({ block: 'nearest' });
+			} finally {
+				loading = false;
+			}
+		}
+
+		/**
+		 * Živý stav se tahá JEDNOU za návštěvu, ne při každém dotazu. `/api/online/`
+		 * sdílí rate limit s `/go/` (40 req/10 s) a proklik je to poslední, co smí
+		 * dostat 429 kvůli hledání.
+		 */
+		async function refreshLive() {
+			if (live || !meta) return;
+			live = new Map();
+			await Promise.all(meta.nets.map(async (net) => {
+				try {
+					const r = await fetch(`/api/online/${net}/`, { signal: AbortSignal.timeout(6000) });
+					if (!r.ok) return;
+					const feed = await r.json() as {
+						online: Record<string, number>; truncated?: boolean;
+					};
+					for (const [slug, viewers] of Object.entries(feed.online ?? {})) {
+						live!.set(`${net}:${slug}`, viewers);
+					}
+					if (feed.truncated) liveTruncated.add(net);
+				} catch { /* výpadek jedné sítě nesmí rozbít výsledky */ }
+			}));
+			render();
+		}
+
+		function matches(row: number, ignoreLive = false): boolean {
+			// Layout: bajt 0 = síť, bajt 1 = gender/online/suffix, 2 = země,
+			// 3 = věk. Síť má celý bajt od 25. 8. 2026 (D54) — do tří bitů se
+			// jedenáct sítí nevešlo.
+			const b1 = cols[row * 4 + 1];
+			if (state.live && !ignoreLive && !((b1 >> 1) & 1)) return false;
+			if (state.twin && !twinOf[row]) return false;
+			if (state.gender && meta!.gens[(b1 >> 2) & 7] !== state.gender) return false;
+			if (state.net && meta!.nets[cols[row * 4]] !== state.net) return false;
+			if (state.cc) {
+				const ci = cols[row * 4 + 2];
+				if (!ci || meta!.cc[ci - 1] !== state.cc) return false;
+			}
+			return true;
+		}
+
+		/** Řádek podle pozice v blobu — binárně, `starts` je setříděné. */
+		function rowAt(offset: number): number {
+			let lo = 0, hi = meta!.rows - 1;
+			while (lo < hi) {
+				const mid = (lo + hi + 1) >> 1;
+				if (starts[mid] <= offset) lo = mid; else hi = mid - 1;
+			}
+			return lo;
+		}
+
+		/**
+		 * Vrací řádky a jestli se musel povolit filtr „Live now".
+		 *
+		 * **Když hledáš jméno, chceš odpověď i u offline modelky** — „nenašli jsme
+		 * nic" je u dotazu na konkrétní nick horší odpověď než „není teď online".
+		 * Filtr se proto u jmenného dotazu sám povolí, ale řekne se to nahlas.
+		 */
+		function search(): { rows: number[]; relaxed: boolean; part?: string } {
+			const q = state.q.trim().toLowerCase();
+			if (!q) {
+				const out: number[] = [];
+				for (let r = 0; r < meta!.rows && out.length < 2000; r++) if (matches(r)) out.push(r);
+				return { rows: out, relaxed: false };
+			}
+			const strict = byName(q, false);
+			if (strict.length) return { rows: strict, relaxed: false };
+			// Není online → zkusit i offline (jméno se hledá i u zhasnutého pokoje).
+			const anyState = state.live ? byName(q, true) : [];
+			if (anyState.length) return { rows: anyState, relaxed: true };
+			// Pořád nic: zkusit nejdelší úsek nicku. Nicky bývají složené
+			// (`sandy_candycrush`), takže překlep v jedné části nemá zabít celý
+			// dotaz. Substring překlep UVNITŘ slova neodpustí — to je vlastnost
+			// `indexOf` a vědomě se s tím nic nedělá (změřeno: 0/20).
+			const part = q.split(/[^a-z0-9]+/).filter((x) => x.length >= 4)
+				.sort((a, b) => b.length - a.length)[0];
+			if (part && part !== q) {
+				const loose = byName(part, true);
+				if (loose.length) return { rows: loose, relaxed: true, part };
+			}
+			return { rows: [], relaxed: false };
+		}
+
+		function byName(q: string, ignoreLive: boolean): number[] {
+			// Přesná shoda → od začátku → uvnitř. Uvnitř skupiny rozhoduje pořadí
+			// řádku, což je rovnou ranking (online, pak peak).
+			const exact: number[] = [], prefix: number[] = [], inside: number[] = [];
+			const seen = new Uint8Array(meta!.rows);
+			let from = 0, hit: number;
+			while ((hit = lower.indexOf(q, from)) !== -1 && exact.length + prefix.length + inside.length < 2000) {
+				from = hit + 1;
+				const row = rowAt(hit);
+				if (seen[row]) continue;
+				seen[row] = 1;
+				if (!matches(row, ignoreLive)) continue;
+				const start = starts[row];
+				const len = starts[row + 1] - start - 1;
+				if (hit === start) (len === q.length ? exact : prefix).push(row);
+				else inside.push(row);
+			}
+			return [...exact, ...prefix, ...inside];
+		}
+
+		/** Live / Live at last check / Offline — tři stavy, ne dva (D11). */
+		function liveState(row: number, nick: string): { label: string; cls: string } {
+			const net = meta!.nets[cols[row * 4]];
+			const builtOnline = (cols[row * 4 + 1] >> 1) & 1;
+			if (!live) return builtOnline ? { label: 'Live', cls: 'bg-live' } : { label: 'Offline', cls: 'bg-ink-700' };
+			const viewers = live.get(`${net}:${slugify(nick)}`);
+			if (viewers !== undefined) {
+				return { label: viewers ? `Live · ${viewers.toLocaleString('en-US')} watching` : 'Live', cls: 'bg-live' };
+			}
+			// Feed vidí jen prvních N modelek; chybět v něm neznamená být offline.
+			if (builtOnline && liveTruncated.has(net)) return { label: 'Live at last check', cls: 'bg-ink-700' };
+			return { label: 'Offline', cls: 'bg-ink-700' };
+		}
+
+		function render() {
+			if (!meta) return;
+			const { rows: hits, relaxed, part } = search();
+			list.replaceChildren();
+			const slice = hits.slice(0, shown);
+			for (const row of slice) {
+				const nick = nickAt(row);
+				const page = pageOf(row, nick);
+				const net = meta.nets[cols[row * 4]];
+				const netLabel = meta.netLabels[cols[row * 4]];
+				const ci = cols[row * 4 + 2];
+				const age = cols[row * 4 + 3] & 0x7f;
+				const st = liveState(row, nick);
+				const group = twinOf[row] ? meta.tw[twinOf[row] - 1] : null;
+
+				const li = document.createElement('li');
+				li.className = 'finder-row';
+				const a = document.createElement('a');
+				a.href = `/live/${page}/`;
+				a.className = 'finder-nick';
+				a.textContent = nick;
+				add(li, a);
+
+				const badge = document.createElement('span');
+				badge.className = `badge ${st.cls}`;
+				badge.textContent = st.label;
+				add(li, ' ', badge);
+
+				const bits = [netLabel];
+				if (ci) bits.push(meta.ccNames[ci - 1]);
+				if (age) bits.push(`${age}`);
+				const meta_ = document.createElement('span');
+				meta_.className = 'finder-meta';
+				meta_.textContent = bits.join(' · ');
+				add(li, ' ', meta_);
+
+				// Nejužitečnější věc celého nástroje: její pokoj je offline, ale
+				// na jiné síti právě vysílá. To samotná síť říct neumí.
+				if (group) {
+					const elsewhere = group
+						.filter((r) => r !== row)
+						.filter((r) => {
+							const n = meta!.nets[cols[r * 4]];
+							return live ? live.has(`${n}:${slugify(nickAt(r))}`) : ((cols[r * 4 + 1] >> 1) & 1) === 1;
+						});
+					if (elsewhere.length) {
+						const other = elsewhere[0];
+						const link = document.createElement('a');
+						link.href = `/live/${pageOf(other, nickAt(other))}/`;
+						link.className = 'finder-elsewhere';
+						link.textContent = st.label === 'Offline'
+							? `live now on ${meta.netLabels[cols[other * 4]]} →`
+							: `also on ${meta.netLabels[cols[other * 4]]}`;
+						add(li, ' ', link);
+					} else {
+						const chip = document.createElement('span');
+						chip.className = 'finder-meta';
+						chip.textContent = `· on ${group.length} sites`;
+						add(li, ' ', chip);
+					}
+				}
+
+				// Sledování přímo z výsledku. Klik obsluhuje delegovaný listener
+				// v Layoutu, tady se jen vykreslí stav — v řádku, který stejně
+				// vzniká za běhu, to nestojí ani bajt v HTML.
+				const follow = document.createElement('button');
+				follow.type = 'button';
+				follow.className = watched.has(page) ? 'watch-btn is-on' : 'watch-btn';
+				follow.setAttribute('aria-pressed', String(watched.has(page)));
+				follow.dataset.watchToggle = '';
+				follow.dataset.watchSource = 'finder';
+				follow.dataset.page = page;
+				follow.dataset.network = net;
+				follow.dataset.username = nick;
+				const flabel = document.createElement('span');
+				flabel.dataset.watchLabel = '';
+				flabel.textContent = watched.has(page) ? 'Following' : 'Follow';
+				follow.appendChild(flabel);
+				add(li, ' ', follow);
+
+				const cta = document.createElement('a');
+				cta.href = `/go/${net}/${encodeURIComponent(nick)}/?p=finder`;
+				cta.className = 'finder-cta';
+				cta.rel = 'nofollow sponsored';
+				cta.textContent = 'Chat →';
+				add(li, ' ', cta);
+				add(list, li);
+			}
+
+			more.hidden = hits.length <= shown;
+			const total = hits.length >= 2000 ? '2000+' : String(hits.length);
+			status.textContent = !hits.length
+				// Nenajít nick je legitimní stav: modelka, která dlouho nevysílala,
+				// z katalogu vypadne (strop 16 000 stránek řadí podle poptávky).
+				// Říct to je lepší než nechat člověka hádat, jestli se přepsal.
+				? 'Nothing matches. Try a shorter piece of the name — and note that models drop out of the index if they stop broadcasting for a while.'
+				: relaxed
+					? part
+						? `No match for "${state.q.trim()}" — showing ${total} names containing "${part}".`
+						: `${total} match "${state.q.trim()}", but none are live right now — showing them anyway.`
+					: `${total} of ${meta.rows.toLocaleString('en-US')} profiles`;
+		}
+
+		let timer = 0;
+		input.addEventListener('input', () => {
+			state.q = input.value;
+			shown = PAGE;
+			clearTimeout(timer);
+			// Debounce jen kvůli psaní, ne kvůli síti — hledání je lokální.
+			timer = window.setTimeout(() => { void load().then(render); }, 120);
+		});
+		input.addEventListener('focus', () => { void load(); }, { once: true });
+
+		filters.addEventListener('click', (e) => {
+			const btn = (e.target as HTMLElement).closest<HTMLElement>('button[data-f]');
+			if (!btn) return;
+			const f = btn.dataset.f!;
+			if (f === 'live') { state.live = !state.live; btn.classList.toggle('is-on', state.live); }
+			else if (f === 'twin') { state.twin = !state.twin; btn.classList.toggle('is-on', state.twin); }
+			else if (f.startsWith('g:')) {
+				const g = f.slice(2);
+				state.gender = state.gender === g ? '' : g;
+				for (const b of filters.querySelectorAll<HTMLElement>('button[data-f^="g:"]')) {
+					b.classList.toggle('is-on', b.dataset.f === `g:${state.gender}`);
+				}
+			}
+			shown = PAGE;
+			void load().then(render);
+		});
+		filters.addEventListener('change', (e) => {
+			const sel = e.target as HTMLSelectElement;
+			if (sel.dataset.f === 'net') state.net = sel.value;
+			if (sel.dataset.f === 'cc') state.cc = sel.value;
+			shown = PAGE;
+			void load().then(render);
+		});
+		more.addEventListener('click', () => { shown += PAGE; render(); });
+
+		// Index až v nečinnosti — na první vykreslení nesmí mít vliv.
+		if ('requestIdleCallback' in window) requestIdleCallback(() => void load(), { timeout: 4000 });
+		else setTimeout(() => void load(), 2500);
+	}
+</script>

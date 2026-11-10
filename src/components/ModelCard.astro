@@ -1,0 +1,86 @@
+---
+/**
+ * Karta modelky.
+ *
+ * **Z karty se ven nechodí.** Vede vždycky na naši stránku `/live/<page>/`.
+ *
+ * Do 3. 9. 2026 měla karta ještě odchozí tlačítko „Chat →". Změřeno za sedm
+ * dní po D67/D68: **placement `card` 0 prokliků**, zatímco klik do streamu na
+ * stránce modelky (`player`) jich měl 27 z 36 celkem. Tlačítko tedy nic
+ * nevydělávalo a jen bralo místo a pozornost; konverze se děje na `/live/`,
+ * kam teď míří celá karta. Kenny: „potřebujeme ty lidi co nejdýl udržet na
+ * webu a mít /live/ abychom měli co indexovat." Viz D71.
+ *
+ * Vnořené <a> nejsou platné HTML, takže se používá „stretched link": jméno
+ * modelky je odkaz, který si přes ::after roztáhne klikací plochu na celou
+ * kartu.
+ */
+import { NETWORK_LABELS, countryName, type Model } from '../lib/data';
+
+interface Props {
+	model: Model;
+	eager?: boolean;
+	/**
+	 * Karta z rezervy. Je v HTML (crawler ji vidí, prolinkování funguje), ale
+	 * skrytá — klientský kód ji odkryje, až když nějakou jinou zhasne kvůli
+	 * offline stavu. Díky tomu mřížka zůstane plná živých modelek.
+	 */
+	reserve?: boolean;
+}
+const { model, eager = false, reserve = false } = Astro.props;
+
+const label = NETWORK_LABELS[model.network];
+// Feedy posílají i nesmysly typu věk 99 nebo 0 — stejná hranice jako
+// `ageBucket()` v taxonomy-cleanup.ts, ať se karta neshoduje s kategorií.
+const age = model.age && model.age >= 18 && model.age <= 80 ? model.age : null;
+const meta = [label, model.country ? countryName(model.country) : null, age]
+	.filter(Boolean).join(' · ');
+---
+<article class="card" data-network={model.network} hidden={reserve}>
+	<div class="thumb-wrap">
+		{model.thumbnail ? (
+			<img
+				src={model.thumbnail}
+				alt={`${model.displayName} live cam`}
+				loading={eager ? 'eager' : 'lazy'}
+				decoding="async"
+				width="360" height="270"
+				referrerpolicy="no-referrer"
+				data-preview={model.previewVideo ?? undefined}
+				data-thumb-fallback={model.thumbnailFallback ?? undefined}
+			/>
+		) : (
+			<div class="flex h-full items-center justify-center text-sm text-ink-600">no preview</div>
+		)}
+
+		<div class="thumb-shade"></div>
+
+		<div class="badge-row">
+			<span
+				class="badge badge-live bg-live"
+				role="status"
+				data-live-badge={`${model.network}:${model.slug}`}
+				data-build-viewers={model.viewers ?? 0}
+			>Live</span>
+			{model.isHd && <span class="badge bg-ink-700">HD</span>}
+			{model.isNew && <span class="badge bg-ink-700">New</span>}
+			{model.toy && <span class="badge bg-toy" title="Interactive toy — reacts to tips">Toy</span>}
+		</div>
+
+		{model.viewers != null && (
+			<span
+				class="viewer-count"
+				data-viewers={`${model.network}:${model.slug}`}
+			>{model.viewers.toLocaleString('en-US')} watching</span>
+		)}
+
+	</div>
+
+	<div class="p-2.5">
+		<h3 class="truncate text-sm font-semibold">
+			<a href={`/live/${model.page}/`} class="stretch hover:text-accent">{model.displayName}</a>
+		</h3>
+		<p class="mt-0.5 truncate text-xs text-ink-400">{meta}</p>
+	</div>
+
+</article>

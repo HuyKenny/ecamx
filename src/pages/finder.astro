@@ -1,0 +1,87 @@
+---
+/**
+ * Hledání modelky podle jména napříč 7 sítěmi.
+ *
+ * Měřený cluster (Ahrefs US, 19. 8. 2026): „cam girl search engine" 800/měs,
+ * „cam girl search" 300, „find cam girl" 250, „cam model search" 150.
+ *
+ * **Po hlavním dotazu „cam girl finder" (2 300/měs) se vědomě nejde** — vítěz
+ * `camgirlfinder.net` je face-search nad 2,5 miliardy tváří a záměr toho dotazu
+ * je biometrická identifikace osob. Tuhle stránku dělá jméno, ne obličej.
+ *
+ * Hranice proti `/models/`: tady se **hledá**, tam se **prochází abecedně**.
+ * Dvě stránky na jednu frázi by při DR 13 znamenaly rozdělenou sílu.
+ */
+import Layout from '../layouts/Layout.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import Finder from '../components/Finder.astro';
+import { MODEL_PAGES, MODELS, FACETS, META } from '../lib/data';
+import { crossNetworkNicks } from '../lib/cross-network';
+import { SITE_NAME, SITE_URL, fmt, approx } from '../lib/seo';
+import { safeJsonLd } from '../lib/jsonld';
+
+const twins = crossNetworkNicks(MODEL_PAGES).length;
+const title = `Cam Model Search – Find Any Model Across ${FACETS.networks.length} Sites | ${SITE_NAME}`;
+const description = `Search ${approx(MODEL_PAGES.length)} cam models by name across ` +
+	`${FACETS.networks.length} sites at once. See who is live right now, and where else she streams ` +
+	`under the same nickname.`;
+
+/**
+ * `WebSite` + `SearchAction` popisuje, že tahle stránka je vyhledávání. Cíl
+ * míří na hash, ne na `?q=` — query URL by `robots.txt` (`Disallow: /*?`)
+ * stejně nikdy nepustil do indexu.
+ */
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'WebPage',
+	name: 'Cam model search',
+	description,
+	url: `${SITE_URL}/finder/`,
+	isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL },
+};
+---
+<Layout title={title} description={description}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+	<Breadcrumbs items={[{ label: 'Find a model' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Find a cam model by name</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		One search box over <strong class="text-white">{fmt(MODEL_PAGES.length)} profiles</strong> from
+		{' '}{FACETS.networks.length} cam sites — {fmt(MODELS.length)} of them live right now. Type any
+		part of a nickname; you do not need to know which site she is on, which is the whole point.
+	</p>
+
+	<div class="mt-6">
+		<Finder />
+	</div>
+
+	<section class="mt-12 max-w-3xl" aria-labelledby="why-h">
+		<h2 id="why-h" class="mb-3 text-xl font-bold">Why search here and not on the cam site</h2>
+		<div class="space-y-3 text-sm leading-relaxed text-ink-200">
+			<p>
+				Every cam site has its own search, and every one of them only knows its own
+				performers. If the name you remember was on a different site — or she moved —
+				their search says she does not exist. This one looks at all
+				{' '}{FACETS.networks.length} at once.
+			</p>
+			<p>
+				<strong>It also knows when the same nickname is broadcasting somewhere else.</strong>
+				{' '}We currently track {fmt(twins)} nicknames that appear on more than one of these
+				sites, so when a room is dark here, the result can point you at the site where that
+				name is live right now. No individual cam site can tell you that, because none of
+				them can see the others.
+			</p>
+			<p>
+				A shared nickname is a name match, not a verified identity — nicknames are not
+				reserved across cam sites. Each profile page says exactly how much the two listings
+				agree on. <a href="/models/same-nickname/" class="text-accent underline">How we
+				match names →</a>
+			</p>
+			<p class="text-xs text-ink-500">
+				Live status comes from the sites themselves and is checked as you search; everything
+				else was counted by our own sync, last run
+				{' '}{new Date(META.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC.
+			</p>
+		</div>
+	</section>
+</Layout>

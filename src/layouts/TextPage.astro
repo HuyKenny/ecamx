@@ -1,0 +1,31 @@
+---
+/**
+ * Šablona textových stránek (právní, About, Contact). Vzor:
+ * apps/vian/src/layouts/TextPage.astro.
+ *
+ * Tyhle stránky jsou u adult affiliate webu povinné a Google je čte jako
+ * trust signál — proto jsou indexovatelné a odkazované z footeru na každé stránce.
+ */
+import Layout from './Layout.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+
+interface Props {
+	title: string;
+	description: string;
+	heading: string;
+	/** Datum poslední revize — u právních textů se očekává. */
+	updated?: string;
+}
+const { title, description, heading, updated } = Astro.props;
+---
+<Layout title={title} description={description}>
+	<Breadcrumbs items={[{ label: heading }]} />
+
+	<article class="prose-ecamx max-w-3xl">
+		<h1 class="text-2xl font-extrabold sm:text-3xl">{heading}</h1>
+		{updated && <p class="mt-1 text-sm text-ink-400">Last updated: {updated}</p>}
+		<div class="mt-6 space-y-4 text-ink-200">
+			<slot />
+		</div>
+	</article>
+</Layout>

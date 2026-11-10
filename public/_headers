@@ -1,0 +1,33 @@
+# Bezpečnostní hlavičky pro statické stránky. Astro middleware se tu neuplatní —
+# prerenderované soubory jdou přes assets binding a Worker vůbec nespustí.
+# Adaptér do tohohle souboru navíc injektuje cache pro /_astro/*.
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()
+  X-Frame-Options: DENY
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
+  # **Plnou CSP generuje `scripts/build-csp.ts` po buildu** — přepíše řádek níž
+  # hodnotou složenou z toho, co postavený web opravdu načítá (hosty rámců,
+  # obrázků a videí + hashe inline skriptů). Ručně psaný allowlist by zastaral
+  # při první nové síti a poznalo by se to až podle rozbitého přehrávače.
+  #
+  # Do 28. 8. 2026 tu byla jen část direktiv, protože web tahal cizí skript
+  # (widget Amateur.tv na `cdn.a00s.net`) a nedalo se to nasadit naslepo.
+  # Widget je pryč (D63), takže jediný cizí skript je Google Analytics.
+  # `style-src` zůstává `'unsafe-inline'`: filtr sítí vyrábí <style> za běhu
+  # blokujícím skriptem a hash na dynamicky vložený element nesedne.
+  #
+  # Hodnota níž je jen záložní pro případ, že by generátor neproběhl.
+  Content-Security-Policy: default-src 'none'; script-src 'self' https://www.googletagmanager.com; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; upgrade-insecure-requests
+
+# POZN.: pro /api/* a /go/* tady nic být nemůže — jsou to Worker routy, ne
+# assety, a assets layer na ně `_headers` neaplikuje. Hlavičky si staví
+# samotné endpointy.
+
+# Index pro hledání (/finder/). Krátká cache s dlouhým stale-while-revalidate:
+# sync deployuje 12× denně, ale mezi běhy se roster nemusí změnit — pak assets
+# layer odpoví 304 na ETag a nestáhne se ani bajt. Hash v názvu by naopak
+# znamenal 12 nových URL denně a nulové znovupoužití cache.
+/search/*
+  Cache-Control: public, max-age=900, stale-while-revalidate=86400

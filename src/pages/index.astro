@@ -1,0 +1,167 @@
+---
+import GridFilters from '../components/GridFilters.astro';
+import Layout from '../layouts/Layout.astro';
+import ModelCard from '../components/ModelCard.astro';
+import { FACETS, META, NETWORK_LABELS, countryName, allLive, gridWindow, topCategories, facetLabel } from '../lib/data';
+import Pagination from '../components/Pagination.astro';
+import { HOME_GRID as GRID } from '../lib/paging';
+import { assertAffiliateEnv } from '../lib/affiliate';
+import { safeJsonLd } from '../lib/jsonld';
+import { SITE_NAME, SITE_URL, SITE_TAGLINE, approx } from '../lib/seo';
+
+assertAffiliateEnv();
+
+// Proložené sítěmi, ne jen podle diváků — jinak je celá mřížka Chaturbate
+// a dvě sítě, které počty diváků neposílají, se nezobrazí nikdy.
+//
+// VISIBLE bylo 30, tedy 30 karet pod nadpisem, který hlásil 8 168 živých
+// modelek — a za poslední kartou nebylo nic. Teď je to 60 jako na kategoriích
+// a zbytek katalogu má stránky `/page/2/` a dál.
+const VISIBLE = GRID.visible;
+// Do HTML jde 3× víc karet, než se ukáže. Rezerva je skrytá a klientský kód
+// z ní doplňuje, když nějakou kartu zhasne kvůli offline stavu — jinak by
+// mřížka po odfiltrování zůstala poloprázdná (viz Layout.astro, [data-grid]).
+const win = gridWindow(allLive(), 1, GRID);
+const featured = win.items;
+const topCats = topCategories(28);
+const topCountries = FACETS.countries.slice(0, 12);
+
+/*
+ * Titulek homepage: `approx()`, ne přesné číslo. Sync deployuje každé 2 h,
+ * takže exaktní počet dělal dvanáct různých titulků denně — D28 to zakazuje
+ * a všude jinde se to drželo, na homepage to zůstalo přehlédnuté až do 19. 8.
+ *
+ * „Live Sex Cams" je zároveň nejsilnější dosažitelný klíč, jaký web má:
+ * 28 000 hledání/měs v US při KD 0 (Ahrefs). „cam girls" má 20 000 při KD 59
+ * a SERP drží redakce s DR 81–100 (D22), takže tam nemíříme.
+ */
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'Organization',
+			'@id': `${SITE_URL}/#organization`,
+			name: SITE_NAME,
+			url: SITE_URL,
+		},
+		{
+			'@type': 'WebSite',
+			'@id': `${SITE_URL}/#website`,
+			url: SITE_URL,
+			name: SITE_NAME,
+			description: SITE_TAGLINE,
+			publisher: { '@id': `${SITE_URL}/#organization` },
+		},
+	],
+};
+// Popisek jmenuje čtyři největší sítě a zbytek počítá z dat. Pevný výčet
+// sedmi jmen tu stál od doby, kdy sítí bylo sedm; od 25. 8. jich je jedenáct.
+const topNetworks = [...META.networks]
+	.sort((a, b) => b.count - a.count)
+	.slice(0, 4)
+	.map((n) => NETWORK_LABELS[n.id] ?? n.id);
+---
+<Layout
+	title={`${approx(META.modelCount)} Live Sex Cams – Free Webcam Chat, No Signup | ${SITE_NAME}`}
+	description={`Watch ${approx(META.modelCount)} live sex cams from ${topNetworks.join(', ')} and ${META.networks.length - topNetworks.length} more cam sites in one grid. Free to watch, no account needed.`}
+>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+
+	{/*
+	  H1 — starý web ho na homepage neměl vůbec.
+
+	  **Nad mřížkou je jen nadpis, nic víc.** Úvodní odstavec se 28. 8. přesunul
+	  POD mřížku: na 390 px stál 350 px vysoko a odsouval první kam pod druhou
+	  obrazovku. Vyhledávači je jedno, kde na stránce ten text je; návštěvníkovi,
+	  který přišel na cam, ne. Podnadpis „Live right now…" zmizel taky — říkal
+	  totéž co H1 o dva řádky výš. Viz D63.
+	*/}
+	<h1 class="text-xl font-extrabold sm:text-3xl">
+		{approx(META.modelCount)} Live Sex Cams, Streaming Right Now
+	</h1>
+
+	<section class="mt-3" aria-labelledby="featured">
+		<h2 id="featured" class="sr-only">
+			Live right now across all {META.networks.length} sites
+		</h2>
+		<GridFilters models={featured} />
+		<div class="card-grid" data-grid data-visible={VISIBLE}>
+			{featured.map((m, i) => (
+				<ModelCard
+					model={m}
+					eager={i < 10}
+					reserve={i >= VISIBLE}
+				/>
+			))}
+		</div>
+
+		<Pagination
+			base="/" pageBase="/page/"
+			page={win.page} pages={win.pages}
+			from={win.from} to={win.to} total={win.total}
+			label="live cams"
+		/>
+	</section>
+
+	{/* Přesunuto zpod H1 (viz výš) — text zůstává na stránce, jen nestojí
+	    mezi návštěvníkem a mřížkou. */}
+	<p class="mt-8 max-w-3xl text-sm text-ink-400">
+		eCamx pulls live models from {META.networks.length} major cam sites into one grid, so you
+		don't have to keep seven tabs open. Every stream above is free to watch and needs no account.
+	</p>
+
+	<section class="mt-10" aria-labelledby="cats">
+		<h2 id="cats" class="mb-3 text-lg font-bold">Browse by category</h2>
+		<div class="flex flex-wrap gap-2">
+			{topCats.map((c) => (
+				<a href={`/cams/${c.slug}/`} class="pill">{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span></a>
+			))}
+		</div>
+	</section>
+
+	<section class="mt-8" aria-labelledby="countries">
+		<h2 id="countries" class="mb-3 text-lg font-bold">Browse by country</h2>
+		<div class="flex flex-wrap gap-2">
+			{topCountries.map((c) => (
+				<a href={`/country/${c.slug}/`} class="pill">{countryName(c.slug)} <span class="text-ink-400">{c.count}</span></a>
+			))}
+		</div>
+	</section>
+
+	{/* Do 19. 8. měla homepage dvě věty textu. Míří přitom na `live sex cams`
+	    (28 000/měs, KD 0) — nejsilnější dosažitelný klíč webu — a konkurent,
+	    který na `sex cam` rankuje, má na homepage 1 614 klíčů. Text je psaný
+	    z toho, co web opravdu dělá; žádná čísla, která se mění každé 2 h. */}
+	<section class="mt-10 max-w-3xl" aria-labelledby="what">
+		<h2 id="what" class="mb-3 text-xl font-bold">What eCamx actually is</h2>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			eCamx is a live sex cam aggregator. Instead of opening {META.networks.length} cam sites and
+			comparing who is online, you get one grid that pulls streams from Chaturbate,
+			CamSoda, Cam4, BongaCams, LiveJasmin, XLoveCam and Amateur.tv, refreshed every
+			two hours and re-checked live in your browser so the cards you see are actually
+			broadcasting.
+		</p>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			Watching is free and needs no account — that is how the cam sites themselves
+			work, and it is why every model page here opens the stream straight away. You
+			only need to register on the cam site itself if you want to chat, tip or start
+			a private show. We earn a commission when you do; it costs you nothing and it
+			does not change what we show you.
+		</p>
+		<p class="text-sm leading-relaxed text-ink-200">
+			Every performer has her own page with the tags she streams under, the languages
+			she speaks, our own log of when we saw her online, and who is live instead when
+			she is not. That is the part you cannot get on the cam sites: they only show you
+			who is broadcasting this second.
+		</p>
+	</section>
+
+	<section class="mt-8" aria-labelledby="sites">
+		<h2 id="sites" class="mb-3 text-lg font-bold">Cam sites we cover</h2>
+		<div class="flex flex-wrap gap-2">
+			{FACETS.networks.map((n) => (
+				<a href={`/site/${n.slug}/`} class="pill">{NETWORK_LABELS[n.slug]} <span class="text-ink-400">{n.count}</span></a>
+			))}
+		</div>
+	</section>
+</Layout>

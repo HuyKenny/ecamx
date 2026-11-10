@@ -1,0 +1,577 @@
+@import "tailwindcss";
+
+/**
+ * Tailwind v4 CSS-first (stejně jako vian). Žádný tailwind.config.js.
+ *
+ * Vizuální směr (Kenny, 16. 8. 2026): tmavá redakční plocha — klid, kontrast,
+ * jeden akcent. Ne neon a ne gradienty; tenhle segment je jich plný a stárnou
+ * nejrychleji ze všeho. Barva se používá jen tam, kde má něco znamenat:
+ * akcent = akce, `live` = vysílá teď, `toy` = reaguje na dýška.
+ */
+@theme {
+	--color-ink-950: #0a0a0c;
+	--color-ink-900: #101014;
+	--color-ink-850: #16161b;
+	--color-ink-800: #1c1c22;
+	--color-ink-700: #26262e;
+	--color-ink-600: #35353f;
+	--color-ink-500: #565663;
+	--color-ink-400: #8a8a99;
+	--color-ink-200: #c9c9d4;
+	--color-ink-50: #f4f4f7;
+
+	--color-accent: #ff2d6f;
+	--color-accent-hover: #e01a58;
+	--color-live: #ff3b30;
+	--color-toy: #a855f7;
+
+	/* Bez webfontu: jedno HTTP spojení navíc a FOUT za nic. Systémové písmo
+	   navíc nezastará. Dřív tu byl deklarovaný Inter, který se nikdy nenačetl. */
+	--font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+	             "Helvetica Neue", Arial, sans-serif;
+	--radius-card: 0.625rem;
+}
+
+html {
+	background: var(--color-ink-950);
+	color: var(--color-ink-50);
+	color-scheme: dark;
+}
+
+body {
+	font-family: var(--font-sans);
+	min-height: 100vh;
+	-webkit-text-size-adjust: 100%;
+}
+
+/* Klávesnicová navigace musí být vidět všude, ne jen na tlačítkách. */
+:where(a, button, [tabindex]):focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+	border-radius: 4px;
+}
+
+@layer components {
+	.btn-cta {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-3
+		       font-semibold text-white transition hover:bg-accent-hover active:translate-y-px;
+	}
+	.btn-ghost {
+		@apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-700
+		       bg-ink-900 px-4 py-2.5 font-medium text-ink-200 transition
+		       hover:border-ink-600 hover:bg-ink-800 hover:text-white;
+	}
+	.pill {
+		@apply inline-block rounded-full bg-ink-800 px-3 py-1 text-sm text-ink-200
+		       transition hover:bg-ink-700 hover:text-white;
+	}
+	.card-grid {
+		@apply grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5;
+	}
+	/* Malý odznak v rohu náhledu. Barvu si přidá volající. */
+	.badge {
+		@apply rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide;
+	}
+}
+
+/* ── karta modelky ────────────────────────────────────────────────────────── */
+
+.card {
+	position: relative;
+	/* Odznaky a počet diváků se pozicují ze šířky karty (`cqw`). */
+	container-type: inline-size;
+	overflow: hidden;
+	border-radius: var(--radius-card);
+	background: var(--color-ink-900);
+	border: 1px solid var(--color-ink-800);
+	transition: border-color .15s, transform .15s;
+}
+.card:hover {
+	border-color: var(--color-ink-600);
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.card:hover { transform: translateY(-2px); }
+}
+/* Modelka, kterou živý stav označil za offline. */
+.card.is-offline { opacity: .55; }
+.card.is-offline .badge-live { background: var(--color-ink-600); }
+
+/* Náhled má pevný poměr stran → žádný layout shift, až se obrázek načte. */
+.thumb-wrap {
+	position: relative;
+	aspect-ratio: 4 / 3;
+	background: var(--color-ink-800);
+	overflow: hidden;
+}
+.thumb-wrap img,
+.thumb-wrap video {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	display: block;
+}
+/* Náhled, který se nenačetl (Cam4 a Amateur.tv mají v URL podpis s expirací).
+   Dřív se tahle třída nastavovala, ale nikde nestylovala. */
+.thumb-wrap.is-placeholder img {
+	object-fit: contain;
+	padding: 18%;
+	opacity: .35;
+}
+/* Video preview leží nad obrázkem a naskočí, až se rozjede. */
+.thumb-wrap video {
+	position: absolute;
+	inset: 0;
+	opacity: 0;
+	transition: opacity .25s;
+}
+.thumb-wrap video.is-playing { opacity: 1; }
+
+/* Odznaky a počet diváků. Byly to dlouhé Tailwind utility stringy přímo
+   v atributu — 154 B na kartu, tj. ~22 kB na mřížkovou stránku. */
+.badge-row {
+	position: absolute;
+	left: .5rem;
+	top: .5rem;
+	z-index: 20;
+	display: flex;
+	flex-wrap: wrap;
+	gap: .25rem;
+	pointer-events: none;
+}
+.viewer-count {
+	position: absolute;
+	left: .5rem;
+	bottom: .5rem;
+	z-index: 20;
+	font-size: 11px;
+	font-weight: 500;
+	color: rgb(255 255 255 / .9);
+	pointer-events: none;
+}
+
+/* Spodní čitelnostní přechod pod počtem diváků. */
+.thumb-shade {
+	position: absolute;
+	inset: auto 0 0 0;
+	height: 45%;
+	background: linear-gradient(to top, rgb(0 0 0 / .75), transparent);
+	pointer-events: none;
+}
+
+
+/* Proužek nad náhradním streamem: „X právě dovysílala — teď hraje Y".
+   Absolutní, takže odkrytí nic neposune (CLS 0), a nad přehrávačem, aby
+   nešlo přehlédnout, že to není ta modelka, kvůli které sem člověk přišel. */
+.player-note {
+	position: absolute;
+	left: 0;
+	right: 0;
+	top: 0;
+	z-index: 25;
+	padding: .45rem .6rem;
+	font-size: .8125rem;
+	line-height: 1.3;
+	color: #fff;
+	background: linear-gradient(to bottom, rgb(0 0 0 / .82), rgb(0 0 0 / 0));
+	pointer-events: auto;
+}
+.player-note[hidden] { display: none; }
+
+/* Modelka skončila mezi buildem a načtením stránky. Blok leží v ploše
+   přehrávače (pevný poměr stran), takže jeho odkrytí nic neposune — CLS 0. */
+.player-offline {
+	position: absolute;
+	inset: 0;
+	z-index: 30;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: 1.5rem;
+	text-align: center;
+	background: var(--color-ink-900, #18181b);
+}
+.player-offline[hidden] { display: none; }
+
+/* Karta, kterou živý průchod vyměnil za zhaslou. Modelka dovysílala, takže se
+   vyměnit MUSÍ — ale nemusí to blesknout před očima. Prolne se; mění se jen
+   krytí, nikdy rozměr, takže CLS zůstává nula (D57 hlídá i pořadí karet). */
+@keyframes card-swap-in { from { opacity: 0 } to { opacity: 1 } }
+.card.is-swapped { animation: card-swap-in .18s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+	.card.is-swapped { animation: none; }
+}
+
+/* Zpětná vazba na klepnutí. Bez ní na pomalé stránce vypadá klik do karty jako
+   „nic se nestalo" a lidé klepou znovu. */
+.card .stretch { -webkit-tap-highlight-color: rgb(244 63 94 / .25); }
+
+/* Odkaz, který zvětší svůj klikací cíl na celou kartu. Díky tomu je klikatelná
+   celá plocha, ale CTA nad ní zůstane samostatný odkaz — vnořené <a> nejde. */
+.stretch::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+}
+
+/* ── stránka modelky ──────────────────────────────────────────────────────── */
+
+.player-frame {
+	position: relative;
+	aspect-ratio: 16 / 9;
+	background: #000;
+	border-radius: var(--radius-card);
+	overflow: hidden;
+}
+.player-frame iframe { width: 100%; height: 100%; border: 0; }
+
+/* Klikací vrstva nad běžícím streamem. Existuje kvůli penězům, ne kvůli vzhledu:
+   klik uvnitř Chaturbate embedu nikdy nenesl provizi (`/embed/` nenastaví
+   affiliate cookie), takže se plocha videa převádí na náš `/go/` odkaz.
+   Spodních 34 px je vynechaných — tam je 30px ovládání video.js a přes něj se
+   ztišený autoplay odtišuje. */
+.player-hit {
+	position: absolute;
+	inset: 0 0 34px 0;
+	z-index: 5;
+	display: flex;
+	align-items: flex-end;
+	justify-content: center;
+	padding-bottom: .625rem;
+}
+.player-hit-label {
+	border-radius: 9999px;
+	background: color-mix(in srgb, var(--color-ink-950) 82%, transparent);
+	padding: .35rem .75rem;
+	font-size: .8125rem;
+	font-weight: 600;
+	color: #fff;
+	opacity: 0;
+	transition: opacity .15s ease;
+}
+.player-hit:hover .player-hit-label,
+.player-hit:focus-visible .player-hit-label { opacity: 1; }
+/* Na dotyku hover neexistuje — tam ať je vidět od začátku, jinak nikdo nepozná,
+   že se dá na stream kliknout. */
+@media (hover: none) {
+	.player-hit-label { opacity: .9; }
+}
+
+/* Tlačítko, které teprve spustí stream (viz Heavy Ad Intervention v D13).
+   Leží přes náhled a musí být čitelné i na světlém snímku. */
+.play-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 10;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: .75rem;
+	width: 100%;
+	background: linear-gradient(rgb(0 0 0 / .35), rgb(0 0 0 / .6));
+	color: #fff;
+	font-weight: 700;
+	font-size: .95rem;
+	text-shadow: 0 1px 3px rgb(0 0 0 / .8);
+	transition: background .15s;
+	cursor: pointer;
+}
+.play-overlay:hover { background: linear-gradient(rgb(0 0 0 / .2), rgb(0 0 0 / .5)); }
+.play-icon {
+	display: grid;
+	place-items: center;
+	width: 4rem;
+	height: 4rem;
+	padding-left: .2rem;
+	border-radius: 999px;
+	background: var(--color-accent);
+	font-size: 1.5rem;
+	line-height: 1;
+	box-shadow: 0 6px 24px rgb(0 0 0 / .45);
+	transition: transform .15s, background .15s;
+}
+.play-overlay:hover .play-icon { background: var(--color-accent-hover); }
+@media (prefers-reduced-motion: no-preference) {
+	.play-overlay:hover .play-icon { transform: scale(1.06); }
+}
+
+/* Lišta s hlavním CTA, která na mobilu drží u spodní hrany. Na desktopu je
+   CTA vidět vedle přehrávače, takže tam lišta nemá co dělat.
+   Skutečná výška je 68 px (2× .6rem padding + tlačítko 48 px + 1px border) —
+   spacer v šabloně to musí respektovat, jinak zmizí poslední řádek patičky. */
+.sticky-cta {
+	position: fixed;
+	inset: auto 0 0 0;
+	z-index: 40;
+	display: flex;
+	gap: .5rem;
+	padding: .6rem .75rem calc(.6rem + env(safe-area-inset-bottom));
+	background: color-mix(in srgb, var(--color-ink-950) 92%, transparent);
+	border-top: 1px solid var(--color-ink-800);
+	backdrop-filter: blur(8px);
+}
+@media (min-width: 768px) { .sticky-cta { display: none; } }
+
+/* ── typografie delších textů ─────────────────────────────────────────────── */
+/* Tailwind typography plugin kvůli tomuhle netaháme do buildu. */
+.prose-ecamx h2 { font-size: 1.15rem; font-weight: 700; margin-top: 2rem; color: var(--color-ink-50); }
+.prose-ecamx h3 { font-size: 1rem; font-weight: 600; margin-top: 1.25rem; color: var(--color-ink-50); }
+.prose-ecamx p { line-height: 1.7; }
+.prose-ecamx ul, .prose-ecamx ol { list-style: disc; padding-left: 1.25rem; }
+.prose-ecamx li { margin: 0.35rem 0; line-height: 1.6; }
+.prose-ecamx a { color: var(--color-accent); text-decoration: underline; }
+.prose-ecamx a:hover { color: var(--color-accent-hover); }
+.prose-ecamx strong { color: var(--color-ink-50); }
+
+
+/* ── mobilní detaily, které stály konverze ────────────────────────────────── */
+
+/* Věková lišta se odkrývá z JS. Bez rezervované výšky skočil obsah o 130–150 px
+   přesně v momentě, kdy uživatel mířil prstem na první kartu. */
+.age-notice { min-height: 3.25rem; }
+/* Skrývá blokující skript v <head> podle localStorage — tedy ještě před prvním
+   vykreslením, aby se neposouval <main>. Viz Layout.astro. */
+html.age-ok .age-notice { display: none; }
+
+/*
+ * Souhlas s analytikou se ukazuje jen tam, kde je opt-in povinný (EU/EHP/UK).
+ * Markup je pro všechny stejný — web je statický, takže o obsahu lišty
+ * rozhoduje třída `needs-consent`, kterou nasadí blokující skript v <head>.
+ * `revert` místo `inline`, aby si <button> nechal svůj inline-block.
+ */
+.consent-only { display: none; }
+html.needs-consent .consent-only { display: revert; }
+html.needs-consent .no-consent-only { display: none; }
+
+/* Na úzkém displeji se počet diváků a odchozí pilulka přetlačovaly: 85 + 57 px
+   plus odsazení je přesně šířka karty na 360 px a na 320 px se překrývaly.
+   Diváci proto jdou nad pilulku, ne vedle ní. Platí jen pro myš — na dotyku
+   je CTA od 27. 8. pás v patičce karty, tedy mimo náhled (D61). */
+@media (max-width: 420px) and (hover: hover) {
+	.thumb-wrap [data-viewers] { bottom: 2.25rem; }
+}
+
+/* ── finder (/finder/) ─────────────────────────────────────────────────────
+   Výsledky mají rezervovanou výšku a v řádcích NEJSOU obrázky, takže se po
+   vyhledání nic neposune — CLS na tomhle webu je 0 a musí zůstat (D29). */
+.finder-box { display: block; }
+.finder-input {
+	width: 100%;
+	border-radius: 0.5rem;
+	border: 1px solid var(--color-ink-700, #3f3f46);
+	background: var(--color-ink-900, #18181b);
+	padding: 0.75rem 1rem;
+	font-size: 1rem;
+	color: #fff;
+}
+.finder-input:focus { outline: 2px solid var(--color-accent, #f43f5e); outline-offset: 1px; }
+.finder-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
+.chip {
+	border-radius: 9999px;
+	border: 1px solid var(--color-ink-700, #3f3f46);
+	background: var(--color-ink-900, #18181b);
+	padding: 0.25rem 0.75rem;
+	font-size: 0.875rem;
+	color: #d4d4d8;
+	cursor: pointer;
+}
+.chip:hover { color: #fff; }
+.chip.is-on { background: var(--color-accent, #f43f5e); border-color: transparent; color: #fff; }
+
+/* ── filtr mřížky podle sítě (D58) ───────────────────────────────────────────
+   Řádek je v HTML od začátku a nic se v něm neodkrývá skriptem; volba se
+   aplikuje blokujícím skriptem v <head>, takže se karty skryjí ještě před
+   prvním vykreslením (jinak by to posunulo obsah, past 73). */
+/* Na mobilu JEDEN řádek s vodorovným posuvem, ne pět zalomených řádků.
+   Deset sítí se na 390 px lámalo do pěti řad (~300 px) a odsouvalo mřížku pod
+   druhou obrazovku. Vodorovný posuv je u filtrů běžný vzor a nic neskrývá:
+   posuvník je vidět a chipy pokračují za okrajem. Viz D63. */
+.grid-filters {
+	display: flex;
+	flex-wrap: nowrap;
+	align-items: center;
+	gap: 0.5rem;
+	margin-top: 0.75rem;
+	overflow-x: auto;
+	/* Aby poslední chip nekončil přesně na hraně. */
+	padding-bottom: 0.25rem;
+	scrollbar-width: thin;
+}
+.grid-filters > * { flex: 0 0 auto; }
+/* Na širokém displeji není co posouvat — zpátky do řádků. */
+@media (min-width: 768px) {
+	.grid-filters { flex-wrap: wrap; overflow-x: visible; }
+}
+.grid-filters-label { font-size: 0.8125rem; color: #71717a; }
+.grid-filters-more {
+	/* V posouvaném řádku `margin-left: auto` netlačí odkaz doprava (obsah je
+	   širší než kontejner), takže na mobilu jde prostě za poslední chip. */
+	margin-left: auto;
+	font-size: 0.8125rem;
+	color: var(--color-accent, #f43f5e);
+	text-decoration: underline;
+}
+.grid-filters-more:hover { color: #fff; }
+/* Východ z prázdného filtru: doplňuje ho skript, místo si nedrží — je pod
+   mřížkou, takže posunout nemá co. */
+.grid-filter-note { margin-top: 1rem; font-size: 0.875rem; color: #a1a1aa; }
+/* Čtyři živé karty nad ohybem u offline modelky — užší mřížka, ať se vejdou
+   do jednoho řádku i na mobilu bez scrollování textu. */
+.card-grid-quick { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
+
+/* ── lepivé CTA na stránce modelky (D58) ─────────────────────────────────────
+   Jen na mobilu a jen na stránce modelky. **Místo je rezervované od začátku**
+   (`--sticky-cta`), takže zobrazení pásku nic neposune a CLS zůstává 0 —
+   stejná lekce jako u „Show more" ve finderu (past 52). */
+.sticky-cta {
+	position: fixed;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 40;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	min-height: 3.25rem;
+	padding: 0.75rem 1rem;
+	background: var(--color-accent, #f43f5e);
+	color: #fff;
+	font-weight: 600;
+	text-align: center;
+	box-shadow: 0 -6px 20px rgb(0 0 0 / 0.35);
+}
+.sticky-cta.is-on { display: flex; }
+/* Místo se drží od prvního snímku, i když je pásek ještě skrytý — jinak by ho
+   jeho zobrazení přetlačilo přes poslední odstavec (a na `position: fixed`
+   se CLS nechytá, takže by to nikdo nezměřil). */
+@media (max-width: 767px) {
+	body:has(.sticky-cta) { padding-bottom: 3.25rem; }
+}
+@media (min-width: 768px) {
+	.sticky-cta { display: none !important; }
+}
+.finder-status { margin-top: 0.75rem; font-size: 0.8125rem; color: #a1a1aa; min-height: 2.5rem; }
+.finder-placeholder { padding: 1rem 0; font-size: 0.875rem; color: #71717a; }
+/* Rezervované místo pro „Show more" — jeho zobrazení nesmí nic posunout.
+   Místo se NEHÁDÁ číslem: `min-height: 2.75rem` byla o 14 px menší než tlačítko
+   samo (44 vs 58 px) a odkrytí posouvalo obsah pod finderem — změřeno
+   CLS 0,0128 (past 52). Skryté tlačítko proto zůstává v layoutu
+   (`visibility`), takže rezervace je vždycky přesně jeho výška. */
+.finder-foot { min-height: 3.625rem; padding-top: 0.75rem; }
+/* `!important` je tu nutné: preflight Tailwindu má `[hidden] { display: none
+   !important }`, takže bez toho pravidlo neplatí vůbec a odkrytí posune obsah
+   o celých 46 px (změřeno CLS 0,0421). `min-height` výš je pojistka, kdyby
+   tohle pravidlo někdo shodil. */
+.finder-foot [data-finder-more][hidden] { display: inline-flex !important; visibility: hidden; }
+.finder-input:disabled { opacity: 0.6; cursor: not-allowed; }
+/* Výsledky mají PEVNÝ rám a scrollují uvnitř. Bez toho posouvá každý dotaz
+   obsah pod sebou a CLS vyskočí — naměřeno 0,2353, když se výška jen
+   rezervovala minimem. Na tomhle webu je CLS 0 a musí zůstat (D29). */
+.finder-results {
+	margin-top: 0.25rem;
+	height: 60vh;
+	min-height: 20rem;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.finder-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.5rem;
+	border-bottom: 1px solid rgb(39 39 42 / 0.6);
+	padding: 0.5rem 0;
+	font-size: 0.875rem;
+}
+.finder-nick { font-weight: 500; color: #fff; }
+.finder-nick:hover { text-decoration: underline; }
+.finder-meta { color: #71717a; }
+.finder-elsewhere { color: var(--color-accent, #f43f5e); text-decoration: underline; }
+.finder-cta { margin-left: auto; color: var(--color-accent, #f43f5e); text-decoration: underline; }
+.sr-only {
+	position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+	overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ── watchlist („tvoje modelky") ────────────────────────────────────────────
+   Odznak v hlavičce i prázdný/plný stav `/my/` jsou v HTML od prvního snímku
+   a přepíná se mezi nimi TŘÍDA z blokujícího skriptu v <head>. Kdyby to
+   odkrýval odložený modul, posune se hlavička — a přesně tím stál `/finder/`
+   CLS 0,2724 (past 52). */
+.watch-link { display: none; }
+html.has-follows .watch-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	border-radius: 9999px;
+	border: 1px solid var(--color-ink-700, #3f3f46);
+	padding: 0.25rem 0.75rem;
+	font-size: 0.875rem;
+	color: #d4d4d8;
+	white-space: nowrap;
+}
+html.has-follows .watch-link:hover { color: #fff; }
+html.has-follows .watch-link.is-live { border-color: var(--color-accent, #f43f5e); color: #fff; }
+.watch-count {
+	min-width: 1.25rem;
+	border-radius: 9999px;
+	background: var(--color-accent, #f43f5e);
+	padding: 0 0.375rem;
+	text-align: center;
+	font-size: 0.75rem;
+	font-weight: 600;
+	color: #fff;
+}
+
+/* Prázdný stav `/my/` vidí jen ten, kdo nikoho nesleduje — a naopak. */
+html.has-follows .watch-empty { display: none; }
+.watch-list { display: none; }
+html.has-follows .watch-list { display: block; }
+
+.watch-btn {
+	border-radius: 9999px;
+	border: 1px solid var(--color-ink-700, #3f3f46);
+	background: var(--color-ink-900, #18181b);
+	padding: 0.375rem 0.875rem;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: #d4d4d8;
+	cursor: pointer;
+	white-space: nowrap;
+}
+.watch-btn:hover { color: #fff; }
+.watch-btn.is-on { border-color: var(--color-accent, #f43f5e); color: #fff; }
+
+/* Místo pro řádky je rezervované PŘED dosypáním seznamu, protože řádky plní
+   klient — bez toho tlačí patičku dolů (změřeno CLS 0,1208). Je to PEVNÁ výška
+   se scrollem, ne `min-height`: na mobilu se řádek podle obsahu zalomí do dvou
+   i tří linek, takže rezervace „na jednu linku" by neplatila. Tentýž vzor drží
+   na nule výsledky `/finder/` (past 52). Počet řádků dodává blokující skript
+   v <head> jako `--watch-rows`. */
+[data-watch-rows] {
+	height: calc(var(--watch-rows, 0) * 3.25rem);
+	max-height: 32rem;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+/* Hlášku „N z tvých je live" mění skript; dvě linky se do toho vejdou. */
+.watch-list [data-watch-status] { display: block; min-height: 2.5rem; }
+
+.watch-row {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: baseline;
+	gap: 0.5rem;
+	border-bottom: 1px solid rgb(39 39 42 / 0.6);
+	padding: 0.5rem 0;
+	font-size: 0.875rem;
+}
+.watch-nick { font-weight: 500; color: #fff; }
+.watch-nick:hover { text-decoration: underline; }
+.watch-meta { color: #71717a; }
+.watch-elsewhere { color: var(--color-accent, #f43f5e); text-decoration: underline; }
+.watch-cta { margin-left: auto; color: var(--color-accent, #f43f5e); text-decoration: underline; }
+.watch-drop { background: none; border: 0; color: #71717a; cursor: pointer; font-size: 0.8125rem; }
+.watch-drop:hover { color: #d4d4d8; text-decoration: underline; }

@@ -1,0 +1,173 @@
+---
+/**
+ * Rozcestník všech kategorií.
+ *
+ * Řeší dvě věci najednou: drobeček „Categories" na 301 kategoriálních stránkách
+ * mířil sem, ale stránka neexistovala (301 mrtvých odkazů + chyba v JSON-LD),
+ * a dlouhý ocas kategorií neměl žádný příchozí odkaz — Google se k nim dostal
+ * jen sitemapou.
+ */
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import ModelCard from '../../components/ModelCard.astro';
+import { FACETS, allCategoryFacets, facetLabel, countryName, NETWORK_LABELS, MODELS, diversify } from '../../lib/data';
+import { safeJsonLd } from '../../lib/jsonld';
+import { SITE_URL, SITE_NAME, fmt } from '../../lib/seo';
+
+const all = allCategoryFacets();
+const byKind = {
+	// `money` MUSÍ mít vlastní skupinu. Kurátorské facety mají `kind: 'money'`
+	// a `allCategoryFacets()` je vrací první, takže se sem přesunou i slugy,
+	// které dřív patřily do tag/ethnicity/… — bez téhle skupiny by 24 kategorií
+	// ze rozcestníku zmizelo úplně (včetně teen, feet, anal, big-tits).
+	money: all.filter((f) => f.kind === 'money'),
+	tag: all.filter((f) => f.kind === 'tag'),
+	ethnicity: all.filter((f) => f.kind === 'ethnicity'),
+	hairColor: all.filter((f) => f.kind === 'hairColor'),
+	bodyType: all.filter((f) => f.kind === 'bodyType'),
+};
+// Populární nahoře, zbytek abecedně — ať se dlouhý ocas dá vůbec projít.
+const popular = byKind.tag.slice(0, 40);
+const rest = byKind.tag.slice(40).sort((a, b) => a.slug.localeCompare(b.slug));
+
+const title = `All Cam Categories – ${all.length} Live Categories | ${SITE_NAME}`;
+const description =
+	`Browse every live cam category on eCamx — ${all.length} categories covering ` +
+	`${fmt(FACETS.categories.reduce((s, c) => s + c.count, 0))} model listings across ` +
+	`${FACETS.networks.length} cam sites.`;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: 'All Cam Categories',
+	description,
+	url: `${SITE_URL}/cams/`,
+};
+
+/**
+ * Hub byl doteď čistě interní rozcestník — 301 pilulek a ani jeden odkaz, který
+ * by vydělal. Přitom na něj vede „All categories" z hlavičky a drobeček ze všech
+ * 301 kategoriálních stránek, takže je to jedna z nejnavštěvovanějších stránek
+ * webu. Mřížka živých modelek nahoře z něj dělá plnohodnotnou vstupní stránku.
+ */
+const VISIBLE = 30;
+const featured = diversify(
+	[...MODELS].sort((a, b) => (b.viewers ?? 0) - (a.viewers ?? 0)),
+	VISIBLE * 3,
+);
+
+const Group = 'section';
+---
+<Layout title={title} description={description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<Breadcrumbs items={[{ label: 'Categories' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">All Cam Categories</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{all.length} categories, rebuilt every two hours from what is actually being
+		broadcast. We do not keep empty pages: a category is only listed while it has
+		enough models genuinely live to fill it.
+	</p>
+
+	<section class="mt-6" aria-labelledby="live-now">
+		<h2 id="live-now" class="mb-3 text-lg font-bold">Live right now</h2>
+		<div class="card-grid" data-grid data-visible={VISIBLE}>
+			{featured.map((m, i) => (
+				<ModelCard
+					model={m}
+					eager={i < 10}
+					reserve={i >= VISIBLE}
+				/>
+			))}
+		</div>
+	</section>
+
+
+	{byKind.money.length > 0 && (
+		<Group class="mt-8" aria-labelledby="top">
+			<h2 id="top" class="mb-3 text-lg font-bold">Most searched categories</h2>
+			<div class="flex flex-wrap gap-2">
+				{byKind.money.map((c) => (
+					<a href={`/cams/${c.slug}/`} class="pill">
+						{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span>
+					</a>
+				))}
+			</div>
+		</Group>
+	)}
+
+	<Group class="mt-8" aria-labelledby="popular">
+		<h2 id="popular" class="mb-3 text-lg font-bold">Most models online</h2>
+		<div class="flex flex-wrap gap-2">
+			{popular.map((c) => (
+				<a href={`/cams/${c.slug}/`} class="pill">
+					{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span>
+				</a>
+			))}
+		</div>
+	</Group>
+
+	{byKind.ethnicity.length > 0 && (
+		<Group class="mt-8" aria-labelledby="eth">
+			<h2 id="eth" class="mb-3 text-lg font-bold">By ethnicity</h2>
+			<div class="flex flex-wrap gap-2">
+				{byKind.ethnicity.map((c) => (
+					<a href={`/cams/${c.slug}/`} class="pill">
+						{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span>
+					</a>
+				))}
+			</div>
+		</Group>
+	)}
+
+	{byKind.hairColor.length > 0 && (
+		<Group class="mt-8" aria-labelledby="hair">
+			<h2 id="hair" class="mb-3 text-lg font-bold">By hair colour</h2>
+			<div class="flex flex-wrap gap-2">
+				{byKind.hairColor.map((c) => (
+					<a href={`/cams/${c.slug}/`} class="pill">
+						{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span>
+					</a>
+				))}
+			</div>
+		</Group>
+	)}
+
+	{byKind.bodyType.length > 0 && (
+		<Group class="mt-8" aria-labelledby="body">
+			<h2 id="body" class="mb-3 text-lg font-bold">By body type</h2>
+			<div class="flex flex-wrap gap-2">
+				{byKind.bodyType.map((c) => (
+					<a href={`/cams/${c.slug}/`} class="pill">
+						{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span>
+					</a>
+				))}
+			</div>
+		</Group>
+	)}
+
+	{rest.length > 0 && (
+		<Group class="mt-8" aria-labelledby="az">
+			<h2 id="az" class="mb-3 text-lg font-bold">Everything else, A–Z</h2>
+			<div class="flex flex-wrap gap-2">
+				{rest.map((c) => (
+					<a href={`/cams/${c.slug}/`} class="pill">
+						{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span>
+					</a>
+				))}
+			</div>
+		</Group>
+	)}
+
+	<Group class="mt-10" aria-labelledby="other">
+		<h2 id="other" class="mb-3 text-lg font-bold">Other ways to browse</h2>
+		<div class="flex flex-wrap gap-2">
+			{FACETS.countries.map((c) => (
+				<a href={`/country/${c.slug}/`} class="pill">{countryName(c.slug)}</a>
+			))}
+			{FACETS.networks.map((n) => (
+				<a href={`/site/${n.slug}/`} class="pill">{NETWORK_LABELS[n.slug]}</a>
+			))}
+		</div>
+	</Group>
+</Layout>

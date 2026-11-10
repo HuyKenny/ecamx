@@ -1,0 +1,170 @@
+---
+/**
+ * Rozcestník cam sítí.
+ *
+ * **Proč vůbec vzniká:** na `/site/{síť}/` odkazuje **16 830 stránek**, ale
+ * rodič `/site/` neexistoval — kdo URL zkrátil, dostal 404 z catch-allu, a
+ * drobeček na recenzích měl navíc nepravdivý cíl („Cam sites" → `/cams/`,
+ * tedy na kategorie). Tohle je oprava té díry, ne nová sekce.
+ *
+ * **Co tu je a co ne.** Srovnávají se jen čísla, která měříme MY stejným
+ * způsobem u všech sedmi sítí. Feedy se totiž liší v tom, co hlásí, a nula
+ * znamená „síť to neposílá", ne „modelky to nemají" — kdyby tabulka napsala
+ * „CamSoda: HD 0 %", byla by to lež, a shodou okolností lež lichotící
+ * Chaturbate, tedy našemu největšímu zdroji provizí. Detaily a měření jsou
+ * v `src/lib/network-stats.ts`.
+ *
+ * Hranice proti `/cams/`: tady se mluví o **platformách**, tam o **kategoriích**.
+ * Kdo sem přidá výpis kategorií, tu hranici smaže a stránky si začnou
+ * konkurovat.
+ */
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { FACETS, META, NETWORK_LABELS, MODELS, type NetworkId } from '../../lib/data';
+import { NETWORK_REVIEWS } from '../../content/networks';
+import { networkStats } from '../../lib/network-stats';
+import { siteHubSeo, SITE_URL, fmt, approx } from '../../lib/seo';
+import { safeJsonLd } from '../../lib/jsonld';
+
+const stats = networkStats();
+const totalLive = MODELS.length;
+const seo = siteHubSeo(stats.length, totalLive);
+
+/** „nehlásí" se musí dát napsat slovem, ne nulou. */
+const reportLabels: Array<[keyof typeof stats[0]['reports'], string]> = [
+	['age', 'age'], ['country', 'country'], ['hd', 'HD flag'],
+	['toy', 'interactive toy'], ['looks', 'ethnicity & hair'],
+];
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: 'Cam sites we track',
+	description: seo.description,
+	url: `${SITE_URL}/site/`,
+	mainEntity: {
+		'@type': 'ItemList',
+		numberOfItems: stats.length,
+		itemListElement: stats.map((s, i) => ({
+			'@type': 'ListItem',
+			position: i + 1,
+			name: NETWORK_LABELS[s.id],
+			url: `${SITE_URL}/site/${s.id}/`,
+		})),
+	},
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+	<Breadcrumbs items={[{ label: 'Cam sites' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">The cam sites we track</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		eCamx pulls {stats.length} cam networks into one catalogue every two hours, so
+		instead of guessing which site is busiest, we can count it. Right now
+		{' '}<strong class="text-white">{fmt(totalLive)} models</strong> are live across all
+		of them.
+	</p>
+
+	<div class="mt-6 overflow-x-auto">
+		<table class="w-full min-w-[46rem] border-collapse text-sm">
+			<thead>
+				<tr class="border-b border-ink-800 text-left text-ink-400">
+					<th class="py-2 pr-4 font-medium">Site</th>
+					<th class="py-2 pr-4 font-medium">Live now</th>
+					<th class="py-2 pr-4 font-medium">Women / men / trans / couples</th>
+					<th class="py-2 pr-4 font-medium">Typical audience</th>
+					<th class="py-2 font-medium">Also on another site</th>
+				</tr>
+			</thead>
+			<tbody>
+				{stats.map((s) => (
+					<tr class="border-b border-ink-800/60 align-top">
+						<td class="py-3 pr-4">
+							<a href={`/site/${s.id}/`} class="font-medium text-white underline">
+								{NETWORK_LABELS[s.id]}
+							</a>
+							<div class="mt-0.5 max-w-xs text-xs text-ink-500">
+								{NETWORK_REVIEWS[s.id].tagline}
+							</div>
+						</td>
+						<td class="py-3 pr-4 tabular-nums">{fmt(s.online)}</td>
+						<td class="py-3 pr-4 text-ink-300 tabular-nums">
+							{Math.round(s.genders.female / s.online * 100)}% /
+							{' '}{Math.round(s.genders.male / s.online * 100)}% /
+							{' '}{Math.round(s.genders.trans / s.online * 100)}% /
+							{' '}{Math.round(s.genders.couple / s.online * 100)}%
+						</td>
+						<td class="py-3 pr-4 text-ink-300">
+							{s.medianViewers != null
+								? <span class="tabular-nums">{fmt(s.medianViewers)} watching (median)</span>
+								: <span class="text-ink-500">site does not publish viewer counts</span>}
+						</td>
+						<td class="py-3 text-ink-300 tabular-nums">
+							{fmt(s.alsoElsewhere)}
+							<span class="text-ink-500"> ({Math.round(s.alsoElsewhere / s.online * 100)}%)</span>
+						</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</div>
+
+	<p class="mt-3 max-w-3xl text-xs text-ink-500">
+		Counted from our own sync, refreshed every two hours — last run
+		{' '}{new Date(META.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC.
+		„Also on another site" means we found the same nickname broadcasting on one of the
+		other networks; it is a name match, not a verified identity
+		(<a href="/models/same-nickname/" class="underline">how we count it</a>).
+	</p>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="reports-h">
+		<h2 id="reports-h" class="mb-3 text-xl font-bold">What each site tells you about a model</h2>
+		<p class="mb-4 text-sm leading-relaxed text-ink-200">
+			This is the part no review mentions, and it decides how much you can filter
+			before you click. A blank below means <strong>the site does not publish that
+			field at all</strong> — not that its models lack it. It is also why some
+			filters on eCamx cover four sites and others cover seven.
+		</p>
+		<ul class="space-y-2 text-sm">
+			{stats.map((s) => {
+				const yes = reportLabels.filter(([k]) => s.reports[k]).map(([, l]) => l);
+				const no = reportLabels.filter(([k]) => !s.reports[k]).map(([, l]) => l);
+				return (
+					<li class="leading-relaxed">
+						<a href={`/site/${s.id}/`} class="font-medium text-white underline">{NETWORK_LABELS[s.id]}</a>
+						<span class="text-ink-300">
+							{' '}publishes {yes.length ? yes.join(', ') : 'nothing beyond the room itself'}
+							{no.length ? ` — no ${no.join(', ')}.` : '.'}
+						</span>
+					</li>
+				);
+			})}
+		</ul>
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="pick-h">
+		<h2 id="pick-h" class="mb-3 text-xl font-bold">Which one should you actually open?</h2>
+		<ul class="space-y-3 text-sm leading-relaxed text-ink-200">
+			{stats.map((s) => (
+				<li>
+					<strong class="text-white">{NETWORK_LABELS[s.id]}:</strong> {NETWORK_REVIEWS[s.id].bestFor}
+					{' '}<a href={`/site/${s.id}/`} class="text-accent underline">Full review →</a>
+				</li>
+			))}
+		</ul>
+	</section>
+
+	<section class="mt-10" aria-labelledby="browse-h">
+		<h2 id="browse-h" class="mb-3 text-lg font-bold">Browse across all {stats.length} sites</h2>
+		<div class="flex flex-wrap gap-2">
+			<a href="/girls/" class="pill">Cam girls</a>
+			<a href="/guys/" class="pill">Guys</a>
+			<a href="/couples/" class="pill">Couples</a>
+			<a href="/trans/" class="pill">Trans</a>
+			<a href="/cams/" class="pill">All categories</a>
+			<a href="/models/" class="pill">A–Z directory</a>
+			<a href="/models/same-nickname/" class="pill">Same nickname, two sites</a>
+		</div>
+	</section>
+</Layout>

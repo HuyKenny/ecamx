@@ -1,0 +1,5 @@
+# esbuild a workerd stahují v postinstall nativní binárku. Bez povolení
+# pnpm 11 build skripty ignoruje a `astro build` pak padá.
+allowBuilds:
+  esbuild: true
+  workerd: true

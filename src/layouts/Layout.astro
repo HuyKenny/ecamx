@@ -1,0 +1,1656 @@
+---
+/**
+ * Základní layout. Řeší kompletní <head> — starý web tady měl díry:
+ * homepage bez H1, identická meta description na 26 830 stránkách, žádný
+ * og:image, u Cam4 dokonce canonical mířil na cam4.com (a tím se 3 292 stránek
+ * samo vyřadilo z indexu).
+ */
+import { canonicalUrl, SITE_NAME, SITE_URL } from '../lib/seo';
+import { THUMBNAIL_HOSTS, META, LIVE_FEED_NETWORKS, NETWORK_WEIGHT } from '../lib/data';
+import '../styles/global.css';
+
+interface Props {
+	title: string;
+	description: string;
+	noindex?: boolean;
+	/** Absolutní URL OG obrázku. Default je brandovaný, NE náhled modelky. */
+	image?: string;
+}
+
+const { title, description, noindex = false, image } = Astro.props;
+const canonical = canonicalUrl(Astro.url.pathname);
+// Brandovaný OG obrázek záměrně: adult náhled se na sociálních sítích blokuje
+// a navíc expiruje (Cam4 podepsané URL).
+const ogImage = image ?? new URL('/og-default.png', SITE_URL).toString();
+---
+
+<!doctype html>
+<html lang="en">
+<head>
+	<meta charset="utf-8" />
+	{/*
+		  `viewport-fit=cover` je podmínka pro `env(safe-area-inset-*)` v CSS.
+		  Bez něj se insety vyhodnotí jako 0 a sticky CTA na iPhonu leží
+		  v gesture zóně — swipe-up místo kliknutí = ztracená konverze.
+		*/}
+	<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+	<title>{title}</title>
+	<meta name="description" content={description} />
+	{/*
+	  Kdy byl tenhle výpis postavený. Klient to potřebuje, aby poznal, že běží
+	  nad starou stránkou: 26. 8. 2026 padal deploy pětkrát za sebou, na webu
+	  ležel deset hodin starý seznam a mřížka k němu napsala „Nobody in this
+	  category is live right now" — což byla lež, živých byly tisíce. Bez tohohle
+	  údaje to skript nemá jak rozlišit. Viz D56.
+	*/}
+	<meta name="ecamx-built" content={META.generatedAt} />
+
+	{/* noindex stránka nedostane canonical ani og:url — konfliktní signály. */}
+	{noindex
+		? <meta name="robots" content="noindex, follow" />
+		: <>
+			<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+			<link rel="canonical" href={canonical} />
+		</>
+	}
+
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content={SITE_NAME} />
+	<meta property="og:title" content={title} />
+	<meta property="og:description" content={description} />
+	<meta property="og:image" content={ogImage} />
+	{!noindex && <meta property="og:url" content={canonical} />}
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={title} />
+	<meta name="twitter:description" content={description} />
+	<meta name="twitter:image" content={ogImage} />
+
+	{/* MUSÍ být blokující a v <head>: rozhoduje o věkové liště ještě před prvním
+	    vykreslením. Modulový skript je odložený, takže když lištu odkrýval on,
+	    naskočila v 1 625 ms a posunula celý <main> — jediný layout shift na
+	    stránce (CLS 0,1204 na /cams/bbw/, iPhone + slow 4G). Takhle je CLS 0
+	    pro oba případy: kdo lištu ještě neodklikl, vidí ji od prvního snímku;
+	    kdo ano, tomu se nikdy neukáže. */}
+	<script is:inline>
+		/*
+		 * Rozhoduje o dvou věcech ještě před prvním vykreslením: jestli se ukáže
+		 * věková lišta a jestli se vůbec smí načíst analytika.
+		 *
+		 * **Souhlas se vyžaduje tam, kde ho vyžaduje právo.** Lišta záměrně
+		 * neblokuje obsah (rozhodnutí 16. 8., HTML musí zůstat crawlovatelné),
+		 * takže „bez kliknutí neměříme" by u všech znamenalo měřit skoro nikoho.
+		 * Pro EU/EHP/UK je opt-in povinný, mimo ně stačí zveřejnění a možnost
+		 * odmítnout — proto se region rozhoduje z časové zóny prohlížeče. Není
+		 * to autorita na jurisdikci, ale je to zdarma, bez requestu a bez
+		 * latence; **když se nedá zjistit, bere se to jako EU** (bezpečný směr).
+		 */
+		(function () {
+			var age = null, consent = null, watch = null;
+			try {
+				age = localStorage.getItem('ecamx-age-ok');
+				consent = localStorage.getItem('ecamx-consent');
+				watch = localStorage.getItem('ecamx-watch');
+			} catch (e) { /* privátní režim → lišta se prostě zobrazí */ }
+
+			var needsConsent = true;
+			try {
+				var tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+				// Evropa + kousky EU/EHP mimo pásmo „Europe/" (Kanáry, Madeira,
+				// Azory, Island, Kypr, Ceuta) a UK spadá pod Europe/London.
+				needsConsent = /^Europe\//.test(tz)
+					|| /^Atlantic\/(Canary|Madeira|Azores|Reykjavik)$/.test(tz)
+					|| tz === 'Asia/Nicosia' || tz === 'Africa/Ceuta';
+			} catch (e) { /* Intl chybí → zůstává true */ }
+
+			var root = document.documentElement;
+			// Lišta zmizí, až je odkliknutý věk A (mimo EU, nebo je rozhodnuto
+			// o souhlasu). Jinak by se EU návštěvník neměl kde vyjádřit.
+			if (age === '1' && (!needsConsent || consent)) root.classList.add('age-ok');
+			if (needsConsent) root.classList.add('needs-consent');
+			// Odznak „N z tvých je live" je v HTML od prvního snímku a CSS ho
+			// schová, dokud tahle třída není. Kdyby ho odkrýval odložený modul,
+			// posune hlavičku — a přesně tím stál `/finder/` CLS 0,2724 (past 52).
+			// Kdo nikoho nesleduje, nezaplatí ani jeden request (viz modul níž).
+			if (watch && watch !== '[]') {
+				root.classList.add('has-follows');
+				// Kolik řádků má `/my/` rezervovat, aby se po dosypání seznamu
+				// neposunula patička. Bez toho měřeno CLS 0,1208 (past 52).
+				try {
+					var n = JSON.parse(watch).length;
+					if (n > 0) root.style.setProperty('--watch-rows', String(Math.min(n, 200)));
+				} catch (e) { /* rozbitý zápis → rezervace se prostě neudělá */ }
+			}
+			/**
+			 * Uložený filtr mřížky podle sítě. Aplikuje se **stylem, tady a hned** —
+			 * kdyby karty skrýval odložený modul, posunul by obsah po dopadu
+			 * stránky (past 52 a 73). Selektor se skládá z `data-network`, které
+			 * karta nese odjakživa, takže to nestojí ani bajt v HTML (past 31).
+			 */
+			try {
+				var sites = JSON.parse(localStorage.getItem('ecamx-sites') || '[]');
+				if (Array.isArray(sites) && sites.length) {
+					var ok = sites.filter(function (x) { return /^[a-z0-9]{1,20}$/.test(x); });
+					if (ok.length) {
+						var sel = ok.map(function (x) { return '[data-network="' + x + '"]'; }).join('');
+						var st = document.createElement('style');
+						st.setAttribute('data-site-filter', ok.join(','));
+						st.textContent = '.card:not(' + sel.split('][').join(']):not([') + '){display:none}';
+						document.head.appendChild(st);
+					}
+				}
+			} catch (e) { /* rozbitý zápis → filtr se prostě neuplatní */ }
+
+			// Čte to loader gtag.js i obsluha tlačítek níž.
+			window.__ecamxConsent = { needed: needsConsent, value: consent };
+		})();
+	</script>
+	{/* Google Analytics 4. `is:inline` je nutné, aby Astro stub nezabalilo do
+	    modulu — `gtag()` musí být globální funkce, jinak ho `gtag('config')`
+	    nenajde.
+
+	    **`gtag.js` se NENAČÍTÁ hned.** Změřeno 19. 8. na homepage (mobil,
+	    4× CPU throttle, slow 4G): s GA je TBT 2 110 ms, bez GA **870 ms** —
+	    tedy 1 240 ms blokovaného hlavního vlákna za třetí stranu. `async` sice
+	    neblokuje parsování HTML, ale vykonání toho skriptu ano.
+
+	    Řešení bez ztráty dat: stub definuje `gtag()` hned, takže všechno, co
+	    stránka naměří, se odloží do `dataLayer`, a knihovna se natáhne až
+	    v nečinnosti nebo při první interakci — co přijde dřív. Po načtení GA
+	    frontu z `dataLayer` zpracuje, takže `page_view` ani `go_click` nezmizí.
+	    `visibilitychange` je pojistka pro případ, že návštěvník odchází dřív,
+	    než prohlížeč vůbec zahálí.
+
+	    POZOR: až se bude dodělávat plná CSP, tohle potřebuje
+	    `script-src https://www.googletagmanager.com` a inline hash, a
+	    `connect-src https://*.google-analytics.com`. Bez toho GA umlčíme.
+
+	    Měřená čísla budou nižší než realita — na adult webu blokuje
+	    googletagmanager velká část návštěvníků (proto celá věc s /go/, D17).
+	    Nezkreslený počet requestů je v Cloudflare dashboardu. */}
+	<script is:inline>
+		window.dataLayer = window.dataLayer || [];
+		function gtag(){dataLayer.push(arguments);}
+		/*
+		 * Consent Mode v2. Výchozí stav je ODMÍTNUTO pro všechno — teprve pak
+		 * smí přijít `config`, jinak by první `page_view` odešel bez souhlasu.
+		 *
+		 * Mimo EU se hned povolí `analytics_storage`; v EU se čeká na tlačítko
+		 * a `gtag.js` se do té doby VŮBEC NENAČTE. To je silnější než jen
+		 * odmítnutý consent: Google by při `denied` posílal cookieless pingy,
+		 * a to je pořád zpracování dat návštěvníka, které nikdo nepovolil.
+		 * Dokud se knihovna nenačte, `page_view` a všechny události čekají
+		 * v `dataLayer` — po souhlasu se odešlou, po odmítnutí se zahodí.
+		 */
+		gtag('consent', 'default', {
+			ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied',
+			analytics_storage: 'denied', wait_for_update: 500,
+		});
+		gtag('js', new Date());
+		gtag('config', 'G-JSSZP2XFBL');
+		(function () {
+			var c = window.__ecamxConsent || { needed: true, value: null };
+			var allowed = !c.needed || c.value === 'granted';
+			if (allowed) gtag('consent', 'update', { analytics_storage: 'granted' });
+			var loaded = false;
+			// Vystaveno tlačítkům v liště: po souhlasu se knihovna natáhne hned
+			// a zpracuje frontu, takže se neztratí ani `page_view`.
+			window.__ecamxLoadGa = function () { allowed = true; load(); };
+			function load() {
+				if (loaded || !allowed) return;
+				loaded = true;
+				var s = document.createElement('script');
+				s.async = true;
+				s.src = 'https://www.googletagmanager.com/gtag/js?id=G-JSSZP2XFBL';
+				document.head.appendChild(s);
+			}
+			// Nečinnost s tvrdým stropem 3 s — na pomalém mobilu se prohlížeč
+			// „nudy" nedočká sám, ale déle už bychom riskovali ztracené návštěvy.
+			if ('requestIdleCallback' in window) requestIdleCallback(load, { timeout: 3000 });
+			else setTimeout(load, 2000);
+			// První dotek/klik/scroll znamená, že návštěvník zůstává → GA hned.
+			['pointerdown', 'keydown', 'scroll'].forEach(function (e) {
+				addEventListener(e, load, { once: true, passive: true });
+			});
+			// Odchod ze stránky: poslat, co je ve frontě, dokud to jde.
+			addEventListener('visibilitychange', function () {
+				if (document.visibilityState === 'hidden') load();
+			});
+		})();
+	</script>
+
+	<meta name="rating" content="adult" />
+	<meta name="RATING" content="RTA-5042-1996-1400-1577-RTA" />
+
+	<link rel="icon" href="/favicon.ico" sizes="32x32" />
+	<link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32" />
+	<link rel="apple-touch-icon" href="/favicon-180.png" />
+
+	{/*
+	  Náhledy jdou z cizích CDN — bez preconnect se čeká na TLS u každého hostu.
+	  Preconnect ale není zadarmo (drží spojení), takže jen na 6 nejčastějších;
+	  na zbytek stačí dns-prefetch.
+	*/}
+	{THUMBNAIL_HOSTS.slice(0, 6).map((h) => (
+		<link rel="preconnect" href={`https://${h}`} crossorigin />
+	))}
+	{THUMBNAIL_HOSTS.slice(6).map((h) => (
+		<link rel="dns-prefetch" href={`https://${h}`} />
+	))}
+
+	{/*
+	  Živý stav se začne stahovat UŽ TEĎ, ne až se vykoná modul na konci <body>.
+	  Kenny 28. 8.: „hned se mi některé streamy skryjí a objeví se jiné."
+	  Čím dřív feedy dorazí, tím dřív je mřížka opravená — a tím menší šance, že
+	  si toho někdo všimne. Odpovědi jsou edge-cachované 60 s, takže je to levné.
+	  Jen sítě, které endpoint mají (`LIVE_FEED_NETWORKS`); ostatní by střílely 404.
+	*/}
+	{[...LIVE_FEED_NETWORKS].map((n) => (
+		<link rel="preload" as="fetch" crossorigin="anonymous" href={`/api/online/${n}/`} />
+	))}
+
+	<slot name="head" />
+</head>
+<body class="bg-ink-950 text-ink-50"
+	{...{
+		'data-live-feeds': [...LIVE_FEED_NETWORKS].join(','),
+		/* Váhy sítí pro klientské doplňování rezervy. Jako atribut, protože
+		   `data.ts` by v klientském bundlu znamenal celý katalog (past 64).
+		   Tabulka má dnes jednu položku, takže je to pár bajtů na stránku. */
+		'data-network-weight': JSON.stringify(NETWORK_WEIGHT),
+	}}>
+	<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:p-3">Skip to content</a>
+
+	{/*
+	  Věková lišta. Záměrně NEblokuje obsah — HTML zůstává crawlovatelné a
+	  uživatel není zavřený za modalem. Volba padla 16. 8. 2026; plná brána
+	  by byla právně silnější (UK Online Safety Act, část US států).
+	*/}
+	{/* Lišta je ve výchozím stavu VIDITELNÁ a schová ji CSS podle třídy na <html>,
+	    kterou nastaví blokující skript v <head> ještě před prvním vykreslením.
+	    Dřív byla `hidden` a odkrýval ji modulový skript — ten je ale odložený,
+	    takže lišta naskočila až v 1 625 ms a posunula celý <main>: jediný layout
+	    shift na stránce, CLS 0,1204 (měřeno na /cams/bbw/, iPhone, slow 4G). */}
+	{/*
+	  Lišta nese DVĚ věci: potvrzení věku a — jen tam, kde je opt-in povinný —
+	  souhlas s analytikou. Markup je pro všechny stejný (web je statický),
+	  o zobrazení věty a druhého tlačítka rozhoduje třída `needs-consent`,
+	  kterou nasadí blokující skript v <head>.
+
+	  **Obě tlačítka mají stejnou velikost i tvar.** Odmítnutí musí být stejně
+	  snadné jako souhlas — schovat „jen nutné" do drobného odkazu je přesně ten
+	  dark pattern, kvůli kterému by souhlas nebyl platný, a pak by nebylo
+	  pravdivé ani prohlášení, které kvůli tomuhle v GA4 odklikáváme.
+	*/}
+	{/*
+	  **Text je krátký schválně.** Na 390 px zabírala tahle lišta i s odstavcem
+	  o Analytics 350 px z 844 — spolu s navigací, H1 a chipy vycházela první
+	  karta na 1 480 px, tedy skoro dvě obrazovky scrollování u webu, jehož
+	  produkt JE mřížka. Právní obsah zůstal (potvrzení věku, zmínka o cookies,
+	  odkazy), jen se nevypráví. Viz D63.
+	*/}
+	<div id="age-notice" class="age-notice border-b border-ink-800 bg-ink-900 text-xs sm:text-sm">
+		<div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5">
+			<strong class="text-accent">18+</strong>
+			<span class="text-ink-200">
+				Adult content.<span class="consent-only"> Analytics cookies.</span>
+			</span>
+			<a href="/terms/" class="text-ink-400 underline hover:text-white">Terms</a>
+			<a href="/privacy/" class="consent-only text-ink-400 underline hover:text-white">Privacy</a>
+			<span class="ml-auto flex gap-2">
+				<button
+					type="button" id="age-dismiss"
+					class="rounded bg-ink-700 px-3 py-1 font-medium text-white hover:bg-ink-600"
+				><span class="consent-only">Accept</span><span
+					class="no-consent-only">I&#39;m 18+</span></button>
+				{/* Stejná velikost i tvar jako „Accept" — odmítnutí musí být
+				    stejně snadné, jinak souhlas není platný (D45). */}
+				<button
+					type="button" id="consent-decline"
+					class="consent-only rounded bg-ink-700 px-3 py-1 font-medium text-white hover:bg-ink-600"
+				>Decline</button>
+			</span>
+		</div>
+	</div>
+
+	<header class="sticky top-0 z-40 border-b border-ink-800 bg-ink-950/95 backdrop-blur">
+		<div class="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
+			<a href="/" class="text-xl font-extrabold tracking-tight">
+				e<span class="text-accent">Camx</span>
+			</a>
+			<nav aria-label="Main" class="flex flex-wrap gap-1 text-sm">
+				<a href="/girls/" class="pill">Girls</a>
+				<a href="/guys/" class="pill">Guys</a>
+				<a href="/couples/" class="pill">Couples</a>
+				<a href="/trans/" class="pill">Trans</a>
+				<a href="/cams/" class="pill">All categories</a>
+				{/* `/site/` existovalo, ale vedla na něj jen patička homepage
+				    a drobečky — přitom „vyber si web" je jeden ze dvou způsobů,
+				    jak lidi ten katalog procházejí (D58). */}
+				<a href="/site/" class="pill">Cam sites</a>
+				<a href="/finder/" class="pill">Find a model</a>
+			</nav>
+			{/*
+			  „Tvoje modelky" — jediný důvod, proč se sem někdo vrátí bez
+			  upozornění. Je v HTML vždy, ukazuje se jen s třídou `has-follows`
+			  (viz blokující skript v <head>), takže nic neskáče a návštěvník
+			  bez sledovaných o tom nic neví.
+			*/}
+			<a href="/my/" class="watch-link ml-auto" data-watch-link>
+				Your models<span class="watch-count" data-watch-count hidden></span>
+			</a>
+		</div>
+	</header>
+
+	<main id="main" class="mx-auto max-w-7xl px-4 py-6">
+		<slot />
+	</main>
+
+	<footer class="mt-16 border-t border-ink-800 py-8 text-sm text-ink-400">
+		<div class="mx-auto max-w-7xl px-4">
+			{/* Adresář je jediná trvalá cesta ke stránkám modelek, které právě
+			    nevysílají — mřížky ukazují jen živé. Proto je v patičce, tedy
+			    na každé stránce webu. Viz docs/DECISIONS.md D33. */}
+			<nav aria-label="Browse" class="mb-4 flex flex-wrap gap-x-5 gap-y-2">
+				<a href="/finder/" class="hover:text-white">Find a model by name</a>
+				<a href="/models/" class="hover:text-white">All models A–Z</a>
+				<a href="/models/same-nickname/" class="hover:text-white">Same nickname, two sites</a>
+				<a href="/cams/" class="hover:text-white">All categories</a>
+				<a href="/site/" class="hover:text-white">Cam sites compared</a>
+				<a href="/country/" class="hover:text-white">Cams by country</a>
+				<a href="/for-models/" class="hover:text-white">For models</a>
+			</nav>
+			<nav aria-label="Legal" class="mb-4 flex flex-wrap gap-x-5 gap-y-2">
+				<a href="/terms/" class="hover:text-white">Terms of Service</a>
+				<a href="/privacy/" class="hover:text-white">Privacy Policy</a>
+				<a href="/2257/" class="hover:text-white">18 U.S.C. 2257</a>
+				<a href="/dmca/" class="hover:text-white">DMCA</a>
+				<a href="/about/" class="hover:text-white">About</a>
+				<a href="/contact/" class="hover:text-white">Contact</a>
+			</nav>
+			<p>
+				All models were 18 years of age or older at the time of depiction.
+				eCamx has a zero-tolerance policy against illegal pornography.
+			</p>
+			<p class="mt-2">© {new Date().getFullYear()} eCamx. All performers are independent broadcasters on third-party platforms.</p>
+		</div>
+	</footer>
+
+	{/*
+	  Astro z tohohle skriptu dělá SOUBOR v /_astro/ (6 438 B) a načítá ho
+	  `<script type="module" src>`. Je tedy cachovaný přes všechny stránky —
+	  bajty přidané sem stojí jednou za celý web, ne za stránku. (Dřív tu stálo,
+	  že se inlinuje; to od GA změn 18. 8. neplatí a rozhodovalo by to o CSP.)
+
+	  Celý skript musí tiše degradovat: když endpoint spadne, na stránce
+	  zůstanou hodnoty z buildu a nic se nerozbije.
+	*/}
+	<script>
+		import { liveFor, readWatch, toggleWatch, watchedNetworks } from '../lib/watchlist';
+
+		/**
+		 * Tentýž slugify jako sync a finder. `/api/online/` je klíčované slugem,
+		 * ale watchlist si drží `username` (potřebný pro `/go/`), takže se musí
+		 * převést. Kopie je tu vědomě: modul nesmí tahat `data.ts` (13 MB katalogu).
+		 */
+		function slugOf(nick: string): string {
+			return nick.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96);
+		}
+
+		// ── věková lišta ──────────────────────────────────────────────────────
+		// O tom, JESTLI se lišta zobrazí, rozhoduje blokující skript v <head>
+		// (třída `age-ok` na <html>) — tenhle modul je odložený a rozhodoval by
+		// až po prvním vykreslení. Tady zůstává jen odkliknutí.
+		/**
+		 * Uložení volby o analytice. `granted` natáhne gtag.js hned a GA zpracuje
+		 * frontu z `dataLayer` (takže `page_view` nezmizí), `denied` nechá
+		 * knihovnu nenačtenou — nic se neodešle.
+		 */
+		function setConsent(value: 'granted' | 'denied') {
+			try { localStorage.setItem('ecamx-consent', value); } catch { /* privátní režim */ }
+			const w = window as unknown as {
+				gtag?: Function; __ecamxLoadGa?: () => void;
+			};
+			// Volba musí být čitelná i pro Worker na `/go/` — localStorage tam
+			// nedosáhne. Proto cookie: bez ní by serverové měření (`go_click_server`)
+			// nevědělo, že návštěvník právě odmítl, a zadní cestou by rušilo to,
+			// co lišta slíbila. Viz D45 a src/pages/go/[network]/[user].ts.
+			setCookie('ecamx_consent', value);
+			if (value === 'granted') {
+				w.gtag?.('consent', 'update', { analytics_storage: 'granted' });
+				w.__ecamxLoadGa?.();
+				ensureCid();
+			} else {
+				// Odmítnutí znamená i zahodit identifikátor, ne ho jen přestat používat.
+				setCookie('ecamx_cid', '', 0);
+			}
+		}
+
+		/** First-party cookie, rok, `Lax` (proklik na `/go/` je same-site navigace). */
+		function setCookie(name: string, value: string, days = 365) {
+			const age = days > 0 ? `max-age=${days * 86400}` : 'max-age=0';
+			document.cookie = `${name}=${encodeURIComponent(value)}; path=/; ${age}; SameSite=Lax; Secure`;
+		}
+
+		function getCookie(name: string): string | null {
+			const m = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+			return m ? decodeURIComponent(m[1]) : null;
+		}
+
+		/**
+		 * `client_id` pro serverové měření. **Náhodné ID na každý klik nejde** —
+		 * GA4 by z každého prokliku udělala nového uživatele. Je to naše
+		 * first-party cookie, takže ji blokátor googletagmanageru nesundá, a
+		 * právě proto serverový hit vidí i kliky, které klientské GA nezachytí.
+		 */
+		function ensureCid() {
+			if (getCookie('ecamx_cid')) return;
+			const rand = crypto?.randomUUID?.()
+				?? `${Date.now()}.${Math.floor(Math.random() * 1e9)}`;
+			setCookie('ecamx_cid', rand);
+		}
+
+		// Mimo EU souhlas potřeba není, takže se stav nastaví hned při načtení —
+		// jinak by serverové měření vidělo jen ty, kdo na lištu klikli.
+		{
+			const c = (window as unknown as { __ecamxConsent?: { needed: boolean } }).__ecamxConsent;
+			if (c && !c.needed && getCookie('ecamx_consent') !== 'denied') {
+				setCookie('ecamx_consent', 'granted');
+				ensureCid();
+			}
+		}
+
+		// „Essential only" — věk potvrzený, analytika odmítnutá. Lišta zmizí
+		// stejně jako u souhlasu, jinak by odmítnutí bylo trestané.
+		document.getElementById('consent-decline')?.addEventListener('click', () => {
+			setConsent('denied');
+			document.documentElement.classList.add('age-ok');
+			try { localStorage.setItem('ecamx-age-ok', '1'); } catch { /* privátní režim */ }
+		});
+
+		document.getElementById('age-dismiss')?.addEventListener('click', () => {
+			document.documentElement.classList.add('age-ok');
+			try { localStorage.setItem('ecamx-age-ok', '1'); } catch { /* privátní režim */ }
+			// Tam, kde je potřeba souhlas, je tohle tlačítko „Accept & continue".
+			// Mimo EU je volba uložená taky, ať je stav explicitní.
+			setConsent('granted');
+		});
+
+		// ── měření ────────────────────────────────────────────────────────────
+		// `gtag` je globální díky `is:inline` stubu v <head> (AGENTS.md bod 31).
+		// Měření nesmí NIKDY rozbít stránku, proto to má vlastní try/catch:
+		// když blokátor gtag zahodí, tohle musí projít bez chyby.
+		const ga = (name: string, params?: Record<string, unknown>) => {
+			try { (window as unknown as { gtag?: Function }).gtag?.('event', name, params); }
+			catch { /* měření je až druhé v řadě po funkčnosti webu */ }
+		};
+
+		// `card` se renderuje na SEDMI typech stránek a na elementu není nic, co
+		// by je rozlišilo — proto se typ bere z cesty.
+		const pageType = (() => {
+			const p = location.pathname;
+			if (p === '/') return 'home';
+			if (p === '/cams/') return 'category_hub';
+			if (p.startsWith('/live/')) return 'model';
+			if (p.startsWith('/cams/')) return 'category';
+			if (p.startsWith('/country/')) return 'country';
+			if (p.startsWith('/site/')) return 'network';
+			if (['/girls/', '/guys/', '/couples/', '/trans/'].includes(p)) return 'gender';
+			return 'other';
+		})();
+
+		/** Slug modelky, jejíž stránku právě čteme (jinak prázdné). */
+		const pageModel = pageType === 'model'
+			? decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] ?? '')
+			: '';
+
+		// Odchozí proklik. JEDEN delegovaný listener pokryje všech 11 míst, kde se
+		// `/go/` odkaz renderuje (7× karta, similar grid, hlavní CTA, sticky lišta,
+		// network CTA) — a hlavně ZERO nového markupu na kartě. Karet je na mřížce
+		// 180 a stránek modelek přes 10 000, takže 20 B na kartu = 3,6 kB na
+		// stránku; přesně proto vzniklo `/go/` (D17) a proto tu je delegace místo
+		// atributů, stejně jako u `error` listeneru níž.
+		//
+		// GA4 tenhle klik sám nezaznamená: jeho vestavěné „outbound clicks" se
+		// spouští jen na CIZÍ doménu a `/go/` je first-party. Bez téhle události
+		// o proklicích nevíme nic.
+		//
+		// Href se čte AŽ PŘI KLIKU, ne při načtení, protože se za běhu mění:
+		// network CTA se přesměrovává na živou modelku (viz `data-cta-retarget`
+		// níž) a offline stránka přepíná `?p=offline` na `?p=profile`, když
+		// modelka naskočí (D19).
+		document.addEventListener('click', (e) => {
+			const a = (e.target as HTMLElement | null)?.closest?.('a[href^="/go/"]') as HTMLAnchorElement | null;
+			if (!a) return;
+
+			const [, , network = '', user = ''] = a.pathname.split('/');
+			const placement = new URLSearchParams(a.search).get('p') ?? 'card';
+
+			// `?p=` samo nerozliší dvě věci: `profile` posílá hlavní CTA i sticky
+			// lišta, `player` posílá textový odkaz „Player not loading?" i tlačítko
+			// „Open full screen". Bez `slot` by se to slilo do jednoho čísla.
+			const slot = a.closest('.sticky-cta') ? 'sticky'
+				// Vrstva nad streamem. Musí být PŘED `btn-ghost`/`underline`,
+				// jinak by se slila s ostatními odkazy u přehrávače a nešlo by
+				// poznat, jestli klik do videa vůbec někdo dělá.
+				: a.classList.contains('player-hit') ? 'stream'
+				: a.classList.contains('btn-ghost') ? 'fullscreen'
+				: a.classList.contains('underline') ? 'fallback_text'
+				: a.classList.contains('btn-cta') ? 'main'
+				: 'other';
+
+			const card = a.closest('.card');
+			// Offline se pozná dvěma cestami: u karty ji zhasl live refresh,
+			// u profilu to říká `data-cta-offline` ze serveru.
+			const offline = card?.classList.contains('is-offline')
+				|| a.hasAttribute('data-cta-offline');
+
+			ga('go_click', {
+				network,
+				placement,
+				slot,
+				page_type: pageType,
+				live_state: offline ? 'offline' : 'live',
+				// Na stránce modelky ji známe z cesty; z karty se vezme z odkazu
+				// dovnitř, protože `username` (nick u sítě) není totéž co `page`
+				// (naše URL) — viz komentář u `page` v src/lib/data.ts.
+				model: pageModel
+					|| card?.querySelector<HTMLAnchorElement>('a[href^="/live/"]')?.pathname.split('/')[2]
+					|| user,
+			});
+		});
+
+		document.getElementById('age-dismiss')?.addEventListener('click', () => ga('age_accept'));
+
+		// ── náhled, který se nenačetl ─────────────────────────────────────────
+		// Cam4 a Amateur.tv mají v URL podpis s expirací, takže fallback je
+		// povinný (AGENTS.md bod 6). Dřív to byl inline `onerror` na každém
+		// obrázku: 116 B × 180 karet = 21 kB na jednu mřížkovou stránku, znak
+		// za znak stejných. Jeden delegovaný listener to zvládne za 120 B —
+		// a hlavně díky tomu může vzniknout CSP bez `'unsafe-hashes'`.
+		// POZOR: `error` NEBUBLÁ, musí se poslouchat v capture fázi.
+		document.addEventListener('error', (e) => {
+			const el = e.target as HTMLElement | null;
+			if (!(el instanceof HTMLImageElement)) return;
+			if (el.dataset.fallbackDone) return;          // ať se to nezacyklí
+			const wrap = el.closest('.thumb-wrap');
+			el.dataset.fallbackDone = '1';
+			if (wrap) {
+				el.src = '/placeholder.svg';
+				wrap.classList.add('is-placeholder');
+			} else {
+				// Rozmazaný poster na offline stránce — bez náhrady, prostě zmizí.
+				el.remove();
+			}
+		}, true);
+
+		// ── náhled se rozhýbe při najetí ──────────────────────────────────────
+		// CamSoda posílá hotovou MP4 smyčku (`vthumb`); u ostatních sítí je
+		// náhled živý snímek, takže stačí ho obnovovat a vypadá to stejně.
+		// Video element se vyrábí až na hoveru — 120 <video> v mřížce by byla
+		// hloupost. Na dotyku se nespouští nic: hover tam neexistuje a data
+		// jsou drahá.
+		const canPreview =
+			window.matchMedia('(hover: hover) and (pointer: fine)').matches &&
+			!window.matchMedia('(prefers-reduced-motion: reduce)').matches &&
+			!(navigator as any).connection?.saveData;
+
+		if (canPreview) {
+			let timer: number | undefined;
+			let active: HTMLElement | null = null;
+
+			// Původní URL náhledu si držíme tady, ne v data atributu — na kartu
+			// je to 70 B a karet jsou na stránce stovky.
+			let originalSrc: string | null = null;
+
+			const stop = () => {
+				if (timer) { clearInterval(timer); timer = undefined; }
+				if (!active) return;
+				active.querySelector('video')?.remove();
+				const img = active.querySelector('img');
+				if (img && originalSrc) img.src = originalSrc;
+				originalSrc = null;
+				active = null;
+			};
+
+			const start = (card: HTMLElement) => {
+				if (active === card) return;
+				stop();
+				const wrap = card.querySelector<HTMLElement>('.thumb-wrap');
+				const img = card.querySelector<HTMLImageElement>('img[data-preview], .thumb-wrap img');
+				if (!wrap || !img) return;
+				active = wrap;
+				originalSrc = img.src;
+
+				const mp4 = img.dataset.preview;
+				if (mp4) {
+					const v = document.createElement('video');
+					v.src = mp4; v.muted = true; v.loop = true;
+					v.playsInline = true; v.preload = 'auto';
+					v.addEventListener('playing', () => v.classList.add('is-playing'), { once: true });
+					wrap.appendChild(v);
+					v.play().catch(() => v.remove()); // autoplay může být zakázané
+					return;
+				}
+				// Bez MP4: obnovovat živý JPEG. Ne rychleji — snímek se stejně
+				// na CDN neobnovuje častěji a je to cizí přenos.
+				timer = window.setInterval(() => {
+					if (!originalSrc) return;
+					img.src = originalSrc + (originalSrc.includes('?') ? '&' : '?') + 'cb=' + Date.now();
+				}, 900);
+			};
+
+			document.addEventListener('pointerover', (e) => {
+				const card = (e.target as HTMLElement)?.closest?.('.card') as HTMLElement | null;
+				if (card) start(card); else stop();
+			});
+			document.addEventListener('pointerleave', stop, true);
+		}
+
+		// ── watchlist („tvoje modelky") ───────────────────────────────────────
+		/**
+		 * Sledování je čistě klientské — proč, viz `src/lib/watchlist.ts`.
+		 * Tady je jen obsluha tlačítka a odznak v hlavičce.
+		 */
+		{
+			const link = document.querySelector<HTMLElement>('[data-watch-link]');
+			const countEl = document.querySelector<HTMLElement>('[data-watch-count]');
+
+			const paintToggle = (btn: HTMLElement, on: boolean) => {
+				btn.classList.toggle('is-on', on);
+				btn.setAttribute('aria-pressed', String(on));
+				const label = btn.querySelector<HTMLElement>('[data-watch-label]');
+				// Text se jen přepíše, prvek se nepřidává ani neubírá — jinak by
+				// tlačítko měnilo šířku a posouvalo řádek.
+				if (label) label.textContent = on ? 'Following' : 'Follow';
+			};
+
+			// Delegovaně: tlačítko je na profilu i v řádcích finderu, které se
+			// vykreslují až za běhu.
+			document.addEventListener('click', (e) => {
+				const btn = (e.target as HTMLElement | null)?.closest?.('[data-watch-toggle]') as HTMLElement | null;
+				if (!btn) return;
+				e.preventDefault();
+				const page = btn.dataset.page ?? '';
+				const network = btn.dataset.network ?? '';
+				const username = btn.dataset.username ?? '';
+				if (!page || !network || !username) return;
+				const { watched, count } = toggleWatch({ page, network, username });
+				paintToggle(btn, watched);
+				document.documentElement.classList.toggle('has-follows', count > 0);
+				if (countEl && !watched && count === 0) { countEl.hidden = true; countEl.textContent = ''; }
+				ga(watched ? 'watch_add' : 'watch_remove', {
+					network, model: page, placement: btn.dataset.watchSource ?? 'profile',
+				});
+			});
+
+			// Stav tlačítek po načtení. Tlačítka jsou v HTML od začátku, mění se
+			// jen jejich text a třída — nic se nezjevuje (past 52).
+			const watched = new Set(readWatch().map((w) => w.page));
+			for (const btn of document.querySelectorAll<HTMLElement>('[data-watch-toggle]')) {
+				if (btn.dataset.page && watched.has(btn.dataset.page)) paintToggle(btn, true);
+			}
+
+			/**
+			 * Odznak „N z tvých je live". Ptáme se **jen sítí, které v seznamu
+			 * opravdu jsou** — kdo sleduje tři modelky z Chaturbate, zaplatí jeden
+			 * request, ne sedm. Stahování i 60s cache řeší `liveFor()` — sdílí ho
+			 * s `/my/`, jinak by se tam tentýž feed stáhl dvakrát.
+			 */
+			if (link && countEl && watched.size) {
+				const list = readWatch();
+				void liveFor(watchedNetworks(list), list.map((w) => slugOf(w.username))).then((live) => {
+					const liveNow = list.filter((w) => live.viewers(w.network, slugOf(w.username)) !== undefined);
+					if (!liveNow.length) return;
+					countEl.textContent = String(liveNow.length);
+					countEl.hidden = false;
+					link.classList.add('is-live');
+					link.title = `${liveNow.length} of the models you follow are live now`;
+				});
+			}
+		}
+
+		// ── filtr mřížky podle sítě (D58) ─────────────────────────────────────
+		/**
+		 * Chipy jsou v HTML ze serveru, volba se drží v `localStorage` a platí
+		 * napříč webem. **Aplikuje ji blokující skript v <head>** stylem, takže
+		 * karty jsou skryté už při prvním vykreslení a nic se neposouvá; tady se
+		 * jen reaguje na kliknutí a přepisuje se ten samý <style>.
+		 */
+		const SITES_KEY = 'ecamx-sites';
+		const filterBar = document.querySelector<HTMLElement>('[data-grid-filters]');
+
+		function activeSites(): string[] {
+			try {
+				const raw = JSON.parse(localStorage.getItem(SITES_KEY) || '[]');
+				return Array.isArray(raw) ? raw.filter((x) => typeof x === 'string' && /^[a-z0-9]{1,20}$/.test(x)) : [];
+			} catch { return []; }
+		}
+
+		function applySites(sites: string[]): void {
+			const tag = document.querySelector<HTMLStyleElement>('style[data-site-filter]');
+			if (!sites.length) { tag?.remove(); return; }
+			const css = `.card${sites.map((x) => `:not([data-network="${x}"])`).join('')}{display:none}`;
+			if (tag) { tag.textContent = css; tag.dataset.siteFilter = sites.join(','); return; }
+			const st = document.createElement('style');
+			st.dataset.siteFilter = sites.join(',');
+			st.textContent = css;
+			document.head.appendChild(st);
+		}
+
+		/** Kolik karet po filtru zbylo — `display:none` z <style> se pozná jen výpočtem. */
+		function visibleCards(): number {
+			return Array.from(document.querySelectorAll<HTMLElement>('.card'))
+				.filter((c) => !c.hidden && c.offsetParent !== null).length;
+		}
+
+		/**
+		 * Filtrovaná mřížka se nesmí vyprázdnit. Živý průchod už zhaslé karty
+		 * skryl, takže po zapnutí filtru může ze stránky zbýt nula — změřeno
+		 * 26. 8. na `/cams/bbw/` + Chaturbate (0 karet, CLS 0,146). Zhaslé karty
+		 * té sítě se proto vrátí zešedlé (`is-offline`, opacity .55) a hláška
+		 * nabídne plnou mřížku sítě. Volá se z obou míst: po kliknutí i po
+		 * živém průchodu.
+		 */
+		function rescueFiltered(sites: string[]): void {
+			if (!sites.length || visibleCards() >= 12) return;
+			for (const grid of document.querySelectorAll<HTMLElement>('[data-grid]')) {
+				for (const card of grid.querySelectorAll<HTMLElement>('.card[hidden]')) {
+					if (!sites.includes(card.dataset.network ?? '')) continue;
+					card.hidden = false;
+					card.classList.add('is-offline');
+					if (visibleCards() >= 12) return;
+				}
+			}
+		}
+
+		/**
+		 * Východ z prázdné mřížky. Přefiltrovat kategorii na jednu síť dá klidně
+		 * šest karet — a slepá ulička je ta nejdražší obrazovka na webu, protože
+		 * z ní člověk odchází. Radši ho pošleme do plné mřížky té sítě.
+		 */
+		function filterNote(sites: string[]): void {
+			document.querySelector('[data-filter-note]')?.remove();
+			const left = visibleCards();
+			if (!sites.length || left >= 12) return;
+			const grid = document.querySelector<HTMLElement>('[data-grid]');
+			if (!grid) return;
+			const chip = filterBar?.querySelector<HTMLElement>(`[data-site="${sites[0]}"]`);
+			const label = siteLabel(sites[0]);
+			const total = chip?.querySelector('span')?.textContent?.trim() ?? '';
+			const note = document.createElement('p');
+			note.className = 'grid-filter-note';
+			note.setAttribute('data-filter-note', '');
+			// Jen zhaslé karty VYBRANÝCH sítí — dřív se sčítaly všechny na stránce
+			// (včetně mřížky podobných modelek) a číslo bylo vyšší, než kolik ta
+			// síť na stránce vůbec má.
+			const ended = Array.from(document.querySelectorAll<HTMLElement>('[data-grid] .card.is-offline'))
+				.filter((c) => !c.hidden && sites.includes(c.dataset.network ?? '')).length;
+			note.textContent = ended
+				? `${ended} of these ${label} rooms just ended. `
+				: left
+					? `Only ${left} ${label} cam${left === 1 ? '' : 's'} on this page. `
+					: `No ${label} cams on this page. `;
+			const a = document.createElement('a');
+			a.href = `/site/${sites[0]}/`;
+			a.className = 'text-accent underline hover:text-white';
+			a.textContent = total ? `See all ${label} cams (${total} here) →` : `See all ${label} cams →`;
+			note.appendChild(a);
+			grid.insertAdjacentElement('afterend', note);
+		}
+
+		/** Popisek sítě z chipu („CamSoda", ne „camsoda"); bez chipu zbývá ID. */
+		function siteLabel(id: string): string {
+			const chip = filterBar?.querySelector<HTMLElement>(`[data-site="${id}"]`);
+			return chip?.textContent?.replace(/\s*\d+\s*$/, '').trim() || id;
+		}
+
+		function paintChips(sites: string[]): void {
+			if (!filterBar) return;
+			for (const b of filterBar.querySelectorAll<HTMLElement>('[data-site]')) {
+				const id = b.dataset.site ?? '';
+				const on = id ? sites.includes(id) : sites.length === 0;
+				b.classList.toggle('is-on', on);
+				b.setAttribute('aria-pressed', String(on));
+			}
+		}
+
+		if (filterBar) {
+			paintChips(activeSites());
+			filterNote(activeSites());
+			filterBar.addEventListener('click', (e) => {
+				const btn = (e.target as HTMLElement | null)?.closest?.('[data-site]') as HTMLElement | null;
+				if (!btn) return;
+				const id = btn.dataset.site ?? '';
+				let sites = activeSites();
+				// „All sites" je reset, ostatní chipy se přepínají.
+				if (!id) sites = [];
+				else sites = sites.includes(id) ? sites.filter((x) => x !== id) : [...sites, id];
+				try { localStorage.setItem(SITES_KEY, JSON.stringify(sites)); } catch { /* privátní režim */ }
+				applySites(sites);
+				paintChips(sites);
+				rescueFiltered(sites);
+				filterNote(sites);
+				// Dimenze `network` už v GA4 existuje, takže se nemusí nic
+				// registrovat před deployem (past 32).
+				ga('filter_apply', { network: sites.join(',') || 'all', page_type: pageType });
+			});
+		}
+
+		// ── živý stav ─────────────────────────────────────────────────────────
+		/**
+		 * Váha sítě v mřížce — tatáž tabulka jako v buildu. Nedá se sem
+		 * naimportovat: `data.ts` by do klientského bundlu přitáhl katalog,
+		 * takže se hodnoty předávají v `data-network-weight` na <body>.
+		 */
+		const WEIGHTS: Record<string, number> = (() => {
+			try { return JSON.parse(document.body.dataset.networkWeight || '{}'); }
+			catch { return {}; }
+		})();
+		const WEIGHT = (net: string) => WEIGHTS[net] ?? 1;
+
+		interface Feed {
+			online: Record<string, number>;
+			truncated?: boolean;
+			floor?: number;
+			/** Chybějící modelka u téhle sítě nedokazuje offline (viz endpoint). */
+			absenceUnproven?: boolean;
+		}
+		/**
+		 * **Karta bez náhledu je díra — vyměníme ji za jinou.**
+		 *
+		 * Kenny 29. 8.: „Cam4 nefunguje." Změřeno na `/site/cam4/`: **8 ze 40
+		 * karet mělo prázdný náhled**. Není to expirace ani offline — Cam4
+		 * pro část modelek snímek prostě nemá a `snapshots.xcdnpro.com` vrací
+		 * **404 s `text/html`**, což prohlížeč u obrázku zahodí (ORB), takže
+		 * po kartě zbude prázdné místo. Ověřeno i na čerstvé adrese z feedu
+		 * a na modelce, která právě vysílá — čekat na další build nepomůže.
+		 *
+		 * Řeší se to jako každá jiná mrtvá karta: na její místo nastoupí
+		 * rezerva (přednostně ze stejné sítě, ať se nerozhodí poměr, D63),
+		 * původní jde skrytá dozadu. Počet viditelných karet se nemění
+		 * a nic se neposune (D57). Když rezerva došla, zbyde aspoň zástupný
+		 * obrázek — pořád lepší než díra.
+		 *
+		 * `error` nebublá, ale dá se odchytit v capture fázi, takže stačí
+		 * jeden posluchač na mřížku a pokryje i lazy obrázky, které se
+		 * načtou až při scrollování.
+		 */
+		for (const grid of document.querySelectorAll<HTMLElement>('[data-grid]')) {
+			let swapped = 0;
+			const fixCard = (img: HTMLImageElement): void => {
+				const card = img.closest<HTMLElement>('.card');
+				if (!card || card.hidden || card.dataset.thumbFixed) return;
+				// **Nejdřív náhradní obrázek té samé modelky.** Cam4 ho ve feedu
+				// posílá právě pro tenhle případ (`profile_thumb`, D69) — profilovka
+				// je pořád ona a karta zůstane užitečná. Teprve když není nebo taky
+				// selže, ustoupí modelka jiné.
+				const alt = img.dataset.thumbFallback;
+				if (alt && img.src !== alt) {
+					delete img.dataset.thumbFallback;
+					img.src = alt;
+					return;
+				}
+				card.dataset.thumbFixed = '1';
+				const net = card.dataset.network ?? '';
+				const spare = [...grid.querySelectorAll<HTMLElement>('.card[hidden]')]
+					.find((c) => c.dataset.network === net && !c.dataset.thumbFixed)
+					?? [...grid.querySelectorAll<HTMLElement>('.card[hidden]')]
+						.find((c) => !c.dataset.thumbFixed);
+				if (spare) {
+					card.replaceWith(spare);
+					spare.hidden = false;
+					card.hidden = true;
+					grid.appendChild(card);
+					swapped++;
+					if (swapped === 1) {
+						// Jedna událost za zobrazení stránky, ne za kartu —
+						// jinak by jedna rozbitá síť utopila všechno ostatní.
+						queueMicrotask(() => ga('thumb_broken', { network: net, count: swapped, page_type: pageType }));
+					}
+				} else {
+					img.src = '/placeholder.svg';
+				}
+			};
+			grid.addEventListener('error', (ev) => {
+				const t = ev.target;
+				if (t instanceof HTMLImageElement) fixCard(t);
+			}, true);
+			// Co se rozbilo dřív, než se posluchač stihl navěsit (modul je
+			// `defer`, obrázky se načítají souběžně s parsováním).
+			for (const img of grid.querySelectorAll<HTMLImageElement>('.card:not([hidden]) .thumb-wrap img')) {
+				if (img.complete && img.naturalWidth === 0) fixCard(img);
+			}
+		}
+
+		const badges = Array.from(document.querySelectorAll<HTMLElement>('[data-live-badge]'));
+		if (badges.length) {
+			// Ptát se jen sítí, které endpoint opravdu má. Bez tohohle filtru
+			// střílela každá stránka s kartami ze CrakRevenue **čtyři 404**
+			// (změřeno na produkci 26. 8.) — a `/api/` sdílí okno rate limitu
+			// 40 req/10 s s vydělávajícím `/go/` (D49). Seznam přichází z buildu
+			// v `data-live-feeds`; když chybí (starší HTML), neomezuje se nic.
+			const feedNets = new Set((document.body.dataset.liveFeeds ?? '').split(',').filter(Boolean));
+			const networks = [...new Set(badges.map((b) => b.dataset.liveBadge!.split(':')[0]))]
+				.filter((n) => feedNets.size === 0 || feedNets.has(n));
+			// Prázdný seznam projde bez pojistky: `Promise.allSettled([])` skončí
+			// hned a `if (!live.size) return;` níž nechá hodnoty z buildu.
+			// (`return` tady být nemůže — jsme v těle `if`, ne ve funkci.)
+
+			/**
+			 * Paralelně, každá síť zvlášť — endpoint je dělený kvůli 10ms CPU limitu.
+			 *
+			 * **Nečeká se na nejpomalejší feed.** Změřeno na produkci 28. 8.:
+			 * deset feedů dobíhá mezi 230 a 736 ms (přednačtení z `<head>` je
+			 * pustí už ve 135 ms), takže `allSettled` posunul opravu mřížky na
+			 * 663 ms — a čím později přijde, tím jistěji ji člověk uvidí.
+			 * První průchod jde proto na **čas** s tím, co do té doby dorazilo,
+			 * a když zbytek doběhne, projede se to znovu. Průchod je idempotentní:
+			 * přeživší karty se nehýbou (D57) a hlášky i „Show more" se přepočítají.
+			 */
+			const live = new Map<string, Feed>();
+			const all = networks.map((n) =>
+				fetch(`/api/online/${n}/`, { signal: AbortSignal.timeout(6000) })
+					.then((r) => (r.ok ? r.json() as Promise<Feed> : null))
+					.then((d) => { if (d?.online) live.set(n, d); })
+					.catch(() => { /* jedna síť navíc nebo míň mřížku nerozbije */ })
+			);
+			/** Kolik čekat na pomalé feedy, než se mřížka opraví poprvé. */
+			const FIRST_PASS_MS = 300;
+			const firstPass = Promise.race([
+				Promise.allSettled(all),
+				new Promise((r) => setTimeout(r, FIRST_PASS_MS)),
+			]);
+			firstPass
+				.then(() => applyLive(false))
+				.then(() => Promise.allSettled(all))
+				.then(() => applyLive(true))
+				.catch(() => { /* tiše — stránka funguje i bez živých dat */ });
+
+			/**
+			 * Dotáhne z feedu karty modelek, které vysílají PRÁVĚ TEĎ, a nahradí
+			 * jimi ty, o kterých to nevíme (nebo víme, že nevysílají).
+			 *
+			 * Karta se **klonuje z existující** a jen se přepíšou pole — markup
+			 * a třídy zůstávají na jednom místě v `ModelCard.astro` (past 31).
+			 * Odkaz míří na `/live/{slug}/?r={síť}&n={nick}`: když u nás stránka
+			 * je, servíruje ji statika a parametrů si nikdo nevšimne; když není,
+			 * Worker pošle návštěvníka rovnou do pokoje (D67). Přeživší živé
+			 * karty se nehýbou (D57).
+			 */
+			async function rescueGrid(
+				grid: HTMLElement,
+				ranked: Array<{ card: HTMLElement; rank: number; network: string }>,
+				target: number,
+				liveNow: number,
+			): Promise<void> {
+				const nets = [...new Set(ranked.map((r) => r.network))]
+					.filter((n) => n && (feedNets.size === 0 || feedNets.has(n)))
+					.sort((a, b) => WEIGHT(b) - WEIGHT(a));
+				if (!nets.length) return;
+
+				interface Card { s: string; n: string; t: string; v: number; e: string; f?: string }
+				const pools = new Map<string, Card[]>();
+				/**
+				 * **Které modelky u nás mají stránku.**
+				 *
+				 * Kenny 29. 8.: „žádné přesměrování k partnerovi hned, potřebujeme
+				 * ty lidi co nejdýl udržet na webu a mít /live/ abychom měli co
+				 * indexovat." Feed vrací i modelky, které u nás stránku nemají
+				 * (změřeno: chaturbate 19 z 20, stripchat 12 z 20) — takové karty
+				 * se prostě nepoužijí, takže KAŽDÁ záchranná karta vede na naši
+				 * stránku a nikam ven.
+				 *
+				 * Seznam je statický soubor, ne data ve Workeru: 400 kB literál by
+				 * se parsoval při startu isolate a `/api/online/` má strop 10 ms
+				 * CPU. Stahuje se jen tady, tedy jen když se záchrana spouští.
+				 */
+				interface PageIndex { v: number; nets: Record<string, { p: string[]; x: string[] }> }
+				let pages: PageIndex | null = null;
+				await Promise.allSettled([
+					...nets.map(async (n) => {
+						try {
+							const r = await fetch(`/api/online/${n}/?cards=40`, { signal: AbortSignal.timeout(6000) });
+							const d = await r.json() as { cards?: Card[] };
+							if (d?.cards?.length) pools.set(n, d.cards);
+						} catch { /* jedna síť míň mřížku nerozbije */ }
+					}),
+					(async () => {
+						try {
+							const r = await fetch('/live-pages.json', { signal: AbortSignal.timeout(6000) });
+							const d = await r.json() as PageIndex;
+							if (d?.nets) pages = d;
+						} catch { /* bez seznamu se radši nezachraňuje, viz níž */ }
+					})(),
+				]);
+				// Bez seznamu nevíme, kam karta povede — a poslat člověka ven je
+				// to jediné, co se stát nesmí. Radši mřížka o něco starší.
+				if (!pools.size || !pages) return;
+
+				/** `/live/{…}/` té modelky, nebo `null` když u nás stránku nemá. */
+				const sets = new Map<string, [Set<string>, Set<string>]>();
+				const pageOf = (net: string, slug: string): string | null => {
+					let pair = sets.get(net);
+					if (!pair) {
+						const idx = (pages as PageIndex).nets[net];
+						if (!idx) return null;
+						// Set až tady a jen pro sítě, na které se opravdu ptáme —
+						// `includes()` přes osm tisíc slugů šedesátkrát je zbytečná
+						// práce v hlavním vlákně.
+						pair = [new Set(idx.p), new Set(idx.x)];
+						sets.set(net, pair);
+					}
+					if (pair[0].has(slug)) return slug;
+					if (pair[1].has(slug)) return `${slug}-${net}`;
+					return null;
+				};
+
+				// Co už na stránce je, se neduplikuje.
+				const onPage = new Set(ranked.map((r) => {
+					const b = r.card.querySelector<HTMLElement>('[data-live-badge]');
+					return b?.dataset.liveBadge ?? '';
+				}));
+				/**
+				 * Kolik karet drží Chaturbate. Záchrana musí jeho podíl držet,
+				 * ne ředit: vydělává nejvíc (D63) a zrovna jeho karty mizí
+				 * nejčastěji, protože u něj se na rozdíl od sítí s
+				 * `absenceUnproven` (D66) zhasíná poctivě.
+				 */
+				const TOP = nets[0];
+				let cbShown = ranked.filter((r) => !r.card.hidden && r.network === TOP).length;
+				const wantTop = () => cbShown < target / 3 && (pools.get(TOP)?.length ?? 0) > 0;
+
+				const nextFor = (prefer: string): [string, Card, string] | null => {
+					for (const net of [wantTop() ? TOP : prefer, ...nets]) {
+						const pool = pools.get(net);
+						while (pool?.length) {
+							const c = pool.shift()!;
+							if (onPage.has(`${net}:${c.s}`)) continue;
+							// Bez naší stránky karta nevznikne — viz `pageOf`.
+							const page = pageOf(net, c.s);
+							if (!page) continue;
+							onPage.add(`${net}:${c.s}`);
+							if (net === TOP) cbShown++;
+							return [net, c, page];
+						}
+					}
+					return null;
+				};
+
+				let added = 0;
+				for (const r of ranked) {
+					if (added >= target - liveNow) break;
+					if (r.card.hidden || r.rank === 0) continue;   // živou nesahat
+					const fresh = r.card.cloneNode(true) as HTMLElement;
+					// Karta bez náhledu (modelka ho ve feedu neměla) se přepsat
+					// nedá; přeskočí se, ale frontu z feedu neprotočí naprázdno.
+					if (!rescueSlots(fresh)) continue;
+					const next = nextFor(r.network);
+					if (!next) break;
+					const [net, c, page] = next;
+					fillRescueCard(fresh, net, c, page);
+					r.card.replaceWith(fresh);
+					fresh.classList.add('is-swapped');
+					// Aby šly záchranné karty poznat v testech i v DOMu; odkaz
+					// samotný je od D71 k nerozeznání od karty z buildu.
+					fresh.dataset.rescued = net;
+					added++;
+				}
+				if (added) ga('grid_rescued', { count: added, page_type: pageType });
+			}
+
+			interface Slots {
+				img: HTMLImageElement; badge: HTMLElement; name: HTMLAnchorElement;
+			}
+
+			/** Místa v kartě, která se přepisují. `null` = tuhle kartu přeskočit. */
+			function rescueSlots(card: HTMLElement): Slots | null {
+				const img = card.querySelector<HTMLImageElement>('.thumb-wrap img');
+				const badge = card.querySelector<HTMLElement>('[data-live-badge]');
+				const name = card.querySelector<HTMLAnchorElement>('a.stretch');
+				return img && badge && name ? { img, badge, name } : null;
+			}
+
+			/** Přepíše klonovanou kartu na modelku z feedu. */
+			function fillRescueCard(
+				card: HTMLElement,
+				net: string,
+				c: { s: string; n: string; t: string; v: number; f?: string },
+				page: string,
+			): void {
+				const { img, badge, name } = rescueSlots(card)!;
+				card.hidden = false;
+				card.classList.remove('is-offline');
+				card.dataset.network = net;
+				img.src = c.t;
+				img.loading = 'lazy';
+				img.alt = `${c.n} live cam`;
+				// Náhledové video patřilo té původní modelce.
+				delete img.dataset.preview;
+				// Náhrada pro chybějící snapshot (dnes jen Cam4, D69).
+				if (c.f) img.dataset.thumbFallback = c.f; else delete img.dataset.thumbFallback;
+				badge.dataset.liveBadge = `${net}:${c.s}`;
+				badge.dataset.buildViewers = String(c.v ?? 0);
+				badge.textContent = 'Live';
+				badge.classList.add('bg-live');
+				badge.classList.remove('bg-ink-700');
+				// Odznaky HD/New/Toy z původní karty by o téhle modelce lhaly.
+				for (const b of card.querySelectorAll('.badge:not([data-live-badge])')) b.remove();
+				const viewers = card.querySelector<HTMLElement>('[data-viewers]');
+				if (viewers) {
+					viewers.dataset.viewers = `${net}:${c.s}`;
+					viewers.hidden = !c.v;
+					if (c.v) viewers.textContent = `${c.v.toLocaleString('en-US')} watching`;
+				}
+				// Čistá adresa naší stránky, žádné parametry: dřív tu byl tvar
+				// `?r={síť}&n={nick}`, který Worker uměl přesměrovat do pokoje,
+				// když stránka nebyla. Kenny to zakázal a `pageOf()` zaručuje,
+				// že stránka je — takže parametry nemají co dělat.
+				name.href = `/live/${encodeURIComponent(page)}/`;
+				name.textContent = c.n;
+				const meta = card.querySelector<HTMLElement>('p.mt-0\\.5');
+				if (meta) meta.textContent = siteLabel(net);
+			}
+
+			function applyLive(final: boolean): void {
+				// Kolik sítí nedojelo. Doteď to byla úplně tichá porucha: mřížka
+				// prostě zůstala na hodnotách z buildu a nikdo se nedozvěděl, že
+				// se živý stav nepovedl načíst. Hlásí se až po posledním průchodu,
+				// jinak by první (na čas) nahlásil i sítě, které jen nestihly.
+				const dead = networks.filter((n) => !live.has(n));
+				if (final && dead.length) ga('live_feed_fail', { network: dead.join(','), page_type: pageType });
+
+				if (!live.size) return; // nic se nepovedlo → necháme build hodnoty
+
+				for (const badge of badges) {
+					const [network, slug] = badge.dataset.liveBadge!.split(':');
+					const feed = live.get(network);
+					if (!feed) continue; // tahle síť nedojela, karty nechat být
+
+					const viewers = feed.online[slug];
+					// Na stránce modelky není karta, ale blok `data-live-scope` —
+					// jinak by se odznak na profilu nikdy neaktualizoval.
+					const card = badge.closest('.card') ?? badge.closest('[data-live-scope]');
+
+					// Feed vrací jen nejsledovanějších N. Když přišla plná odpověď,
+					// chybějící modelka nemusí být offline — může být jen za hranicí
+					// výřezu. Zhasnout ji smíme jen tehdy, když při buildu měla víc
+					// diváků než ta nejslabší, kterou feed vrátil. Bez toho se na
+					// kategoriích s méně sledovanými modelkami zhasínaly živé karty.
+					if (viewers === undefined && feed.truncated) {
+						// U části sítí chybějící modelka NEDOKAZUJE offline: buď
+						// nehlásí diváky (pak je `floor` samá nula), nebo servírují
+						// jiný roster podle IP volajícího než build. Zhasínalo by
+						// to živé pokoje po desítkách (D66).
+						if (feed.absenceUnproven) continue;
+						if (Number(badge.dataset.buildViewers ?? 0) < (feed.floor ?? 0)) continue;
+					}
+
+					if (viewers === undefined) {
+						badge.textContent = 'Offline';
+						badge.classList.remove('bg-live');
+						badge.classList.add('bg-ink-700');
+						card?.classList.add('is-offline');
+						// Počet diváků z buildu u offline karty je matoucí — schovat.
+						const stale = card?.querySelector<HTMLElement>('[data-viewers]');
+						if (stale) stale.hidden = true;
+						/**
+						 * **Na stránce modelky nesmí zůstat mrtvý přehrávač**
+						 * (D63) — a od D67 ani mrtvá hláška. Kenny 29. 8.:
+						 * „chci aby fungoval stream když na ně kliknu
+						 * a neobjevovalo se mi tam just ended the stream."
+						 *
+						 * Přehrávač řídí skript ve `[slug].astro` (má HLS cestu
+						 * i obsluhu play), takže se mu jen ohlásí, že modelka
+						 * nevysílá, a on rozhodne, jestli pustí náhradu, nebo
+						 * odkryje hlášku. Karty v mřížce tudy nechodí — ty se
+						 * poznají podle toho, že `card` je `.card`.
+						 */
+						if (card?.matches('[data-live-scope]')) {
+							document.dispatchEvent(new CustomEvent('ecamx:model-offline', {
+								detail: { network, slug },
+							}));
+						}
+						continue;
+					}
+
+					// Na profilu je text „Live now", na kartě „Live" — nepřepisovat,
+					// když už svítí správně.
+					if (badge.textContent !== 'Live now') badge.textContent = 'Live';
+					badge.classList.add('bg-live');
+					badge.classList.remove('bg-ink-700');
+					card?.classList.remove('is-offline');
+
+					// XLoveCam a LiveJasmin počty diváků neposílají — 0 znamená
+					// „vysílá, počet neznáme". Vypsat „0 watching" by byla lež.
+					if (viewers <= 0) {
+						const el0 = card?.querySelector<HTMLElement>('[data-viewers]');
+						if (el0) el0.hidden = true;
+						continue;
+					}
+
+					// Modelka, která při buildu neměla diváky, span vůbec nemá → dotvořit.
+					let el = card?.querySelector<HTMLElement>(`[data-viewers="${CSS.escape(network + ':' + slug)}"]`);
+					if (!el && card) {
+						el = document.createElement('span');
+						el.className = 'viewer-count';
+						el.dataset.viewers = `${network}:${slug}`;
+						card.querySelector('.thumb-wrap')?.appendChild(el);
+					}
+					if (el) {
+						el.hidden = false;
+						el.textContent = `${viewers.toLocaleString('en-US')} watching`;
+					}
+				}
+
+				// ── mřížky: nechat jen to, co teď opravdu vysílá ──────────────
+				// Karty vznikají při syncu (každé 2 h), takže část modelek už
+				// neběží. Zašedlé karty působily, že je web poloprázdný — při 11h
+				// starých datech bylo offline 80–95 % karet. Offline se proto SKRYJÍ
+				// a doplní z rezervy, která je v HTML od začátku (crawler ji vidí).
+				// Je modelka TÉHLE stránky (ne karty) právě online? Rozhoduje o tom,
+				// jestli se offline stránka povýší na živou.
+				const scopeBadge = document.querySelector<HTMLElement>('[data-live-scope] [data-live-badge]');
+				let isLive = false;
+				if (scopeBadge) {
+					const [n, sl] = (scopeBadge.dataset.liveBadge ?? ':').split(':');
+					isLive = live.get(n)?.online[sl] !== undefined;
+				}
+
+				// Stránka vygenerovaná jako offline, ale modelka právě vysílá:
+				// schovat hlášku, odkrýt play a přepnout CTA na živý pokoj.
+				// Data jsou až 2 h stará, takže tohle není okrajový případ.
+				if (isLive) {
+					// Stránka se generovala jako offline, ale modelka vysílá. Kolik
+					// prokliků tohle zachrání, je jinak neviditelné (D19).
+					//
+					// POZOR: `isLive` je true i na stránce, která se jako ONLINE už
+					// vygenerovala — tam se jen nic neodkrývá. Kdyby se událost
+					// pálila rovnou tady, počítala by každé zobrazení živé modelky
+					// a metrika by nic neříkala (změřeno při ověřování: odpálila se
+					// na autoplay stránce, která žádné povýšení nepotřebovala).
+					// Rozhoduje proto přítomnost offline hlášky = stránka se
+					// opravdu stavěla jako offline.
+					const offlineMsg = document.querySelector<HTMLElement>('[data-offline-msg]');
+					if (offlineMsg) {
+						const [upNet, upSlug] = (scopeBadge?.dataset.liveBadge ?? ':').split(':');
+						ga('offline_upgraded', { network: upNet, model: pageModel || upSlug });
+					}
+					offlineMsg?.setAttribute('hidden', '');
+					// Kenny 29. 8.: „stream neběží a musíme zmáčknout play."
+					// Odkrýt tlačítko nestačí — stránka modelky si sama rozhodne,
+					// jestli přehrávač rovnou pustí (u sítí s ověřeným autoplayem),
+					// nebo tlačítko jen odkryje. Layout o sítích nic vědět nemusí.
+					document.dispatchEvent(new CustomEvent('ecamx:model-online'));
+					for (const a of document.querySelectorAll<HTMLAnchorElement>('a[data-cta-offline]')) {
+						const href = a.dataset.liveHref;
+						const text = a.dataset.liveText;
+						if (href) a.href = href;
+						if (text) a.textContent = text;
+					}
+					// Slib upozornění patří jen offline stránce (D81).
+					for (const n of document.querySelectorAll('[data-cta-offline-note]')) n.setAttribute('hidden', '');
+				}
+
+				// Přeskládání mřížky je kosmetika, ne obsah — HTML už je správné
+				// a karty jsou vidět. Změřeno 19. 8.: TBT homepage 2 280 ms,
+				// kategorie 1 199 ms (mobil, 4× CPU, slow 4G), a tenhle blok
+				// přehazuje až 180 elementů. Do `requestIdleCallback` proto, ať
+				// nesoutěží s prvním vykreslením; fallback pro Safari, který ho
+				// pořád nemá.
+				//
+				// **Průchod na `idle` nečeká.** Kenny 28. 8.: „když navštívím web,
+				// hned se mi některé streamy skryjí a objeví se jiné." Změřeno
+				// na produkci: z 60 karet se 13 vymění ~400 ms po načtení — a čím
+				// později ta výměna přijde, tím jistěji ji člověk uvidí.
+				// `requestIdleCallback` má `timeout: 1200`, takže si na to klidně
+				// počká sekundu; oprava proto jde do nejbližšího snímku.
+				const soon = (fn: () => void) => requestAnimationFrame(() => fn());
+
+				// Věk stránky z `<meta name="ecamx-built">`. Když značka chybí
+				// (stará nasazená verze), bere se 0 — tedy stránka se považuje za
+				// čerstvou a chová se jako dřív.
+				const builtAt = Date.parse(
+					document.querySelector<HTMLMetaElement>('meta[name="ecamx-built"]')?.content ?? ''
+				);
+				const staleHours = Number.isNaN(builtAt) ? 0 : (Date.now() - builtAt) / 3_600_000;
+
+				soon(() => {
+				for (const grid of document.querySelectorAll<HTMLElement>('[data-grid]')) {
+					const target = Number(grid.dataset.visible ?? 0);
+					if (!target) continue;
+
+					// Odfiltrované sítě se do úvahy neberou vůbec: kdyby se jimi
+					// zaplnila díra, `display:none` z filtru by tu kartu schoval
+					// a mřížka by tiše ztratila místo (D58).
+					const allow = activeSites();
+					const cards = Array.from(grid.querySelectorAll<HTMLElement>('.card'))
+						.filter((c) => !allow.length || allow.includes(c.dataset.network ?? ''));
+					const ranked = cards.map((card) => {
+						const b = card.querySelector<HTMLElement>('[data-live-badge]');
+						const [network, slug] = (b?.dataset.liveBadge ?? ':').split(':');
+						const feed = live.get(network);
+						// 0 = jistě vysílá, 1 = nevíme, 2 = jistě offline. „Nevíme" se
+						// ukazuje: feed vrací jen prvních N podle popularity, takže
+						// chybět v odpovědi neznamená být offline (viz D11).
+						let rank = 1;
+						let viewers = -1;
+						if (feed) {
+							const v = feed.online[slug];
+							if (v !== undefined) { rank = 0; viewers = v; }
+							// Totéž co u odznaku: u těchhle sítí absence nic
+							// nedokazuje, takže zůstane „nevíme".
+							else if (feed.absenceUnproven) rank = 1;
+							else if (!feed.truncated
+								|| Number(b?.dataset.buildViewers ?? 0) >= (feed.floor ?? 0)) rank = 2;
+						}
+						return { card, rank, viewers, network };
+					});
+					if (!ranked.some((r) => r.rank === 2)) continue; // není co skrývat
+
+					/**
+					 * **Živá karta se nehýbe.** Do 26. 8. 2026 se tady mřížka celá
+					 * přeskládala podle aktuálních diváků — změřeno na homepage:
+					 * z 60 viditelných karet se 28 vyměnilo za jiné a z 32, které
+					 * zůstaly, si jen 5 udrželo pozici, a to 300–700 ms po dopadu.
+					 * Kenny to popsal jako „viděl jsem stream a najednou mi zmizeli
+					 * a objevily se jiné". CLS to nezachytí (mřížka nemění výšku),
+					 * takže to nehlásila žádná metrika — vidí to jen člověk, který
+					 * se na tu kartu právě koukal.
+					 *
+					 * Teď se plní jen DÍRY: zhaslá karta se nahradí na svém místě
+					 * kartou z rezervy, zbytek zůstává tam, kde ho postavil build
+					 * (a ten sítě prokládá a řadí podle poptávky). Viz D57.
+					 */
+					// Karta, jejíž náhled se nenačetl, je z rezervy venku napořád —
+					// jinak by ji tenhle průchod vrátil zpátky do mřížky a díra
+					// by se objevila znovu.
+					const reserve = ranked.filter((r) => r.card.hidden && !r.card.dataset.thumbFixed);
+					// Prokládání sítí platí dál, jen se použije na REZERVU: čisté
+					// řazení podle diváků by díry zaplnil jeden web (Chaturbate hlásí
+					// řádově vyšší čísla, XLoveCam a LiveJasmin je nehlásí vůbec)
+					// a nejlépe platící síť by se do mřížky nedostala.
+					// Váhy jsou tytéž jako v buildu (`diversify()` v data.ts) — jinak
+					// by se poměr sítí po opravě mřížky rozpadl a Chaturbate by
+					// z třetiny karet spadl zpátky na desetinu.
+					const pool: typeof ranked = [];
+					for (const rank of [0, 1]) {
+						const queues = new Map<string, typeof ranked>();
+						for (const r of reserve.filter((x) => x.rank === rank)
+							.sort((a, b) => b.viewers - a.viewers)) {
+							const q = queues.get(r.network);
+							if (q) q.push(r); else queues.set(r.network, [r]);
+						}
+						const lists = [...queues.entries()]
+							.sort((a, b) => WEIGHT(b[0]) - WEIGHT(a[0]));
+						for (let i = 0; lists.some(([, l]) => i < l.length); i++) {
+							for (const [net, l] of lists) {
+								for (let n = 0; n < WEIGHT(net); n++) {
+									const item = l[i * WEIGHT(net) + n];
+									if (item) pool.push(item);
+								}
+							}
+						}
+					}
+
+					/**
+					 * Kolik nejvíc smí mít jedna síť po doplnění děr.
+					 *
+					 * Rezerva se prokládá vážením (Chaturbate 4), takže jak karty
+					 * zhasínají, bere jich nejvíc — na produkci se tím podíl
+					 * vyšplhal ze 40 na 45 %. Domluvená byla třetina; nad 40 %
+					 * už web přestává vypadat jako agregátor deseti sítí a to je
+					 * to, na čem stojí srovnávací stránky. Viz D63.
+					 */
+					const MAX_SHARE = 0.4;
+					const shareCount = new Map<string, number>();
+					for (const r of ranked) {
+						if (r.card.hidden || r.rank === 2) continue;
+						shareCount.set(r.network, (shareCount.get(r.network) ?? 0) + 1);
+					}
+					/**
+					 * Vytáhne z fronty kartu, která nepřekročí strop podílu sítě.
+					 * `onlyRank` omezí výběr na karty, o kterých VÍME, že vysílají
+					 * — používá se při výměně nejistých karet na staré stránce.
+					 */
+					const take = (onlyRank?: number): typeof pool[number] | undefined => {
+						const limit = Math.ceil(target * MAX_SHARE);
+						const fits = (c: typeof pool[number]) =>
+							(onlyRank === undefined || c.rank === onlyRank);
+						// **Síť, která by z mřížky zmizela úplně, má přednost.**
+						// Změřeno 28. 8. po nasazení vah: ze sítí, které build
+						// proložil, jich po živém průchodu zbylo v mřížce jen
+						// sedm z deseti — díry se zaplnily tím, čeho je nejvíc.
+						// Agregátor, který ukazuje sedm z deseti webů, přestává
+						// být agregátor.
+						let i = pool.findIndex((c) => fits(c) && !shareCount.get(c.network));
+						if (i < 0) i = pool.findIndex((c) => fits(c) && (shareCount.get(c.network) ?? 0) < limit);
+						// Když strop blokuje všechno, radši kartu navíc než díru —
+						// ale požadavek „jen jistě živá" se neobchází.
+						if (i < 0) i = onlyRank === undefined ? 0 : pool.findIndex(fits);
+						if (i < 0) return undefined;
+						const pick = pool.splice(i, 1)[0];
+						if (pick) shareCount.set(pick.network, (shareCount.get(pick.network) ?? 0) + 1);
+						return pick;
+					};
+
+					let shown = 0;
+					// Co jsme v tomhle průchodu schovali. Při zapnutém filtru se to
+					// může vrátit — viz níž.
+					const hiddenNow: HTMLElement[] = [];
+					/**
+					 * Na STARŠÍ stránce se nahrazují i karty, o kterých nevíme.
+					 *
+					 * „Nevíme" znamená, že modelka není ve výřezu feedu (ten vrací
+					 * jen nejsledovanějších N) — na čerstvé stránce je to nejspíš
+					 * jen málo sledovaná modelka, která opravdu vysílá, ale po
+					 * pár hodinách je to spíš zombie: karta tvrdí Live a pokoj je
+					 * zavřený. Přesně na tohle si Kenny stěžoval.
+					 *
+					 * Od 28. 8. jede build 4× denně (free rozpočet Actions, D65),
+					 * takže stránka může být až 6 h stará a zombie karet přibývá.
+					 * Nad 3 h se proto nejistá karta vymění za tu, o které VÍME,
+					 * že vysílá — ale jen dokud takové v rezervě jsou. Na čerstvé
+					 * stránce se nemění nic navíc, aby se mřížka zbytečně nehýbala
+					 * (D57). Viz D65.
+					 */
+					const swapUnknown = staleHours >= 3;
+					const liveLeft = () => pool.some((c) => c.rank === 0);
+
+					for (const r of ranked) {
+						if (r.card.hidden) continue;      // rezerva — řeší se níž
+						if (r.rank === 1 && swapUnknown && liveLeft()) {
+							const rep = take(0);
+							if (rep) {
+								r.card.replaceWith(rep.card);
+								rep.card.hidden = false;
+								rep.card.classList.add('is-swapped');
+								r.card.hidden = true;
+								grid.appendChild(r.card);
+								shown++;
+								continue;
+							}
+						}
+						if (r.rank !== 2) { shown++; continue; }   // vysílá nebo nevíme → nechat být
+						const rep = take();
+						if (rep) {
+							// Náhrada nastupuje na místo zhaslé karty; zhaslá jde
+							// dozadu, ať zůstane v evidenci pro „Show more".
+							r.card.replaceWith(rep.card);
+							rep.card.hidden = false;
+							// Prolnutí místo skoku. Karta se vyměnit MUSÍ (modelka
+							// dovysílala), ale nemusí to člověku blesknout před
+							// očima — mění se jen krytí, nikdy rozměr, takže CLS
+							// zůstává nula. `is-swapped` shodí CSS animace samo.
+							rep.card.classList.add('is-swapped');
+							r.card.hidden = true;
+							grid.appendChild(r.card);
+							shown++;
+						} else {
+							// Není čím zaplnit → mřížka je kratší a hláška níž to řekne.
+							r.card.hidden = true;
+							hiddenNow.push(r.card);
+						}
+					}
+
+					/**
+					 * **Filtrovaná mřížka se nesmí vyprázdnit po dopadu.** Změřeno
+					 * 26. 8.: s uloženým filtrem na Chaturbate zbylo na `/cams/bbw/`
+					 * po živém průchodu 0 karet z 10 a stránka poskočila o
+					 * **CLS 0,146** — a to bez kliknutí, takže se to do metriky
+					 * počítá. Ve filtrovaném pohledu už není z čeho díry zaplnit
+					 * (rezerva té sítě je vyčerpaná), takže se zhaslé karty radši
+					 * nechají viditelné a zešedlé (`is-offline`, opacity .55)
+					 * a hláška pod mřížkou nabídne plnou mřížku té sítě.
+					 * Nefiltrovaná mřížka se chová jako dřív — tam je čím doplnit.
+					 */
+					if (allow.length && shown < 12 && hiddenNow.length) {
+						rescueFiltered(allow);
+						shown = visibleCards();
+					}
+					// Zhaslé karty v rezervě zůstávají skryté; víc než `target`
+					// viditelných nikdy nevznikne, protože se jen nahrazuje 1:1.
+
+					/**
+					 * **Když ze starých dat nezbylo dost živých karet, dotáhnou se
+					 * z feedu.**
+					 *
+					 * Kenny 29. 8.: „chci aby fungoval stream když na ně kliknu."
+					 * Statická karta to zaručit nemůže — změřeno na 13,9 h starém
+					 * buildu: z 60 viditelných karet bylo potvrzeně živých **12**,
+					 * takže čtyři z pěti kliků skončily na „just ended". Feed to
+					 * ale ví; `?cards=N` vrací hotové karty i s náhledem (D67).
+					 *
+					 * Spouští se jen na STARÉ stránce a jen když je živých míň než
+					 * polovina — na čerstvé mřížce se nic navíc nehýbe (D57).
+					 */
+					if (final && staleHours >= 3) {
+						const liveNow = ranked.filter((r) => !r.card.hidden && r.rank === 0).length;
+						if (liveNow < target / 2) void rescueGrid(grid, ranked, target, liveNow);
+					}
+
+					/**
+					 * CTA „Open {síť}" míří z buildu na konkrétní pokoj, který už
+					 * nemusí běžet.
+					 *
+					 * Do 3. 9. se cíl bral z odchozího tlačítka první živé karty;
+					 * od D71 karty žádné nemají, takže se živý nick dotáhne
+					 * z feedu — ale **jen když je ten z buildu prokazatelně
+					 * mrtvý**. V běžném případě (nejsledovanější modelka pořád
+					 * vysílá) to nestojí ani jeden request navíc.
+					 */
+					const retarget = document.querySelector<HTMLAnchorElement>('[data-cta-retarget]');
+					const aim = retarget && /^\/go\/([a-z0-9]+)\/([^/]+)\//.exec(
+						new URL(retarget.href, location.href).pathname);
+					if (final && retarget && aim) {
+						const [, aimNet, aimNick] = aim;
+						const feed = live.get(aimNet);
+						const gone = feed && !feed.absenceUnproven
+							&& feed.online[slugOf(decodeURIComponent(aimNick))] === undefined;
+						if (gone) {
+							void fetch(`/api/online/${aimNet}/?cards=1`, { signal: AbortSignal.timeout(6000) })
+								.then((r) => r.json())
+								.then((d: { cards?: Array<{ n: string }> }) => {
+									const pick = d?.cards?.[0]?.n;
+									if (pick) retarget.href = `/go/${aimNet}/${encodeURIComponent(pick)}/?p=network`;
+								})
+								.catch(() => { /* zůstane cíl z buildu */ });
+						}
+					}
+
+					// Za poslední kartou dosud nebylo nic — žádné stránkování ani nic
+					// jiného. Rezerva je přitom už v HTML, takže „Show more" nic
+					// nestahuje, jen odkryje zbytek.
+					const hiddenLive = ranked.filter((r) => r.rank !== 2 && r.card.hidden);
+					// Průchod běží dvakrát (na čas a po doběhnutí feedů), takže
+					// tlačítko z předchozího kola musí pryč — jinak by pod mřížkou
+					// byla dvě.
+					grid.parentElement?.querySelector('[data-show-more]')?.remove();
+					if (hiddenLive.length) {
+						const more = document.createElement('button');
+						more.type = 'button';
+						more.dataset.showMore = '';
+						more.className = 'btn-ghost mt-4';
+						more.textContent = `Show ${hiddenLive.length} more live cams`;
+						more.addEventListener('click', () => {
+							for (const r of hiddenLive) r.card.hidden = false;
+							more.remove();
+							ga('show_more', { more_count: hiddenLive.length, page_type: pageType });
+						});
+						grid.insertAdjacentElement('afterend', more);
+					}
+
+					// Poznámka k filtru se počítá TEĎ, po živém průchodu — dřív se
+					// psala hned po kliknutí a pak si protiřečila („No Chaturbate
+					// cams" vs. „Only 10", změřeno 26. 8.).
+					filterNote(allow);
+
+					// V úzké kategorii může být live jen pár modelek. Poloprázdná
+					// mřížka bez vysvětlení vypadá jako rozbitý web, tak radši
+					// říct, co se stalo, a nabídnout, kde je plno.
+					// Průchod běží dvakrát, takže hláška z prvního kola musí pryč —
+					// po doběhnutí zbylých feedů už nemusí platit.
+					grid.parentElement?.querySelector('[data-grid-note]')?.remove();
+					if (shown < target / 2) {
+						// Kolikrát návštěvník dostane poloprázdnou mřížku je přesně
+						// ta Kennyho stížnost ze 17. 8. („připadá jim, že je web
+						// poloumrtvý") — teď se to dá změřit, ne odhadovat.
+						const note = document.createElement('p');
+						note.dataset.gridNote = '';
+						note.className = 'mt-4 text-sm text-ink-400';
+						const a = document.createElement('a');
+						a.className = 'text-accent underline hover:text-white';
+
+						// **Stará stránka nesmí tvrdit, že nikdo nevysílá.** Sync jede
+						// každé 2 h, takže výpis starší než 3 h znamená poruchu (26. 8.
+						// padal deploy 5× a na webu ležel 10 h starý seznam: 116 ze 120
+						// karet zhaslo správně, ale hláška lhala). Odkaz obchází cache,
+						// `nofollow` + `robots.txt Disallow: /*?` drží crawlera mimo.
+						// Práh byl 3 h, dokud se stavělo po dvou hodinách. Od 28. 8.
+						// jede build 4× denně (free rozpočet Actions, D65), takže
+						// nejhorší normální mezera je 6 h — při starém prahu by
+						// hláška strašila u každého druhého návštěvníka. 8 h už
+						// znamená, že něco opravdu stojí.
+						if (staleHours >= 8) {
+							// Jen z posledního průchodu — jinak by se každá událost
+							// počítala dvakrát (past 32).
+							if (final) ga('grid_stale', { hours: Math.round(staleHours), shown, page_type: pageType });
+							note.textContent =
+								`This listing was built ${Math.round(staleHours)} hours ago, so most of these `
+								+ 'rooms have closed since. ';
+							a.href = `${location.pathname}?r=${Date.now()}`;
+							a.rel = 'nofollow';
+							a.textContent = 'Load the current line-up →';
+						} else {
+							if (final) ga('grid_sparse', { shown, target, page_type: pageType });
+							note.textContent = shown
+								? `Only ${shown} ${shown === 1 ? 'model' : 'models'} here ${shown === 1 ? 'is' : 'are'} live right now. `
+								: 'Nobody in this category is live right now. ';
+							// Poloprázdná mřížka se ozvala 73× za 14 dní, a „Browse
+							// everyone who is live" je slabá nabídka. Jmenovat síť,
+							// která má právě teď nejvíc pokojů, je konkrétní —
+							// čísla máme z feedů, které už jsou stažené.
+							let best = '', bestCount = 0;
+							for (const [net, feed] of live) {
+								const n = Object.keys(feed.online).length;
+								if (n > bestCount) { bestCount = n; best = net; }
+							}
+							if (best && bestCount > 50) {
+								a.href = `/site/${best}/`;
+								a.textContent = `${bestCount.toLocaleString('en-US')} live on ${siteLabel(best)} right now →`;
+							} else {
+								a.href = '/';
+								a.textContent = 'Browse everyone who is live →';
+							}
+						}
+						note.appendChild(a);
+						// `after()` koliduje v Astro typech s Response.after — tohle je jednoznačné.
+						grid.insertAdjacentElement('afterend', note);
+					}
+				}
+				});
+			}
+		}
+	</script>
+</body>
+</html>

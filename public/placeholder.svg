@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 270" width="360" height="270" role="img" aria-label="Preview unavailable">
+  <rect width="360" height="270" fill="#1b1b21"/>
+  <g fill="none" stroke="#35353f" stroke-width="3">
+    <rect x="140" y="105" width="80" height="58" rx="6"/>
+    <path d="M164 134h32M180 118v32"/>
+  </g>
+  <text x="180" y="196" fill="#8a8a99" font-family="system-ui,sans-serif" font-size="15" text-anchor="middle">preview unavailable</text>
+</svg>

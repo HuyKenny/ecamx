@@ -1,0 +1,151 @@
+---
+import GridFilters from '../../components/GridFilters.astro';
+import Layout from '../../layouts/Layout.astro';
+import ModelCard from '../../components/ModelCard.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import {
+	FACETS, allCategoryFacets, allInCategory, recentlyLiveInCategory, gridWindow,
+	relatedCategories, facetLabel, CURATED_BY_SLUG, topCountries, countryName,
+	NETWORK_LABELS,
+} from '../../lib/data';
+import Pagination from '../../components/Pagination.astro';
+import { GRID } from '../../lib/paging';
+import { safeJsonLd } from '../../lib/jsonld';
+import { categorySeo, SITE_URL, approx } from '../../lib/seo';
+import COPY from '../../content/category-copy.json';
+// Ručně psané texty pro kurátorské kategorie. SCHVÁLNĚ v jiném souboru:
+// `category-copy.json` generuje `scripts/build-category-copy.ts` ze starého WP
+// a při dalším běhu by ruční doplňky přepsal.
+import CURATED_COPY from '../../content/curated-copy.json';
+
+export function getStaticPaths() {
+	// Kategorie z tagů + atributy (etnicita/vlasy/postava) sdílejí /cams/.
+	return allCategoryFacets().map((c) => ({ params: { slug: c.slug }, props: { facet: c } }));
+}
+
+const { facet } = Astro.props;
+const VISIBLE = GRID.visible;
+// Do HTML jde 3× víc karet, než se ukáže. Rezerva je skrytá a klientský kód
+// z ní doplňuje, když nějakou kartu zhasne kvůli offline stavu — jinak by
+// mřížka po odfiltrování zůstala poloprázdná (viz Layout.astro, [data-grid]).
+// Zbytek katalogu pokrývají stránky 2+ (`src/pages/cams/[slug]/[page].astro`).
+const win = gridWindow(allInCategory(facet.slug, facet.kind), 1, GRID);
+const models = win.items;
+// Modelky, které tu vysílaly, ale teď ne. Do 18. 8. neměly archivní stránky
+// nikde odkaz (4 849 sirotků), přitom je posíláme do sitemapy.
+const recent = recentlyLiveInCategory(facet.slug, facet.kind, 24);
+// 30 místo 10: mesh je nejlevnější páka, jakou tu máme (viz relatedCategories).
+const related = relatedCategories(facet.slug, 30, facet.kind);
+const label = facetLabel(facet.slug, facet.label);
+// „cam girls" jen tam, kde to je pravda — podíl žen spočítal sync.
+const girls = CURATED_BY_SLUG.get(facet.slug)?.girls ?? false;
+const seo = categorySeo(label, facet.count, girls);
+const countries = topCountries(10);
+// Text ze starého webu, jinak ručně psaný pro kurátorské kategorie.
+const copy = (COPY as Record<string, string>)[facet.slug]
+	?? (CURATED_COPY as Record<string, string>)[facet.slug]
+	?? null;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: `${label} Cams`,
+	description: seo.description,
+	url: `${SITE_URL}/cams/${facet.slug}/`,
+	mainEntity: {
+		'@type': 'ItemList',
+		numberOfItems: models.length,
+		itemListElement: models.slice(0, 20).map((m, i) => ({
+			'@type': 'ListItem',
+			position: i + 1,
+			name: m.displayName,
+			// Bez `url` je ItemList Googlu k ničemu — nemá kam odkázat.
+			url: `${SITE_URL}/live/${m.page}/`,
+		})),
+	},
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+
+	<Breadcrumbs items={[{ label: 'Categories', href: '/cams/' }, { label }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">
+		Free Live {label} {girls ? 'Cam Girls' : 'Cams'}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{approx(facet.count)} {label.toLowerCase()} {girls ? 'cam girls are' : 'models are'} live
+		right now across all {FACETS.networks.length} cam sites we track. Open any card for the
+		live stream and her details — no account, no signup.</p>
+
+	<GridFilters models={models} />
+	<div class="card-grid mt-6" data-grid data-visible={VISIBLE}>
+		{models.map((m, i) => (
+			<ModelCard
+				model={m}
+				eager={i < 10}
+				reserve={i >= VISIBLE}
+			/>
+		))}
+	</div>
+
+	<Pagination
+		base={`/cams/${facet.slug}/`}
+		page={win.page} pages={win.pages}
+		from={win.from} to={win.to} total={win.total}
+		label={`${label.toLowerCase()} cams`}
+	/>
+
+	{copy && (
+		<section class="prose-ecamx mt-10 max-w-3xl space-y-4 text-ink-200" set:html={copy} />
+	)}
+
+	{recent.length > 0 && (
+		/* Textové odkazy, ne karty: modelka nevysílá, takže náhled by lhal —
+		   a 24 karet by na stránku přidalo ~24 kB kvůli nikomu. */
+		<section class="mt-10" aria-labelledby="recent">
+			<h2 id="recent" class="mb-3 text-lg font-bold">Recently live {label.toLowerCase()} models</h2>
+			<p class="mb-3 max-w-3xl text-sm text-ink-400">
+				Not streaming right now, but these {label.toLowerCase()} models were live in the
+				last few days — their profiles show when they were last on and who is live instead.
+			</p>
+			<div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+				{recent.map((m) => (
+					<a href={`/live/${m.page}/`} class="text-ink-300 underline decoration-ink-700 hover:text-white">{m.displayName}</a>
+				))}
+			</div>
+		</section>
+	)}
+
+	{related.length > 0 && (
+		<section class="mt-10" aria-labelledby="rel">
+			<h2 id="rel" class="mb-3 text-lg font-bold">Related {label.toLowerCase()} categories</h2>
+			<div class="flex flex-wrap gap-2">
+				{related.map((c) => (
+					<a href={`/cams/${c.slug}/`} class="pill">{facetLabel(c.slug, c.label)} <span class="text-ink-400">{c.count}</span></a>
+				))}
+			</div>
+		</section>
+	)}
+
+	{/* Kategorie dřív neodkazovaly na země ani na sítě vůbec — crawler se z nich
+	    dostal jen na profily a zpět na /cams/. */}
+	<section class="mt-10 grid gap-8 sm:grid-cols-2" aria-labelledby="xlinks">
+		<h2 id="xlinks" class="sr-only">Other ways to browse</h2>
+		<div>
+			<h3 class="mb-3 text-lg font-bold">{label} cams by country</h3>
+			<div class="flex flex-wrap gap-2">
+				{countries.map((c) => (
+					<a href={`/country/${c.slug}/`} class="pill">{countryName(c.slug)} <span class="text-ink-400">{c.count}</span></a>
+				))}
+			</div>
+		</div>
+		<div>
+			<h3 class="mb-3 text-lg font-bold">Cam sites we cover</h3>
+			<div class="flex flex-wrap gap-2">
+				{FACETS.networks.map((n) => (
+					<a href={`/site/${n.slug}/`} class="pill">{NETWORK_LABELS[n.slug] ?? n.label}</a>
+				))}
+			</div>
+		</div>
+	</section>
+</Layout>

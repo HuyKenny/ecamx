@@ -1,0 +1,65 @@
+---
+/**
+ * Filtr mřížky podle cam sítě.
+ *
+ * Proč existuje: web má od 25. 8. jedenáct sítí a člověk, který má tokeny jen
+ * na jedné z nich, se k jejím modelkám v kategorii neprofiltroval. Změřeno na
+ * datech: Kolumbie je z 634 živých **430 cam4**, ale tag `bbw` z 396 živých
+ * **266 chaturbate** — bez filtru je to na jedné stránce nepřehledná směs.
+ *
+ * Jak je to postavené:
+ *  - Chipy jsou v HTML **ze serveru** a jen pro sítě, které na té stránce
+ *    opravdu jsou (s počtem z buildu). Nic se neodkrývá skriptem (past 52).
+ *  - Karta už nese `data-network`, takže filtrování nestojí ani bajt navíc
+ *    v HTML (past 31: na kartu se atributy nepřidávají).
+ *  - Volba se pamatuje v `localStorage` a **aplikuje ji blokující skript
+ *    v <head>** ještě před prvním vykreslením — jinak by skrytí karet posunulo
+ *    obsah a CLS by vyskočilo (past 73).
+ *  - Kombinace nad rámec sítě (žena + země + síť) řeší `/finder/`, kam vede
+ *    odkaz s předvybraným filtrem v hashi (`?` má robots.txt zakázaný).
+ *
+ * Viz docs/DECISIONS.md D58.
+ */
+import { FACETS, NETWORK_LABELS, linkableNetwork, type Model } from '../lib/data';
+
+interface Props {
+	/** Modelky, které jsou na téhle stránce v mřížce (včetně rezervy). */
+	models: Model[];
+	/** Předvybraný filtr ve finderu, když na stránce dává smysl (`cc=co`). */
+	finderHash?: string;
+}
+const { models, finderHash = '' } = Astro.props;
+
+const counts = new Map<string, number>();
+for (const m of models) counts.set(m.network, (counts.get(m.network) ?? 0) + 1);
+
+/**
+ * Číslo u chipu je počet ŽIVÝCH POKOJŮ té sítě, ne počet karet na téhle
+ * stránce. Do 28. 8. tam bylo to druhé, takže na homepage svítilo u všech
+ * deseti sítí „12" (120 karet / 10 sítí) — vedle titulku „15 500+ live cams"
+ * to vypadalo, že je web prázdný. Fasety mají skutečná čísla z buildu.
+ */
+const liveByNetwork = new Map(FACETS.networks.map((n) => [n.slug, n.count]));
+// Řadit podle zastoupení na stránce: nejvíc zastoupená síť první, ať se
+// nemusí hledat. (Pořadí ANO podle stránky, číslo NE — to je celé sítě.)
+const sites = [...counts.entries()]
+	.sort((a, b) => b[1] - a[1])
+	.map(([id, onPage]) => ({
+		id,
+		count: liveByNetwork.get(id) ?? onPage,
+		label: NETWORK_LABELS[id] ?? id,
+		page: linkableNetwork(id),
+	}));
+---
+{sites.length > 1 && (
+	<div class="grid-filters" data-grid-filters>
+		<span class="grid-filters-label">Cam site:</span>
+		<button type="button" class="chip is-on" data-site="" aria-pressed="true">All sites</button>
+		{sites.map((s) => (
+			<button type="button" class="chip" data-site={s.id} aria-pressed="false">
+				{s.label} <span class="text-ink-500">{s.count}</span>
+			</button>
+		))}
+		<a class="grid-filters-more" href={`/finder/${finderHash}`}>More filters →</a>
+	</div>
+)}

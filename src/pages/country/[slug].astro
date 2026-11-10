@@ -1,0 +1,78 @@
+---
+import GridFilters from '../../components/GridFilters.astro';
+import Layout from '../../layouts/Layout.astro';
+import ModelCard from '../../components/ModelCard.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { FACETS, allInCountry, gridWindow, countryName, countryPhrase } from '../../lib/data';
+import Pagination from '../../components/Pagination.astro';
+import { GRID } from '../../lib/paging';
+import { safeJsonLd } from '../../lib/jsonld';
+import { countrySeo, SITE_URL, fmt } from '../../lib/seo';
+
+export function getStaticPaths() {
+	return FACETS.countries.map((c) => ({ params: { slug: c.slug }, props: { facet: c } }));
+}
+
+const { facet } = Astro.props;
+const name = countryName(facet.slug);
+const VISIBLE = GRID.visible;
+// Do HTML jde 3× víc karet, než se ukáže. Rezerva je skrytá a klientský kód
+// z ní doplňuje, když nějakou kartu zhasne kvůli offline stavu — jinak by
+// mřížka po odfiltrování zůstala poloprázdná (viz Layout.astro, [data-grid]).
+const win = gridWindow(allInCountry(facet.slug), 1, GRID);
+const models = win.items;
+const seo = countrySeo(name, facet.count);
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: `${name} Cams`,
+	description: seo.description,
+	url: `${SITE_URL}/country/${facet.slug}/`,
+	mainEntity: {
+		'@type': 'ItemList',
+		numberOfItems: models.length,
+		itemListElement: models.slice(0, 20).map((m, i) => ({
+			'@type': 'ListItem', position: i + 1, name: m.displayName,
+		})),
+	},
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<Breadcrumbs items={[{ label: 'Countries', href: '/country/' }, { label: name }]} />
+
+	{/* Člen podle země: „from the Philippines", ale „from Colombia". */}
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Live Cams from {countryPhrase(name)}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{fmt(facet.count)} cam models from {countryPhrase(name)} are broadcasting right now.
+		Free to watch, no signup.
+	</p>
+
+	<GridFilters models={models} finderHash={`#cc=${facet.slug}`} />
+	<div class="card-grid mt-6" data-grid data-visible={VISIBLE}>
+		{models.map((m, i) => (
+			<ModelCard
+				model={m}
+				eager={i < 10}
+				reserve={i >= VISIBLE}
+			/>
+		))}
+	</div>
+
+	<Pagination
+		base={`/country/${facet.slug}/`}
+		page={win.page} pages={win.pages}
+		from={win.from} to={win.to} total={win.total}
+		label={`models from ${countryPhrase(name)}`}
+	/>
+
+	<section class="mt-10" aria-labelledby="other">
+		<h2 id="other" class="mb-3 text-lg font-bold">Other countries</h2>
+		<div class="flex flex-wrap gap-2">
+			{FACETS.countries.filter((c) => c.slug !== facet.slug).map((c) => (
+				<a href={`/country/${c.slug}/`} class="pill">{countryName(c.slug)} <span class="text-ink-400">{c.count}</span></a>
+			))}
+		</div>
+	</section>
+</Layout>

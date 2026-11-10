@@ -1,0 +1,69 @@
+---
+/**
+ * 404. Bude reálně navštěvovaná — po přepnutí z WordPressu zůstane v indexu
+ * ~1 849 starých URL kategorií, které v novém webu protějšek nemají (viz D7).
+ * Proto nabízí rozcestník, ne jen holou hlášku.
+ */
+import Layout from '../layouts/Layout.astro';
+import ModelCard from '../components/ModelCard.astro';
+import { FACETS, facetLabel, NETWORK_LABELS, MODELS, diversify, topCategories } from '../lib/data';
+
+/**
+ * Dostane sem ~1 849 starých WordPress URL, takže to je reálná vstupní stránka
+ * — a doteď z ní nevedl ani jeden vydělávající odkaz, jen pilulky dovnitř webu.
+ * Kdo přijde omylem, má aspoň hned vidět, co běží.
+ */
+const VISIBLE = 10;
+const featured = diversify(
+	[...MODELS].sort((a, b) => (b.viewers ?? 0) - (a.viewers ?? 0)),
+	VISIBLE * 3,
+);
+---
+<Layout
+	title="Page not found | eCamx"
+	description="That page does not exist. Browse live cam categories instead."
+	noindex
+>
+	<h1 class="text-2xl font-extrabold sm:text-3xl">That page is gone</h1>
+	<p class="mt-2 max-w-2xl text-ink-400">
+		The link you followed points to a page that no longer exists. eCamx was
+		rebuilt from the ground up and a lot of thin, empty category pages were
+		removed in the process — this was probably one of them.
+	</p>
+
+	<p class="mt-6">
+		<a href="/" class="btn-cta">Go to the live cam grid →</a>
+	</p>
+
+	<section class="mt-8" aria-labelledby="live-now">
+		<h2 id="live-now" class="mb-3 text-lg font-bold">Live right now</h2>
+		<div class="card-grid" data-grid data-visible={VISIBLE}>
+			{featured.map((m, i) => (
+				<ModelCard
+					model={m}
+					eager={i < 5}
+					reserve={i >= VISIBLE}
+				/>
+			))}
+		</div>
+	</section>
+
+	<section class="mt-10" aria-labelledby="cats">
+		<h2 id="cats" class="mb-3 text-lg font-bold">Popular categories</h2>
+		<div class="flex flex-wrap gap-2">
+			{topCategories(30).map((c) => (
+				<a href={`/cams/${c.slug}/`} class="pill">{facetLabel(c.slug, c.label)}</a>
+			))}
+		</div>
+		<p class="mt-3 text-sm"><a href="/cams/" class="text-accent hover:underline">See all categories →</a></p>
+	</section>
+
+	<section class="mt-8" aria-labelledby="sites">
+		<h2 id="sites" class="mb-3 text-lg font-bold">Cam sites</h2>
+		<div class="flex flex-wrap gap-2">
+			{FACETS.networks.map((n) => (
+				<a href={`/site/${n.slug}/`} class="pill">{NETWORK_LABELS[n.slug]}</a>
+			))}
+		</div>
+	</section>
+</Layout>

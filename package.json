@@ -1,0 +1,39 @@
+{
+  "name": "ecamx",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "packageManager": "pnpm@11.15.1",
+  "scripts": {
+    "dev": "astro dev",
+    "prebuild": "tsx scripts/build-redirects.ts",
+    "build": "astro build",
+    "postbuild": "node --experimental-strip-types scripts/build-csp.ts && node scripts/strip-prerender.mjs",
+    "preview": "wrangler dev -c dist/server/wrangler.json",
+    "typecheck": "astro check && wrangler types",
+    "deploy": "pnpm build && node --experimental-strip-types scripts/check-links.ts && wrangler deploy -c dist/server/wrangler.json",
+    "sync": "tsx scripts/sync-cams.ts",
+    "sync:dry": "tsx scripts/sync-cams.ts --dry-run --limit 200",
+    "redirects": "tsx scripts/build-redirects.ts",
+    "links": "tsx scripts/check-links.ts",
+    "seed:registry": "tsx scripts/seed-registry.ts"
+  },
+  "dependencies": {
+    "@astrojs/cloudflare": "^14.1.3",
+    "astro": "^7.1.2",
+    "hls.js": "^1.7.1"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.4.1",
+    "dotenv": "^17.2.1",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.20.3",
+    "typescript": "^6.0.2",
+    "wrangler": "^4.112.0"
+  }
+}

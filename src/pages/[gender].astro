@@ -1,0 +1,89 @@
+---
+/**
+ * Gender rozcestníky: /girls/, /guys/, /couples/, /trans/.
+ * Vlastní URL (ne /webcam_gender/female/ jako starý web) — je to nejsilnější
+ * dotazový tvar v tomhle segmentu.
+ */
+import GridFilters from '../components/GridFilters.astro';
+import Layout from '../layouts/Layout.astro';
+import ModelCard from '../components/ModelCard.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import { FACETS, allByGender, gridWindow, topCategories, facetLabel } from '../lib/data';
+import Pagination from '../components/Pagination.astro';
+import { GRID } from '../lib/paging';
+import { safeJsonLd } from '../lib/jsonld';
+import { genderSeo, SITE_URL, fmt } from '../lib/seo';
+import COPY from '../content/category-copy.json';
+
+export function getStaticPaths() {
+	const routes: Record<string, { gender: string; label: string }> = {
+		girls: { gender: 'female', label: 'Girl' },
+		guys: { gender: 'male', label: 'Guy' },
+		couples: { gender: 'couple', label: 'Couple' },
+		trans: { gender: 'trans', label: 'Trans' },
+	};
+	return Object.entries(routes).map(([slug, cfg]) => ({
+		params: { gender: slug }, props: cfg,
+	}));
+}
+
+const { gender, label } = Astro.props;
+const all = allByGender(gender);
+const VISIBLE = GRID.visible;
+// Do HTML jde 3× víc karet, než se ukáže. Rezerva je skrytá a klientský kód
+// z ní doplňuje, když nějakou kartu zhasne kvůli offline stavu — jinak by
+// mřížka po odfiltrování zůstala poloprázdná (viz Layout.astro, [data-grid]).
+const win = gridWindow(all, 1, GRID);
+const models = win.items;
+const seo = genderSeo(label, all.length);
+const copy = (COPY as Record<string, string>)[gender] ?? null;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: `Live ${label} Cams`,
+	description: seo.description,
+	url: `${SITE_URL}/${Astro.params.gender}/`,
+};
+---
+<Layout title={seo.title} description={seo.description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<Breadcrumbs items={[{ label: `${label} cams` }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Live {label} Cams</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{fmt(all.length)} {label.toLowerCase()} models streaming live right now across
+		{FACETS.networks.length} cam sites. Free to watch.
+	</p>
+
+	<GridFilters models={models} />
+	<div class="card-grid mt-6" data-grid data-visible={VISIBLE}>
+		{models.map((m, i) => (
+			<ModelCard
+				model={m}
+				eager={i < 10}
+				reserve={i >= VISIBLE}
+			/>
+		))}
+	</div>
+
+	<Pagination
+		base={`/${Astro.params.gender}/`}
+		page={win.page} pages={win.pages}
+		from={win.from} to={win.to} total={win.total}
+		label={`${label.toLowerCase()} models`}
+	/>
+
+	{copy && (
+		<section class="prose-ecamx mt-10 max-w-3xl space-y-4 text-ink-200" set:html={copy} />
+	)}
+
+	<section class="mt-10" aria-labelledby="cats">
+		<h2 id="cats" class="mb-3 text-lg font-bold">Popular categories</h2>
+		<div class="flex flex-wrap gap-2">
+			{topCategories(24).map((c) => (
+				<a href={`/cams/${c.slug}/`} class="pill">{facetLabel(c.slug, c.label)}</a>
+			))}
+		</div>
+	</section>
+</Layout>

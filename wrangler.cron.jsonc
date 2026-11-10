@@ -1,0 +1,51 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ecamx-cron",
+  "main": "workers/cron/index.ts",
+  "compatibility_date": "2026-08-01",
+
+  // **Bez `nodejs_compat`.** Worker potřebuje jen `fetch`, WebCrypto, KV
+  // binding a `TextEncoder`/`btoa` — `Buffer` ani `process` tu nejsou potřeba
+  // a bez nich je bundle menší a studený start rychlejší. Stejný důvod jako
+  // u `qrflowy-redirect`.
+
+  // Veřejná adresa `*.workers.dev` je potřeba pro ruční spuštění
+  // (`POST /run?task=…`, viz workers/cron/index.ts) — v produkci se cron
+  // vyvolat nedá.
+  "workers_dev": true,
+
+  // **Cron triggery jsou UTC**, crontab Maliny je `Europe/Prague`. Původní
+  // `20 5` místního času = `20 3` UTC (v létě). V zimě se běh posune o hodinu;
+  // na ničem to nezávisí (obojí se rozhoduje podle UTC data) a nemá se to
+  // „opravovat" dvěma výměnami cronu ročně.
+  //
+  // Kdo sem přidá trigger, ať ho přidá i do `TASKS` v `workers/cron/index.ts` —
+  // jinak se spustí a v logu bude hlasitá chyba `unknown-cron`.
+  "triggers": {
+    "crons": [
+      "*/30 * * * *" // deploy-watch
+      // IndexNow, Bing `SubmitUrlBatch` ani měření poptávky tu NEJSOU:
+      // z Cloudflare je vyhledávače škrtí (Bing ThrottleIP, api.indexnow.org
+      // 429 TooManyRequests — ověřeno 28. 9. 2026, z Maliny týž požadavek 200).
+      // Běží dál na Malině; tady mají jen ruční `/run`.
+    ]
+  },
+
+  // Stejný namespace jako registry, `demand` a `facets-published`
+  // (`ecamx-registry`). ID **není tajemství** — bez API tokenu s ním nikdo nic
+  // neudělá, a v tomhle workspace je běžně v konfiguraci (pokector, qrflowy,
+  // hlidamo). Worker smí číst a zapisovat VÝHRADNĚ tyhle klíče:
+  // `deploy-watch-state`, `indexnow-state`, `demand` — registry ani
+  // `registry-gone` nesmí sáhnout (jsou to megabajty, isolate má 128 MB).
+  "kv_namespaces": [{ "binding": "KV", "id": "158984aaec6c47eca3e3e6ea29e3cf17" }],
+
+  // Secrets (přes `wrangler secret put`, nikdy do tohohle souboru):
+  //   GITHUB_TOKEN        fine-grained PAT na HuyKenny/ecamx, Actions: read+write
+  //   DISCORD_TOKEN       bot token z /home/kenny/Discord/.env
+  //   DISCORD_CHANNEL_ID  volitelný; jinak #obecné (konstanta v shared.ts)
+  //   BING_WEBMASTER_API_KEY  master klíč portfolia (SubmitUrlBatch)
+  //   GSC_SERVICE_ACCOUNT     celý JSON service accountu (~2,4 kB)
+  //   MANUAL_TOKEN        náhodný řetězec pro POST /run
+
+  "observability": { "enabled": true }
+}

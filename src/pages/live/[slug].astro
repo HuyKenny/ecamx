@@ -1,0 +1,1297 @@
+---
+/**
+ * Stránka modelky — cíl každého kliku z mřížky a místo, kam dopadá longtail
+ * dotaz na nick (GSC potvrzuje: `dulcesecreto69` pozice 10, `shandateneyck` 7).
+ *
+ * Dvě varianty:
+ *   online  — přehrávač nahoře, CTA vedle něj i pod ním, na mobilu sticky lišta
+ *   offline — bez přehrávače, protože není co přehrát. Místo něj kdy naposled
+ *             vysílala, odkaz na její profil (pořád affiliate) a hlavně mřížka
+ *             živých podobných. Bez toho by to byla slepá ulička.
+ *
+ * Do indexu jde jen modelka s `indexable` (viděná aspoň 3 různé dny) — zbytek
+ * má `noindex, follow`, aby se neopakoval index bloat starého webu (D8).
+ */
+import Layout from '../../layouts/Layout.astro';
+import ModelCard from '../../components/ModelCard.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import {
+	MODEL_PAGES, linkableCategories, similarLive, topDemand, demandRotation, titleVariant,
+	NETWORK_LABELS, countryName, canonicalCountry, linkableCountry, linkableNetwork,
+	facetLabel, usualHours, PER_MINUTE_NETWORKS, outTargetFor, type Model,
+} from '../../lib/data';
+import { canonicalLanguage } from '../../lib/taxonomy';
+import { embedUrl, goLink } from '../../lib/affiliate';
+import { profileSeo, SITE_URL } from '../../lib/seo';
+import { aboutParagraphs, contextParagraphs, faqItems, historyParagraphs } from '../../lib/model-copy';
+import { buildCrossNetwork } from '../../lib/cross-network';
+import { safeJsonLd } from '../../lib/jsonld';
+
+export function getStaticPaths() {
+	return MODEL_PAGES.map((m) => ({ params: { slug: m.page }, props: { model: m } }));
+}
+
+// Mimo frontmatter i mimo getStaticPaths: modulový scope se vyhodnotí jednou
+// za build (past D32 platí obráceně — sem getStaticPaths dosáhne, ale na
+// frontmatter ne).
+const CROSS_NETWORK = buildCrossNetwork(MODEL_PAGES);
+
+const { model } = Astro.props as { model: Model };
+/**
+ * Stejný nick na jiné síti. Počítá se jednou pro celý build (modul si mapu
+ * drží), takže 16 000 stránek stojí jeden průchod, ne 16 000.
+ */
+const twins = CROSS_NETWORK.get(model.page) ?? [];
+const label = NETWORK_LABELS[model.network];
+// Země musí projít normalizací: BongaCams ji posílá jako volný text psaný
+// performerkou, takže bez ní se na profilu ukázalo „COLOMBIA" nebo „РОССИЯ".
+const countryCode = canonicalCountry(model.country);
+const countryLabel = countryCode ? countryName(countryCode) : null;
+// Odkaz jen tam, kde stránka země opravdu existuje (práh 20 modelek).
+const countryHref = linkableCountry(model.country);
+/** `/site/{síť}/` existuje jen když síť v tomhle běhu feed vrátila. */
+const networkLink = linkableNetwork(model.network);
+const networkHref = networkLink ? `/site/${networkLink}/` : null;
+
+// Text sestavený z uložených dat — jediná část stránky, kterou nemá nikdo jiný.
+// Nic se tu nevymýšlí, viz pravidla v src/lib/model-copy.ts (D26).
+// U archivní stránky (`model.archived`) katalog nemá NIC než nick a síť —
+// `aboutParagraphs` i `historyParagraphs` staví text z počtu viděných dnů,
+// štítků a země, takže by si u ní musely vymýšlet. Radši žádný text.
+const about = model.archived ? [] : aboutParagraphs(model, label, countryLabel);
+const history = model.archived ? [] : historyParagraphs(model);
+// Kontext z katalogu (kolik pokojů té sítě vedeme, jak velké publikum má proti
+// ostatním, kolik modelek máme z její země) + věta „co to stojí". Archivní
+// stránka ho nedostane ze stejného důvodu jako zbytek textu — nemá data.
+const context = model.archived ? [] : contextParagraphs(model, label, countryLabel);
+// Otázky v těch tvarech, ve kterých je lidé opravdu píšou (změřeno na 3 141
+// dotazech z Bingu). Odpovědi jsou z dat; na co data nemáme, se neptáme.
+const faq = model.archived ? [] : faqItems(
+	model, label, countryLabel,
+	twins.filter((t) => t.tier !== 'conflicting').map((t) => NETWORK_LABELS[t.network]),
+);
+const cats = linkableCategories(model);
+// Kolik podobných ukázat a kolik jich dát do HTML jako rezervu pro doplnění
+// za offline karty. Na vstupních mřížkách je rezerva 3×, tady jen 1,5× —
+// stránek modelek je přes 10 000 a každá karta je ~1,3 kB, takže větší rezerva
+// by nafoukla build a prodloužila CI nad rozpočet free minut.
+const SIMILAR_VISIBLE = model.online ? 10 : 20;
+/**
+ * Čtyři živé karty nad ohyb u offline modelky. Bere se z už spočítaného
+ * `similarLive()`, takže to nic nestojí navíc — jen se to zobrazí dřív.
+ */
+const QUICK_LIVE = 4;
+const similar = similarLive(model, Math.round(SIMILAR_VISIBLE * 1.5));
+const quickLive = model.online ? [] : similar.slice(0, QUICK_LIVE);
+/**
+ * Nejhledanější modelky podle měřené poptávky (D35). Textové odkazy, ne karty:
+ * 24 karet by stránku nafouklo o ~30 kB × 17 000 stránek, kdežto 24 odkazů
+ * stojí 1,5 kB. Smysl je prolinkování — vnitřní odkazy mají mířit tam, kde je
+ * poptávka, protože ty stránky mají reálnou šanci na TOP 3 (Ahrefs: 201 220
+ * hledání/měs na nicky v katalogu při KD 0–24). Konkurent, který na nick
+ * `ehotlovea` stojí #3, má na stránce modelky 83 odkazů na jiné modelky; my
+ * jsme měli 30.
+ */
+const searched = topDemand(24, model.page);
+/** Rotující odkazy na celou množinu stránek s poptávkou, i offline (D79). */
+const popular = demandRotation(model.page, 16, new Set(searched.map((m) => m.page)));
+
+/**
+ * Sítě, u kterých se přehrávač smí spustit hned. Chrome odstraní iframe jen
+ * tehdy, když ho podle filtrovacího seznamu označí za REKLAMU — a `/embed/`
+ * u těchhle pěti na EasyList ani EasyPrivacy není (ověřeno, hlídá
+ * `scripts/check-blocklists.ts`). U LiveJasminu (`ptcdw.com`) a XLoveCamu
+ * na seznamu jsou, takže tam zůstává poster + klik: jinak by Chrome rámec
+ * po 4 MB přenosu zabil a uživatel by koukal na hlášku o reklamě (D13).
+ *
+ * Kdyby se některý z těch hostů na seznam dostal, guard v CI spadne — a tenhle
+ * seznam se musí zkrátit, ne guard obejít.
+ */
+// BongaCams odsud 26. 8. vypadl kvůli EasyListu, ale 27. 8. se VRÁTIL: jede
+// v našem `<video>` přes HLS z jejich feedu, ne v rámci (D62). Podmínka 1 se
+// tedy netýká — na `<video>` `$subdocument` ani Heavy Ad Intervention neplatí
+// a `bcvcdn.com` na seznamech není. Podmínka 2 platí: stream je ztišený,
+// takže autoplay projde.
+/**
+ * Sítě, u kterých se rámec renderuje ze serveru a stream **naskočí sám**.
+ * Podmínky jsou dvě a obě se měří, ne hádají:
+ *  1. host není na blokovacích seznamech — jinak ho Chrome označí za reklamu
+ *     a po 4 MB odstraní (D13, a přesně to se 26. 8. stalo BongaCams),
+ *  2. embed opravdu hraje bez interakce. Ověřeno 26. 8. s restriktivní
+ *     politikou (`--autoplay-policy=document-user-activation-required`):
+ *     stripchat a imlive přes `suaplf.live` hrají ztišené samy, **streamate
+ *     (`purecam`) Chrome zablokuje** (video není ztišené), takže tam zůstává
+ *     klik. XLoveCam a LiveJasmin jsou na EasyListu → klik navždy.
+ * Viz D59.
+ */
+const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'cam4', 'stripchat', 'imlive', 'bongacams']);
+
+/**
+ * Sítě, u kterých se nad stream vkládá klikací vrstva (`.player-hit`).
+ *
+ * Chaturbate: ověřeno 18. 8., že `/embed/` NENASTAVÍ affiliate cookie ani
+ * s `campaign`, ani s `tour` — cookie dává jedině `/in/`. Klik uvnitř rámce
+ * tedy končil na `/auth/login/?next=/{room}/` bez provize, a byl to nejsilnější
+ * klik na webu. Embed proto jede `embed_video_only=1` (bez chatu a tipů, takže
+ * v rámci nezbylo, co by kradlo klik) a klik do plochy videa posílá vrstva na
+ * `/go/`, tedy top-level navigaci přes `/in/`, která provizi přiřadí.
+ *
+ * Ostatních šest sítí nese affiliate ID přímo v embed URL, takže tam klik
+ * uvnitř rámce ztracený být nemusí — audit každé z nich je samostatná položka
+ * v HANDOFF.md, ne odhad. Viz D34.
+ */
+const STREAM_LINK = new Set(['chaturbate']);
+const autoplay = AUTOPLAY_SAFE.has(model.network);
+
+const embed = embedUrl(model.network, model.username, undefined, model.embedRef);
+/**
+ * BongaCams: místo rámce HLS playlist v našem `<video>` (D62). Marker `hls:`
+ * je princip po `widget:` u Amateur.tv (ten zmizel s widgetem, D63) —
+ * `embedUrl()` nesmí vracet něco, co by se omylem dalo strčit do `iframe.src`.
+ */
+const isHls = embed.startsWith('hls:');
+const hlsSrc = isHls ? embed.slice(4) : '';
+/**
+ * Sítě bez přehrávače: Streamate/ImLive, u kterých chybí `embedRef`, a každá
+ * modelka, u které chybí adresa streamu. Dřív se v takovém případě
+ * vyrenderovalo tlačítko „Watch live", které po kliknutí **neudělalo nic** —
+ * obsluha padá na `if (!src) return;`. Mrtvé tlačítko je horší než žádné, takže
+ * zůstane náhled a CTA.
+ */
+const hasPlayer = embed.length > 0;
+/**
+ * Nový tab, nebo stejný? U sítě s plošným `$popup` pravidlem blokovač nový tab
+ * zabije, takže se tam naviguje na místě (`POPUP_BLOCKED_NETWORKS`, D62).
+ */
+const outTarget = outTargetFor(model.network);
+const ctaLive = goLink(model.network, model.username, 'profile');
+const ctaPlayer = goLink(model.network, model.username, 'player');
+const ctaOffline = goLink(model.network, model.username, 'offline');
+/**
+ * Lepivé CTA na mobilu. Stránka modelky nese 22 z 32 měřených prokliků
+ * (GA4, 14 dní k 26. 8.), takže je to konverzní plocha webu — a na mobilu
+ * hlavní tlačítko odscrolluje z obrazovky po prvních dvou odstavcích textu,
+ * kterého tam je od 26. 8. 650 slov (D55). Pásek se měří jako `sticky`, aby
+ * se za týden dalo říct, jestli vydělal. U offline modelky vede na profil,
+ * ne do prázdného pokoje. Viz D58.
+ */
+const ctaSticky = model.online
+	? goLink(model.network, model.username, 'sticky')
+	: goLink(model.network, model.username, 'offline');
+
+const seo = profileSeo({
+	name: model.displayName,
+	network: label,
+	networkId: model.network,
+	country: countryLabel,
+	region: model.region,
+	age: model.age,
+	tags: cats.map((c) => c.label),
+	online: model.online,
+	lastSeen: model.last,
+	subject: model.subject,
+	archived: model.archived,
+	variant: titleVariant(model.page),
+});
+
+/** „3 hours" / „2 days" — hrubě, přesnost tu nikoho nezajímá. */
+function since(iso: string): string {
+	const days = Math.round((Date.now() - new Date(iso + 'T00:00:00Z').getTime()) / 86_400_000);
+	if (days <= 0) return 'today';
+	if (days === 1) return 'yesterday';
+	if (days < 14) return `${days} days ago`;
+	return `${Math.round(days / 7)} weeks ago`;
+}
+
+function duration(seconds: number): string {
+	const h = Math.floor(seconds / 3600);
+	const m = Math.round((seconds % 3600) / 60);
+	return h ? `${h}h ${m}m` : `${m}m`;
+}
+
+/**
+ * Jazyky se čistí i tady, ne jen v syncu. Archivní stránky totiž běží ze
+ * snapshotů uložených ještě starým parserem, který z „Spanish and English
+ * (translator)" udělal tokeny `and` a `translator` — a ty se vypisovaly
+ * návštěvníkovi. Kanonizace při renderu je zahodí bez čekání na další výskyt.
+ */
+const languages = [...new Set(
+	(model.languages ?? []).map((l) => canonicalLanguage(l)).filter(Boolean) as string[]
+)].map((l) => l.charAt(0).toUpperCase() + l.slice(1));
+
+/** „20 February" — bez roku. Den a měsíc je fakt o modelce, rok je už její věk. */
+const birthday = model.birthDate
+	? new Date(model.birthDate + 'T00:00:00Z').toLocaleDateString('en-GB', {
+		day: 'numeric', month: 'long', timeZone: 'UTC',
+	})
+	: null;
+
+/**
+ * Stav pokoje. `private` (u Chaturbate i `hidden`) znamená, že v přehrávači
+ * návštěvník neuvidí nic — 199 ze 7 944 pokojů (2,5 %, změřeno 19. 8. 2026).
+ * Do 19. 8. se pole `status` na webu vůbec nepoužívalo, takže takový pokoj
+ * hlásil „Live now" a přehrávač pak ukázal placenou zeď. Odznak je levnější
+ * než zklamání.
+ */
+const roomState = model.online && model.status === 'private' ? 'private'
+	: model.online && model.status === 'away' ? 'away'
+	: null;
+
+/** Kdy ji vídáme online — jen když je vzorků dost (viz usualHours). */
+const when = usualHours(model);
+
+const attrs: [string, string][] = [
+	['Site', label],
+	...(countryLabel ? [['Country', countryLabel] as [string, string]] : []),
+	// Kraj/město hlásí jen Chaturbate (pole `location`). Je to konkrétnější
+	// než země a na stránce to nemá nikdo jiný — feed ho posílá u 24 % pokojů.
+	...(model.region ? [['Region', model.region] as [string, string]] : []),
+	// Věk mimo 18–80 je zjevně vyplněná blbost (feedy hlásí i 0 a 99).
+	...(model.age && model.age >= 18 && model.age <= 80
+		? [['Age', String(model.age)] as [string, string]] : []),
+	...(birthday ? [['Birthday', birthday] as [string, string]] : []),
+	...(model.gender ? [['Gender', model.gender] as [string, string]] : []),
+	...(model.ethnicity ? [['Ethnicity', model.ethnicity] as [string, string]] : []),
+	...(model.hairColor ? [['Hair', model.hairColor] as [string, string]] : []),
+	...(model.eyeColor ? [['Eyes', model.eyeColor] as [string, string]] : []),
+	...(model.bodyType ? [['Body', model.bodyType] as [string, string]] : []),
+	...(model.bustSize ? [['Bust', model.bustSize] as [string, string]] : []),
+	...(languages.length ? [['Languages', languages.slice(0, 3).join(', ')] as [string, string]] : []),
+	// „Streaming for 55m" u offline modelky si odporuje s nadpisem — je to
+	// hodnota z posledního výskytu, ne z teď.
+	...(model.online && model.onlineSeconds
+		? [['Streaming for', duration(model.onlineSeconds)] as [string, string]] : []),
+	...(model.followers ? [['Followers', model.followers.toLocaleString('en-US')] as [string, string]] : []),
+	// Vlastní měření, ne údaj ze sítě — proto ta formulace v labelu.
+	...(when ? [['Usually live', `${String(when.from).padStart(2, '0')}:00–${String(when.to).padStart(2, '0')}:00 UTC`] as [string, string]] : []),
+	...(model.photos ? [['Photos', String(model.photos)] as [string, string]] : []),
+	...(model.videos ? [['Videos', String(model.videos)] as [string, string]] : []),
+];
+
+/**
+ * ProfilePage + Person a u živé modelky navíc **VideoObject s BroadcastEvent**.
+ *
+ * Dřív tu byl komentář, že VideoObject nevydáváme, protože adult obsah je
+ * z video rich results vyloučený. To pořád platí — jen to není celý důvod,
+ * proč tu značka má být. Změřeno 19. 8.: z celého webu má Google indexovanou
+ * **jedinou stránku** (homepage), stránky modelek hlásí „Crawled – currently
+ * not indexed". Bez odkazů je jediná páka na crawl **Google Indexing API**,
+ * a to bere výhradně `JobPosting` a `BroadcastEvent`. Tyhle stránky živé
+ * vysílání doslova jsou, takže je to pravdivý popis, ne trik pro rich results
+ * (ty u adultu nebudou a nečekáme je).
+ *
+ * `startDate` se počítá z `onlineSeconds` — jak dlouho už vysílá. Když ho síť
+ * neposílá, `BroadcastEvent` se vynechá celý: datum vysílání si nevymýšlíme.
+ */
+const startedAt = model.online && model.onlineSeconds
+	? new Date(Date.now() - model.onlineSeconds * 1000).toISOString()
+	: null;
+
+const videoObject = model.online ? {
+	'@type': 'VideoObject',
+	'@id': `${SITE_URL}/live/${model.page}/#stream`,
+	name: `${model.displayName} live webcam on ${label}`,
+	description: seo.description,
+	isFamilyFriendly: false,
+	// Náhled je hotlink z CDN sítě a u některých sítí má podepsanou expiraci —
+	// pro schema je to pořád platný thumbnail, jen nesmí být povinný.
+	...(model.thumbnail ? { thumbnailUrl: [model.thumbnail] } : {}),
+	uploadDate: model.first,
+	embedUrl: embed,
+	...(startedAt ? {
+		publication: {
+			'@type': 'BroadcastEvent',
+			isLiveBroadcast: true,
+			startDate: startedAt,
+		},
+	} : {}),
+} : null;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'ProfilePage',
+			'@id': `${SITE_URL}/live/${model.page}/#page`,
+			name: `${model.displayName} — live cam on ${label}`,
+			dateModified: model.last,
+			isFamilyFriendly: false,
+			...(videoObject ? { mainEntityOfPage: { '@id': `${SITE_URL}/live/${model.page}/#stream` } } : {}),
+			mainEntity: {
+				'@type': 'Person',
+				name: model.displayName,
+				...(model.thumbnail ? { image: model.thumbnail } : {}),
+				...(countryLabel ? {
+					homeLocation: {
+						'@type': 'Place',
+						name: model.region ? `${model.region}, ${countryLabel}` : countryLabel,
+						...(model.region ? {
+							address: {
+								'@type': 'PostalAddress',
+								addressRegion: model.region,
+								addressCountry: countryCode,
+							},
+						} : {}),
+					},
+				} : {}),
+				...(languages.length ? { knowsLanguage: languages.slice(0, 3) } : {}),
+				...(cats.length ? { knowsAbout: cats.map((c) => c.label) } : {}),
+			},
+		},
+		...(videoObject ? [videoObject] : []),
+	],
+};
+---
+<Layout title={seo.title} description={seo.description} noindex={!model.indexable}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+
+	<Breadcrumbs items={[
+		// Když síť vypadla z feedu, její stránka neexistuje — drobeček pak míří
+		// na rozcestník, který existuje vždy. Bez tohohle spadne `check-links`.
+		{ label: label, href: networkHref ?? '/site/' },
+		{ label: model.displayName },
+	]} />
+
+	<div class="mt-2 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+		<div>
+			{/* „Live Sex Cam" / „Webcam" podle měřených dotazů: GSC ukazuje
+			    `<nick> cam` (197 impresí, pozice 11), `<nick> webcam` (133, 9,3)
+			    a samotný nick (151, 14,5) — tvary, na které stránka reálně sedí. */}
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<h1 class="text-2xl font-extrabold sm:text-3xl">
+					{model.online
+						? `${model.displayName} Live Sex Cam — ${label}`
+						: `${model.displayName} Webcam — ${label} Cam Profile`}
+				</h1>
+				{/*
+				  Sledování. Tlačítko je v HTML od prvního snímku a skript mu jen
+				  přepíše text — nic se nezjevuje ani nemění šířku (past 52).
+				  Stav i logika jsou klientské, viz src/lib/watchlist.ts.
+				*/}
+				<button
+					type="button" class="watch-btn" aria-pressed="false"
+					data-watch-toggle data-watch-source="profile"
+					data-page={model.page}
+					data-network={model.network}
+					data-username={model.username}
+				><span data-watch-label>Follow</span></button>
+			</div>
+
+			{/*
+			  `data-live-scope` napojuje tenhle blok na klientský živý stav
+			  v Layout.astro. Bez toho zůstal odznak na hodnotě z buildu, takže
+			  stránka hlásila „Live now, 58 433 watching", zatímco přehrávač
+			  vedle psal „Room is currently offline".
+			*/}
+			<div class="mt-2 flex flex-wrap items-center gap-2 text-sm" data-live-scope>
+				{model.online
+					? <span class="badge bg-live" data-live-badge={`${model.network}:${model.slug}`}
+					        data-build-viewers={model.viewers ?? 0}>Live now</span>
+					: <span class="badge bg-ink-700" data-live-badge={`${model.network}:${model.slug}`}
+					        data-build-viewers="0">Offline</span>}
+				{roomState === 'private' && (
+					<span class="badge bg-ink-700">Private show — stream hidden</span>
+				)}
+				{roomState === 'away' && <span class="badge bg-ink-700">Away from cam</span>}
+				{model.isHd && <span class="badge bg-ink-700">HD</span>}
+				{model.isNew && <span class="badge bg-ink-700">New</span>}
+				{model.toy && <span class="badge bg-toy">Interactive toy</span>}
+				{model.online && model.viewers != null && (
+					<span class="text-ink-400" data-viewers={`${model.network}:${model.slug}`}>
+						{model.viewers.toLocaleString('en-US')} watching
+					</span>
+				)}
+				{!model.online && !model.archived && (
+					<span class="text-ink-400">Last live {since(model.last)}</span>
+				)}
+			</div>
+
+			{model.online ? (
+				<>
+					{/*
+					  Přehrávač se spouští AŽ NA KLIK. Dva důvody:
+					  1) Chrome odstraní cross-origin iframe, se kterým uživatel
+					     nic neudělal a který přenese víc než 4 MB (Heavy Ad
+					     Intervention) — a to živý stream utáhne za pár sekund.
+					     Interakce uživatele rámec z intervence vyjímá.
+					  2) Kdo profil jen prolétne, nestahuje desítky MB videa.
+					*/}
+					<div
+						class="player-frame mt-4"
+						data-player
+						data-embed={isHls || autoplay || !hasPlayer ? undefined : embed}
+						data-title={`${model.displayName} live webcam`}
+						data-network={model.network}
+						data-model={model.page}
+						data-name={model.displayName}
+						data-slug={model.slug}
+					>
+						{isHls ? (
+							<>
+								{/*
+								  BongaCams: HLS z jejich feedu v NAŠEM přehrávači.
+								  Rámec z bongacams.com je na EasyListu (D56), tohle
+								  není rámec — a `bcvcdn.com` na seznamech není.
+								  `muted` je podmínka autoplaye v prohlížeči, `controls`
+								  dává divákovi unmute i fullscreen zadarmo.
+								  Adresa může být stará (medián vysílání 1,2 h, sync
+								  po 2 h) — když neplatí, skript zkusí čerstvou
+								  z `/api/online/` a pak odkryje `player-hit` níž.
+								*/}
+								<video
+									class="absolute inset-0 h-full w-full bg-black object-contain"
+									data-hls={hlsSrc}
+									data-nick={model.username}
+									data-network={model.network}
+									data-model={model.page}
+									poster={model.thumbnail ?? undefined}
+									muted autoplay playsinline controls
+									preload="none"
+								></video>
+								{/* Záchrana, když stream nenaběhne. Bez `hidden` by
+								    ležela přes video; odkrývá ji skript. */}
+								<a
+									href={ctaPlayer}
+									class="player-hit"
+									data-hls-fallback
+									rel="nofollow sponsored noopener"
+									target={outTarget}
+									aria-label={`Open ${model.displayName}'s live room on ${label}`}
+									hidden
+								>
+									<span class="player-hit-label">
+										Watch {model.displayName} live on {label} →
+									</span>
+								</a>
+							</>
+						) : autoplay ? (
+							<>
+							{/* Rámec není označený za reklamu → smí se načíst hned. */}
+							<iframe
+								src={embed}
+								title={`${model.displayName} live webcam`}
+								allowfullscreen
+								referrerpolicy="strict-origin-when-cross-origin"
+								allow="autoplay; fullscreen"
+								loading="eager"
+							></iframe>
+							{STREAM_LINK.has(model.network) && (
+								/* Klik do plochy streamu = jediný klik, který v rámci nic
+								   nevydělá. Pravý <a>, takže funguje i bez JS a měření na
+								   něj chodí existujícím delegovaným listenerem.
+								   Spodních 34 px zůstává nezakrytých: ovládání video.js je
+								   30 px vysoké (změřeno na 390/768/1280 px) a autoplay je
+								   ze zákona prohlížeče ztišený — bez dosažitelného unmute
+								   by stream zůstal navždy tichý. */
+								<a
+									href={ctaPlayer}
+									class="player-hit"
+									rel="nofollow sponsored noopener"
+									target={outTarget}
+									aria-label={`Open ${model.displayName}'s live room on ${label}`}
+								>
+									<span class="player-hit-label">
+										Chat with {model.displayName} on {label} →
+									</span>
+								</a>
+							)}
+							</>
+						) : (
+							<>
+								{model.thumbnail && (
+									<img
+										src={model.thumbnail} alt=""
+										referrerpolicy="no-referrer"
+										class="absolute inset-0 h-full w-full object-cover"
+									/>
+								)}
+								{hasPlayer ? (
+									<button type="button" data-play class="play-overlay">
+										<span class="play-icon" aria-hidden="true">▶</span>
+										<span>Watch {model.displayName} live</span>
+									</button>
+								) : (
+									/* Přehrávač u téhle sítě nemáme (viz `hasPlayer`).
+									   Místo tlačítka, které by nic neudělalo, vede
+									   plocha rovnou do pokoje — je to tentýž odkaz,
+									   který nese provizi. */
+									<a
+										href={ctaPlayer}
+										class="player-hit"
+										rel="nofollow sponsored noopener"
+										target={outTarget}
+										aria-label={`Open ${model.displayName}'s live room on ${label}`}
+									>
+										<span class="player-hit-label">
+											Watch {model.displayName} live on {label} →
+										</span>
+									</a>
+								)}
+							</>
+						)}
+						{/*
+						  Modelka mohla skončit mezi buildem a načtením stránky
+						  (změřeno 28. 8.: za 27 minut dovysílá 18 % pokojů).
+						  Blok je v HTML od začátku a skrytý, odkrývá ho živá
+						  kontrola v Layout.astro, která zároveň odstraní rámec —
+						  bez toho tu zůstal cizí „Room is currently offline".
+						  Nic se tím neposune: leží v ploše přehrávače, která má
+						  pevný poměr stran. Viz D63.
+						*/}
+						{/*
+						  Když modelka mezitím dovysílala, pustí sem klient
+						  NĚKOHO JINÉHO ze stejné sítě (D67) a tenhle proužek
+						  řekne pravdu: kdo hraje a kam za původní modelkou.
+						  Leží v ploše přehrávače (pevný poměr stran), takže
+						  jeho odkrytí nic neposune — CLS zůstává 0.
+						*/}
+						<div class="player-note" data-substitute-note hidden>
+							<span data-substitute-text></span>
+							{' '}
+							<a
+								href={ctaOffline}
+								class="underline hover:text-white"
+								rel="nofollow sponsored noopener"
+								target={outTarget}
+							>{model.displayName}'s profile →</a>
+						</div>
+
+						<div class="player-offline" data-player-offline hidden>
+							<p class="text-lg font-bold">{model.displayName} just ended the stream</p>
+							<p class="mt-1 text-sm text-ink-400">Ended while you were opening this page.</p>
+							<span class="mt-4 flex flex-wrap justify-center gap-2">
+								<a
+									href={ctaOffline}
+									class="btn-cta"
+									rel="nofollow sponsored noopener"
+									target={outTarget}
+								>Open {model.displayName}'s profile on {label} →</a>
+								<a href="#similar" class="btn-ghost">See who's live now ↓</a>
+							</span>
+						</div>
+					</div>
+
+					{/*
+					  Trvalý východ, ne detekce. Iframe může chybět z víc důvodů
+					  — blokátor (LiveJasmin jede na ptcdw.com, které je v
+					  EasyList), geo-blok sítě, modelka mezitím skončila.
+					  Spolehlivě to z cizí domény nepoznáme, tak radši nabídnout
+					  cestu vždycky, než hádat.
+					*/}
+					<p class="mt-1.5 text-xs text-ink-500">
+						Player not loading?{' '}
+						<a href={ctaPlayer} rel="nofollow sponsored noopener" target={outTarget} class="underline hover:text-ink-200">
+							Open {model.displayName} directly on {label} →
+						</a>
+					</p>
+				</>
+			) : (
+				/* Prázdný přehrávač by byl horší než žádný — místo něj poslední
+				   náhled a rovnou nabídka toho, co běží teď.
+
+				   Stránka je vygenerovaná jako offline, ale modelka může být zrovna
+				   online — data jsou až 2 h stará. Když to živý stav zjistí, blok se
+				   klientsky „povýší": schová se hláška, odkryje se play a CTA přepne
+				   z profilu na živý pokoj. Bez toho návštěvník, který přišel na její
+				   nick právě když vysílá, dostal „nevysílá" a odešel. */
+				<div
+					class="player-frame mt-4 flex items-center justify-center"
+					data-player
+					data-embed={isHls || !hasPlayer ? undefined : embed}
+					{...(autoplay ? { 'data-autoplay': '' } : {})}
+					data-title={`${model.displayName} live webcam`}
+					data-network={model.network}
+					data-model={model.page}
+					data-name={model.displayName}
+					data-slug={model.slug}
+				>
+					{/* Náhradní stream (D67) — tady je potřeba nejvíc: stránka
+					    se stavěla jako offline, takže bez něj je celá plocha
+					    jen hláška. */}
+					<div class="player-note" data-substitute-note hidden>
+						<span data-substitute-text></span>
+						{' '}
+						<a
+							href={ctaOffline}
+							class="underline hover:text-white"
+							rel="nofollow sponsored noopener"
+							target={outTarget}
+						>{model.displayName}'s profile →</a>
+					</div>
+					{model.thumbnail && (
+						<img
+							src={model.thumbnail} alt="" aria-hidden="true"
+							referrerpolicy="no-referrer"
+							class="absolute inset-0 h-full w-full object-cover opacity-25 blur-sm"
+						/>
+					)}
+					<div class="relative z-10 px-6 text-center" data-offline-msg>
+						<p class="text-lg font-bold">{model.displayName} isn’t streaming right now</p>
+						{model.archived
+							? <p class="mt-1 text-sm text-ink-400">Not in our live catalogue right now — check {label}.</p>
+							: <p class="mt-1 text-sm text-ink-400">Last live {since(model.last)} on {label}.</p>}
+						{similar.length > 0 && (
+							<a href="#similar" class="btn-ghost mt-4">See who’s live instead ↓</a>
+						)}
+					</div>
+					{/* U HLS se play nenabízí: adresa v archivu nese shard z doby,
+					    kdy modelka vysílala, a po reconnectu je mrtvá (D62). */}
+					{!isHls && hasPlayer && (
+						<button type="button" data-play class="play-overlay" hidden>
+							<span class="play-icon" aria-hidden="true">▶</span>
+							<span>{model.displayName} is live now — watch</span>
+						</button>
+					)}
+					{STREAM_LINK.has(model.network) && (
+						/* Stránka se stavěla jako offline, ale modelka může právě
+						   vysílat (D19) — pak se odkryje play, vloží iframe a tahle
+						   vrstva se musí odkrýt s ním, jinak by klik do streamu na
+						   povýšené stránce nevydělal nic. Skript ji po
+						   `replaceChildren()` vrací zpátky. */
+						<a
+							href={ctaPlayer}
+							class="player-hit"
+							rel="nofollow sponsored noopener"
+							target={outTarget}
+							aria-label={`Open ${model.displayName}'s live room on ${label}`}
+							hidden
+						>
+							<span class="player-hit-label">
+								Chat with {model.displayName} on {label} →
+							</span>
+						</a>
+					)}
+				</div>
+			)}
+
+			{model.goalText && model.online && (
+				<p class="mt-3 rounded-lg border border-ink-800 bg-ink-900 px-3 py-2 text-sm">
+					<span class="font-semibold text-accent">Tip goal:</span> {model.goalText}
+				</p>
+			)}
+
+			{model.subject && (
+				/* Offline je to text z posledního vysílání — bez označení by
+				   vypadal jako aktuální pozvánka do pokoje. */
+				<p class="mt-3 max-w-3xl text-ink-200">
+					{!model.online && <span class="text-ink-500">Last room topic: </span>}
+					“{model.subject}”
+				</p>
+			)}
+
+			<div class="mt-5 flex flex-wrap gap-3">
+				{model.online ? (
+					<>
+						<a href={ctaLive} rel="nofollow sponsored noopener" target={outTarget} class="btn-cta">
+							Chat &amp; tip {model.displayName} on {label} →
+						</a>
+						<a href={ctaPlayer} rel="nofollow sponsored noopener" target={outTarget} class="btn-ghost">
+							Open full screen
+						</a>
+					</>
+				) : (
+					<a
+						href={ctaOffline} rel="nofollow sponsored noopener" target={outTarget} class="btn-cta"
+						data-cta-offline data-live-href={ctaLive}
+						data-live-text={`Chat & tip ${model.displayName} on ${label} →`}
+					>Follow {model.displayName} on {label} →</a>
+				)}
+			</div>
+			{/*
+			  Offline CTA slibuje to, co hledající chce: vědět, kdy modelka
+			  začne. Dřív „See X's profile" — 9 prokliků za 28 dní (placement
+			  `offline`), přitom na offline stránky jde většina nick provozu
+			  z Bingu. Upozornění na začátek vysílání dává každá z našich sítí
+			  po založení účtu zdarma, a registrace je přesně to, za co
+			  affiliate platí. D81.
+			*/}
+			{!model.online && (
+				<p class="mt-2 text-sm text-ink-300" data-cta-offline-note>
+					Free account — {label} alerts you the moment {model.displayName} goes live.
+				</p>
+			)}
+			<p class="mt-2 text-xs text-ink-500">
+				{PER_MINUTE_NETWORKS.has(model.network)
+					? 'Free preview, paid private shows. eCamx earns a commission if you pay for one — it costs you nothing extra.'
+					: 'Free to watch. eCamx earns a commission if you buy tokens — it costs you nothing extra.'}
+			</p>
+
+			{/*
+			  Offline stránka: čtyři živé alternativy HNED, ne až pod textem.
+			  Kdo přišel na nick, který právě nevysílá, má jedinou užitečnou
+			  odpověď — kdo vysílá teď. Dřív k ní vedlo jen tlačítko „See who's
+			  live instead ↓" a mřížka byla o 650 slov textu níž (D55), takže se
+			  k ní většina lidí nedostala. Placement `grid` se měří zvlášť, takže
+			  se pozná, jestli to zabralo. Viz D58.
+			*/}
+			{!model.online && quickLive.length > 0 && (
+				<div class="mt-6">
+					<h2 class="mb-2 text-sm font-semibold text-ink-200">
+						Live right now, similar to {model.displayName}
+					</h2>
+					<div class="card-grid card-grid-quick">
+						{quickLive.map((m) => (
+							<ModelCard model={m} />
+						))}
+					</div>
+					{similar.length > quickLive.length && (
+						<a href="#similar" class="mt-2 inline-block text-sm text-accent underline hover:text-white">
+							See {similar.length - quickLive.length} more live cams ↓
+						</a>
+					)}
+				</div>
+			)}
+		</div>
+
+		{/* Postranní panel s fakty. Na mobilu spadne pod přehrávač. */}
+		<aside class="lg:pt-14">
+			<h2 class="mb-3 text-lg font-bold">Cam information</h2>
+			<dl class="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 text-sm">
+				{attrs.map(([k, v]) => (
+					<>
+						<dt class="text-ink-400">{k}</dt>
+						<dd class="capitalize">{v}</dd>
+					</>
+				))}
+			</dl>
+
+			{/* Profil dřív neodkazoval na zemi ani na síť, takže crawler z něj vedl
+			    jen na kategorie z tagů. Země a síť jsou obě jednoklikové cesty výš.
+			    Nadpis tu není kosmetika: GSC měří dotazy `<nick> squirt` (pozice 9,0),
+			    `<nick> dildo` (5,5), `<nick> pussy` (7,0), `<nick> ass` (6,0) — tedy
+			    nick plus to, co modelka dělá. Bez nadpisu ta slova na stránce byla,
+			    ale jen jako řádek odkazů bez kontextu. */}
+			{(cats.length > 0 || countryHref) && (
+				<div class="mt-5">
+				<h2 class="mb-1.5 text-lg font-bold">What {model.displayName} streams</h2>
+				<div class="flex flex-wrap gap-2">
+					{cats.map((c) => (
+						<a href={`/cams/${c.slug}/`} class="pill">{facetLabel(c.slug, c.label)}</a>
+					))}
+					{countryHref && countryLabel && (
+						<a href={`/country/${countryHref}/`} class="pill">{countryLabel} cams</a>
+					)}
+					{networkHref && <a href={networkHref} class="pill">{label} cams</a>}
+				</div>
+				</div>
+			)}
+
+			{model.turnOns && (
+				<div class="mt-5">
+					<h2 class="mb-1.5 text-lg font-bold">What turns {model.displayName} on</h2>
+					<p class="text-sm leading-relaxed text-ink-200">{model.turnOns}</p>
+				</div>
+			)}
+		</aside>
+	</div>
+
+	{/* Vlastní text stránky. Dřív tu nebylo nic než `<dl>` a citace subjectu,
+	    takže na vyhledávanější nicky neměla stránka čím konkurovat (D26). */}
+	<section class="mt-10 max-w-3xl" aria-labelledby="about-h">
+		<h2 id="about-h" class="mb-3 text-xl font-bold">About {model.displayName}</h2>
+		{model.archived ? (
+			<>
+				{/* Archivní stránka: jediné, co o ní víme, je nick a síť. Nic
+				    jiného se tu netvrdí — viz src/lib/legacy-pages.ts. */}
+				<p class="mb-3 text-sm leading-relaxed text-ink-200">
+					{model.displayName} streamed on {label}. We haven’t seen this cam in our
+					live feed lately, so there’s no show to watch here right now — but the
+					account may still be active on {label}.
+				</p>
+				<p class="mb-3 text-sm leading-relaxed text-ink-200">
+					Open {model.displayName}’s room on {label} to check, or jump straight to
+					the cams that are live this minute below.
+				</p>
+			</>
+		) : (
+			<>
+				{about.map((para) => (
+					<p class="mb-3 text-sm leading-relaxed text-ink-200">{para}</p>
+				))}
+
+				{context.length > 0 && (
+					<>
+						<h2 class="mb-3 mt-6 text-xl font-bold">
+							How {model.displayName} compares with the rest of our index
+						</h2>
+						{context.map((para) => (
+							<p class="mb-3 text-sm leading-relaxed text-ink-200">{para}</p>
+						))}
+					</>
+				)}
+
+				<h2 class="mb-3 mt-6 text-xl font-bold">{model.displayName}’s streaming history</h2>
+				{history.map((para) => (
+					<p class="mb-3 text-sm leading-relaxed text-ink-200">{para}</p>
+				))}
+				<p class="text-xs text-ink-500">
+					Streaming history is our own observation log, refreshed every two hours.
+					It reflects when we saw {model.displayName} online, not {label} account data.
+				</p>
+
+				{faq.length > 0 && (
+					<>
+						<h2 class="mb-3 mt-6 text-xl font-bold">
+							{model.displayName} — questions people ask
+						</h2>
+						<dl class="space-y-3">
+							{faq.map((item) => (
+								<div>
+									<dt class="text-sm font-semibold text-white">{item.q}</dt>
+									<dd class="mt-1 text-sm leading-relaxed text-ink-200">{item.a}</dd>
+								</div>
+							))}
+						</dl>
+					</>
+				)}
+			</>
+		)}
+	</section>
+
+	{/*
+	  Stejný nick na jiné síti — jediná věc na téhle stránce, kterou nemá odkud
+	  opsat konkurence ani sama síť, protože k tomu potřebuješ všech 7 sítí
+	  v jednom katalogu. Je to zároveň druhý vnitřní odkaz na stránku, která by
+	  jinak visela jen na mřížkách.
+
+	  **Tvrdí se shoda JMÉNA, ne totožnost osoby** a věta se liší podle toho, co
+	  o tom páru opravdu víme (viz src/lib/cross-network.ts). Do `<title>`,
+	  popisku ani JSON-LD tenhle blok NESAHÁ — `sameAs` mezi dvěma našimi
+	  profily by bylo strojové tvrzení o identitě, které nemáme čím podložit.
+	*/}
+	{twins.length > 0 && (
+		<section class="mt-10 max-w-3xl" aria-labelledby="twins-h">
+			<h2 id="twins-h" class="mb-3 text-xl font-bold">
+				The nickname {model.displayName} on other cam sites
+			</h2>
+			<ul class="space-y-3">
+				{twins.map((t) => (
+					<li class="text-sm leading-relaxed text-ink-200">
+						<a href={`/live/${t.page}/`} class="font-medium text-white underline">
+							{model.displayName} on {NETWORK_LABELS[t.network]}
+							{t.tier === 'conflicting' ? ' (a different profile)' : ''}
+						</a>{' '}
+						{t.tier === 'corroborated' && (() => {
+							// „within 0 years of each other" je nesmysl — nula je shoda,
+							// jednička je jednotné číslo.
+							const age = t.ageGap == null ? null
+								: t.ageGap === 0 ? 'give the same age'
+								: t.ageGap === 1 ? 'give ages one year apart'
+								: `give ages ${t.ageGap} years apart`;
+							const place = t.sharedCountry ? `report ${countryName(t.sharedCountry)}` : null;
+							const both = [place, age].filter(Boolean).join(' and ');
+							return <>Both profiles {both}.</>;
+						})()}
+						{t.tier === 'name-only' && (
+							<>The two profiles have no public details in common that we can compare,
+							so we cannot say whether it is the same performer.</>
+						)}
+						{t.tier === 'conflicting' && t.conflict === 'gender' && (
+							<>That profile is listed under a different gender, so it is probably
+							someone else using the same name.</>
+						)}
+						{t.tier === 'conflicting' && t.conflict === 'age' && (
+							<>The two profiles give ages {t.ageGap} years apart, so they are
+							probably not the same performer.</>
+						)}
+						{t.differentCountry && t.tier !== 'conflicting' && (
+							<> The two sites list different countries, which is common — performers
+							often set a different location on each site.</>
+						)}
+					</li>
+				))}
+			</ul>
+			<p class="mt-3 text-xs text-ink-500">
+				We match nicknames across the seven sites we track and compare the public
+				profile fields those sites publish. <strong>We do not verify identity</strong> —
+				nicknames are not reserved across cam sites, so two people can use the same one.
+				<a href="/models/same-nickname/" class="ml-1 underline">See every nickname we found on more than one site →</a>
+			</p>
+		</section>
+	)}
+
+	{similar.length > 0 && (
+		<section class="mt-10" id="similar" aria-labelledby="similar-h">
+			<h2 id="similar-h" class="mb-3 text-lg font-bold">
+				{model.online ? 'More live cams like this' : `Live now instead of ${model.displayName}`}
+			</h2>
+			<div class="card-grid" data-grid data-visible={SIMILAR_VISIBLE}>
+				{similar.map((m, i) => (
+					<ModelCard
+						model={m}
+						reserve={i >= SIMILAR_VISIBLE}
+					/>
+				))}
+			</div>
+		</section>
+	)}
+
+	{searched.length > 0 && (
+		<section class="mt-10" aria-labelledby="searched-h">
+			<h2 id="searched-h" class="mb-3 text-lg font-bold">Most searched cam girls right now</h2>
+			<p class="mb-3 max-w-3xl text-sm text-ink-400">
+				The names people look up most often — all of them streaming right now.
+			</p>
+			<div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+				{searched.map((m) => (
+					<a href={`/live/${m.page}/`} class="text-ink-300 underline decoration-ink-700 hover:text-white">{m.displayName}</a>
+				))}
+			</div>
+		</section>
+	)}
+
+	{popular.length > 0 && (
+		<section class="mt-8" aria-labelledby="popular-h">
+			<h2 id="popular-h" class="mb-3 text-lg font-bold">Popular cam models</h2>
+			<div class="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+				{popular.map((m) => (
+					<a href={`/live/${m.page}/`} class="text-ink-300 underline decoration-ink-700 hover:text-white">{m.displayName}</a>
+				))}
+			</div>
+		</section>
+	)}
+
+	{/* Na mobilu je hlavní CTA po odscrollování pryč — tohle ho drží po ruce. */}
+	<div class="sticky-cta">
+		<a
+			href={model.online ? ctaLive : ctaOffline}
+			rel="nofollow sponsored noopener" target={outTarget}
+			class="btn-cta flex-1"
+			data-cta-offline={model.online ? undefined : true}
+			data-live-href={model.online ? undefined : ctaLive}
+			data-live-text={`Chat & tip ${model.displayName} →`}
+		>{model.online ? `Chat & tip ${model.displayName} →` : `Follow ${model.displayName} →`}</a>
+	</div>
+	{/* Aby sticky lišta nezakrývala patičku. */}
+	<div class="h-[68px] md:hidden" aria-hidden="true"></div>
+
+	<script>
+		// Vloží iframe teprve po kliknutí. Klik je zároveň ta uživatelská
+		// interakce, která rámec vyjímá z Chrome Heavy Ad Intervention.
+		// `gtag` je globál z `is:inline` stubu v <head> (AGENTS.md bod 31), takže
+		// o něm TypeScript nic neví — a měření nesmí nikdy rozbít přehrávač,
+		// proto try/catch. Stejný helper jako v Layout.astro.
+		const ga = (name: string, params?: Record<string, unknown>) => {
+			try { (window as unknown as { gtag?: Function }).gtag?.('event', name, params); }
+			catch { /* přehrávač má přednost před měřením */ }
+		};
+
+		/**
+		 * Lepivé CTA se odkryje, až přehrávač (nebo náhled) vyjede z obrazovky —
+		 * nad ohybem by soutěžilo s hlavním tlačítkem. Místo pro pásek je
+		 * rezervované v CSS, takže odkrytí nic neposune.
+		 */
+		const stickyCta = document.querySelector<HTMLElement>('[data-sticky-cta]');
+		const playerBox = document.querySelector<HTMLElement>('[data-player]');
+		if (stickyCta && playerBox && 'IntersectionObserver' in window) {
+			new IntersectionObserver(([entry]) => {
+				stickyCta.classList.toggle('is-on', !entry.isIntersecting);
+			}, { rootMargin: '-64px 0px 0px 0px' }).observe(playerBox);
+		}
+
+		const frame = document.querySelector<HTMLElement>('[data-player][data-embed]');
+		const play = frame?.querySelector<HTMLButtonElement>('[data-play]');
+		let started = false;
+
+		/**
+		 * Pustí rámec s přehrávačem do plochy.
+		 *
+		 * `mode` říká, co ho spustilo: `click` je tlačítko, `auto` je stránka,
+		 * která se stavěla jako offline a živá kontrola zjistila, že modelka
+		 * vysílá. Do 29. 8. se v tom druhém případě jen odkrylo tlačítko —
+		 * Kenny: „stream neběží a musíme zmáčknout play." U sítí, kde autoplay
+		 * měřeně projde (`AUTOPLAY_SAFE`), se proto pustí sám; u ostatních
+		 * (streamate nemá ztišené video, XLoveCam a LiveJasmin jsou na
+		 * EasyListu) zůstává tlačítko, protože rámec by stejně nehrál.
+		 */
+		function startEmbed(mode: 'click' | 'auto'): void {
+			if (started || !frame) return;
+			const src = frame.dataset.embed;
+			if (!src) return;
+			started = true;
+			const el = document.createElement('iframe');
+			el.src = src;
+			el.title = frame!.dataset.title ?? 'Live webcam';
+			el.allowFullscreen = true;
+			// Site-wide politika stačí — plnou URL profilu sítím posílat nemusíme.
+			el.referrerPolicy = 'strict-origin-when-cross-origin';
+			el.setAttribute('allow', 'autoplay; fullscreen');
+			// `replaceChildren()` smete i klikací vrstvu nad streamem — na offline
+			// stránce je předrenderovaná a skrytá, takže ji vrátíme a odkryjeme.
+			// Bez toho by klik do videa na povýšené stránce nevydělal nic.
+			const hit = frame.querySelector<HTMLElement>('.player-hit');
+			frame.replaceChildren(el);
+			if (hit) { hit.hidden = false; frame.appendChild(hit); }
+			if (mode === 'click') {
+				// Tlačítko zmizelo i s fokusem; bez tohohle spadne focus na <body>
+				// a klávesnicový uživatel ztratí pozici na stránce. Při `auto`ne:
+				// fokus bere ten, kdo o něj požádal, ne stránka sama od sebe.
+				el.setAttribute('tabindex', '-1');
+				el.focus({ preventScroll: true });
+			}
+			// `started` hlídá, že se to nedá nasčítat opakovaným spuštěním.
+			ga('player_start', {
+				network: frame.dataset.network,
+				model: frame.dataset.model,
+				mode,
+			});
+		}
+
+		play?.addEventListener('click', () => startEmbed('click'), { once: true });
+
+		/**
+		 * Stránka se stavěla jako offline, ale modelka vysílá (D19). Pustíme
+		 * stream rovnou — a jen když ho tahle síť utáhne bez interakce.
+		 */
+		document.addEventListener('ecamx:model-online', () => {
+			if (frame?.hasAttribute('data-autoplay')) startEmbed('auto');
+			else if (play) play.hidden = false;
+		});
+
+		/**
+		 * BongaCams: HLS v našem `<video>` (D62). Rámec z jejich domény je na
+		 * EasyListu, tohle není rámec.
+		 *
+		 * Tři věci, na kterých to jinak spadne:
+		 *  1. **HTTP 200 neznamená stream.** Playlist neexistující nebo skončené
+		 *     modelky má 25 bajtů a nula variant — pozná se jen po obsahu.
+		 *  2. **Adresa zastarává.** Nese shard (`ded…-edge….bcvcdn.com`), který
+		 *     z nicku neodvodíš, a modelka ho po reconnectu mění; medián
+		 *     vysílání je 1,2 h, sync jde po 2 h. Jednou se tedy zkusí čerstvý
+		 *     host z `/api/online/…/?s=1` a teprve pak se to vzdá.
+		 *  3. **Mrtvý přehrávač je horší než žádný** (past u `hasPlayer`). Když
+		 *     stream nenaběhne, `<video>` zmizí a odkryje se odkaz do pokoje —
+		 *     tedy přesně stav, jaký tu byl do 27. 8.
+		 *
+		 * Knihovna se tahá jen tam, kde je potřeba: Safari a iOS přehrají HLS
+		 * nativně, ostatní dostanou `hls.js/light` jako lazy chunk (113 kB gz,
+		 * což jsou při 488 kbps zhruba dvě sekundy streamu).
+		 */
+		/**
+		 * Rozjede HLS na daném `<video data-hls>`. Vytažené do funkce, protože
+		 * od D67 se totéž potřebuje i na **náhradním** streamu, když modelka
+		 * dovysílala — a tenhle kód je jediné místo, které umí obojí cestu
+		 * (nativní i přes knihovnu) včetně obnovy adresy a tichého fallbacku.
+		 */
+		function startHls(hlsVideo: HTMLVideoElement, onFail?: () => void): void {
+			const fallback = document.querySelector<HTMLElement>('[data-hls-fallback]');
+			// Nick s kapitalizací: `api_v=2` je case-sensitive (malými odpoví
+			// „Invalid model username"). V cestě playlistu naopak nezáleží.
+			const user = hlsVideo.dataset.nick ?? '';
+			const net = hlsVideo.dataset.network ?? '';
+			let refreshed = false;
+
+			const giveUp = () => {
+				hlsVideo.remove();
+				if (onFail) onFail();
+				else if (fallback) fallback.hidden = false;
+			};
+
+			/**
+			 * Čerstvá adresa, když ta z buildu neplatí. Jen jednou za zobrazení
+			 * stránky — víc dotazů by nic nezlepšilo a `/api/` sdílí okno rate
+			 * limitu s vydělávajícím `/go/` (D49).
+			 */
+			const freshSrc = async (): Promise<string | null> => {
+				if (refreshed || !user) return null;
+				refreshed = true;
+				try {
+					const r = await fetch(`/api/stream/${net}/${encodeURIComponent(user)}/`,
+						{ signal: AbortSignal.timeout(8000) });
+					const data = await r.json() as { url?: string; offline?: boolean };
+					return data?.url ?? null;
+				} catch { return null; }
+			};
+
+			/**
+			 * U Cam4 je adresa z buildu vždycky mrtvá, tak se rovnou tahá čerstvá.
+			 *
+			 * Změřeno: 12 h stará adresa vracela 404 u 8 z 8 modelek, a build je
+			 * i za nejlepších okolností až 6 h starý — první pokus by se tedy
+			 * netrefil nikdy a jen by přehrávač zdržel o jedno kolo.
+			 * BongaCams tu schválně není: 40 minut po syncu jich pořád hrálo
+			 * 14 z 25 (D62), takže tam se stará adresa vyplatí zkusit.
+			 */
+			const firstSrc = async (): Promise<string | null> =>
+				(net === 'cam4' ? await freshSrc() : null) ?? hlsVideo.dataset.hls ?? null;
+
+			const played = () => ga('player_auto', {
+				network: net, model: hlsVideo.dataset.model, mode: 'hls',
+			});
+
+			// Safari a iOS: HLS nativně, žádná knihovna.
+			if (hlsVideo.canPlayType('application/vnd.apple.mpegurl')) {
+				const native = (src: string) => {
+					hlsVideo.src = src;
+					hlsVideo.play().catch(() => { /* politika autoplaye, ovládání zůstává */ });
+				};
+				hlsVideo.addEventListener('error', () => {
+					void freshSrc().then((src) => (src ? native(src) : giveUp()));
+				});
+				hlsVideo.addEventListener('playing', played, { once: true });
+				void firstSrc().then((src) => (src ? native(src) : giveUp()));
+			} else {
+				void (async () => {
+					const { default: Hls } = await import('hls.js/light');
+					if (!Hls.isSupported()) return giveUp();
+					// `startLevel: 0` = 240p na začátek (488 kbps); víc si vezme
+					// samo podle velikosti přehrávače. Kdo profil jen prolétne,
+					// nestáhne 3,4 Mbps.
+					const hls = new Hls({ startLevel: 0, capLevelToPlayerSize: true, maxBufferLength: 12 });
+					const retry = () => {
+						void freshSrc().then((src) => {
+							if (!src) return giveUp();
+							hls.loadSource(src);
+						});
+					};
+					hls.on(Hls.Events.MANIFEST_PARSED, () => {
+						// Prázdný playlist projde jako 200 — poznáme ho podle nuly variant.
+						if (!hls.levels.length) return retry();
+						hlsVideo.play().catch(() => { /* ovládání zůstává divákovi */ });
+					});
+					hls.on(Hls.Events.ERROR, (_e: unknown, data: { fatal: boolean }) => { if (data.fatal) retry(); });
+					hlsVideo.addEventListener('playing', played, { once: true });
+					hls.attachMedia(hlsVideo);
+					const src = await firstSrc();
+					if (!src) return giveUp();
+					hls.loadSource(src);
+				})();
+			}
+		}
+
+		const pageVideo = document.querySelector<HTMLVideoElement>('video[data-hls]');
+		if (pageVideo) startHls(pageVideo);
+
+		/**
+		 * **Modelka dovysílala → pustí se někdo jiný ze stejné sítě.**
+		 *
+		 * Kenny 29. 8.: „chci aby fungoval stream když na ně kliknu
+		 * a neobjevovalo se mi tam just ended the stream." Statická stránka to
+		 * sama zaručit nemůže: build je i za nejlepších okolností až 6 h starý
+		 * (D65) a za tu dobu dovysílá většina pokojů — změřeno na 13,9 h starém
+		 * buildu, kdy bylo z 60 karet živých 12. Živý feed to ale ví, a od D67
+		 * z něj `/api/online/{síť}/?cards=N` vrací hotové karty i s adresou
+		 * přehrávače.
+		 *
+		 * Co se NEMĚNÍ: nadpis, drobečky ani JSON-LD. Stránka je pořád o té
+		 * modelce, kvůli které sem člověk přišel — jen v ploše přehrávače běží
+		 * někdo jiný a proužek nad ním to říká nahlas. Přesměrovat by znamenalo
+		 * lhát návštěvníkovi z Bingu i Bingu samotnému.
+		 */
+		document.addEventListener('ecamx:model-offline', (ev) => {
+			const { network } = (ev as CustomEvent<{ network: string; slug: string }>).detail;
+			const frame = document.querySelector<HTMLElement>('[data-player]');
+			// Jméno a slug se čtou z rámce, ne z `define:vars`: ten by ze
+			// skriptu udělal inline kód na každé stránce a CSP by místo dvou
+			// hashů měla tisíce (past 94).
+			const pageName = frame?.dataset.name ?? 'She';
+			const pageSlug = frame?.dataset.slug ?? '';
+			const pageModel = frame?.dataset.model ?? '';
+			const note = document.querySelector<HTMLElement>('[data-substitute-note]');
+			const text = note?.querySelector<HTMLElement>('[data-substitute-text]');
+			const offlineBlock = document.querySelector<HTMLElement>('[data-player-offline]');
+			if (!frame) return;
+
+			// Mrtvý rámec pryč vždycky — i kdyby náhrada nedopadla (D63).
+			for (const el of frame.querySelectorAll('iframe, video, .play-overlay, .player-hit')) el.remove();
+			const giveUpAll = () => { if (offlineBlock) offlineBlock.hidden = false; };
+
+			void (async () => {
+				let cards: Array<{ s: string; n: string; t: string; v: number; e: string }> = [];
+				try {
+					const r = await fetch(`/api/online/${network}/?cards=8`, { signal: AbortSignal.timeout(6000) });
+					cards = (await r.json())?.cards ?? [];
+				} catch { /* feed nedojel — spadne to na hlášku */ }
+
+				/**
+				 * Náhrada musí mít přehrávač — prázdná plocha je horší než
+				 * poctivá hláška.
+				 *
+				 * U BongaCams adresa ve feedu není schválně: mřížka ji
+				 * nepotřebuje a celý feed má 4,4 MB, takže se čerstvá adresa
+				 * bere z `/api/stream/bongacams/{nick}/` pro JEDNU modelku
+				 * (2,8 kB, D62). Právě u téhle sítě si Kenny stěžoval, že klik
+				 * nikam nevede, takže ji vynechat nelze.
+				 */
+				let pick = cards.find((c) => c.e && c.s !== pageSlug);
+				if (!pick && network === 'bongacams') {
+					// Nejvýš tři pokusy: `/api/` sdílí okno rate limitu 40 req/10 s
+					// s vydělávajícím `/go/` (D49), a když nevysílá ani jedna
+					// z prvních tří nejsledovanějších, je čas přiznat barvu.
+					for (const c of cards.filter((x) => x.s !== pageSlug).slice(0, 3)) {
+						try {
+							const r = await fetch(`/api/stream/${network}/${encodeURIComponent(c.n)}/`,
+								{ signal: AbortSignal.timeout(6000) });
+							const u = (await r.json())?.url;
+							if (u) { pick = { ...c, e: `hls:${u}` }; break; }
+						} catch { /* další modelka */ }
+					}
+				}
+				if (!pick) return giveUpAll();
+
+				const done = () => {
+					if (text) text.textContent =
+						`${pageName} just ended — now playing ${pick.n}.`;
+					if (note) note.hidden = false;
+					// Na stránce, která se stavěla jako offline, leží přes plochu
+					// hláška „isn't streaming right now" — přes běžící stream by
+					// to byl nesmysl.
+					document.querySelector<HTMLElement>('[data-offline-msg]')?.setAttribute('hidden', '');
+					ga('player_substitute', { network, model: pageModel || pick.s });
+				};
+
+				if (pick.e.startsWith('hls:')) {
+					const v = document.createElement('video');
+					v.className = 'absolute inset-0 h-full w-full bg-black object-contain';
+					v.dataset.hls = pick.e.slice(4);
+					v.dataset.nick = pick.n;
+					v.dataset.network = network;
+					v.muted = true; v.autoplay = true; v.playsInline = true; v.controls = true;
+					v.preload = 'none';
+					frame.appendChild(v);
+					startHls(v, giveUpAll);
+					done();
+				} else {
+					const el = document.createElement('iframe');
+					el.src = pick.e;
+					el.title = `${pick.n} live webcam`;
+					el.allowFullscreen = true;
+					el.referrerPolicy = 'strict-origin-when-cross-origin';
+					el.setAttribute('allow', 'autoplay; fullscreen');
+					frame.appendChild(el);
+					done();
+				}
+			})();
+		});
+
+		// U sítí v AUTOPLAY_SAFE se iframe renderuje ze serveru a žádný klik
+		// není — bez tohohle by u čtyř ze šesti sítí spuštění přehrávače
+		// v datech vůbec nebylo. Měří se `load`, ne přítomnost elementu:
+		// zajímá nás, že se stream opravdu načetl.
+		const autoFrame = document.querySelector<HTMLElement>('[data-player]:not([data-embed]) iframe');
+		if (autoFrame) {
+			const host = autoFrame.closest<HTMLElement>('[data-player]');
+			autoFrame.addEventListener('load', () => {
+				ga('player_auto', {
+					network: host?.dataset.network,
+					model: host?.dataset.model,
+					mode: 'auto',
+				});
+			}, { once: true });
+		}
+	</script>
+	{/* Lepivý pásek. Místo pro něj je rezervované v CSS (`.sticky-cta`), takže
+	    jeho zobrazení nic neposune — CLS musí zůstat 0 (past 52). Odkrývá ho
+	    skript, až přehrávač vyjede z obrazovky. */}
+	<a
+		class="sticky-cta"
+		data-sticky-cta
+		href={ctaSticky}
+		rel="nofollow sponsored noopener"
+		target={outTarget}
+	>
+		{model.online
+			? `Chat with ${model.displayName} on ${label} →`
+			: `Open ${model.displayName}'s profile on ${label} →`}
+	</a>
+</Layout>

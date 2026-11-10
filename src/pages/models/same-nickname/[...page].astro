@@ -1,0 +1,122 @@
+---
+/**
+ * Adresář nicků, které vysílají na víc než jedné síti.
+ *
+ * **Poptávka po tomhle je nula** („same cam girl different sites" 0/měs) a je
+ * to tak schválně — stránka tu není kvůli hledanosti, ale kvůli třem věcem:
+ *
+ * 1. **Druhá crawl cesta k 2 075 stránkám modelek**, a to z NE-`/live/` stránky.
+ *    Guard sirotků v `scripts/check-links.ts` počítá jen odkazy z jiných
+ *    sekcí — odkaz z jednoho profilu na druhý se mu nepočítá, a právem.
+ * 2. **Jediné místo, kde se pravidlo vysvětlí celé**, takže ho blok na stránce
+ *    modelky nemusí opakovat 2 075×; opakovaný disclaimer by sám sráželjinak
+ *    unikátnost, kterou má ten blok vyrobit.
+ * 3. Je to stránka, na které stojí věta „nejsme jen další agregátor" —
+ *    tohle nikdo jiný nemá, protože k tomu potřebuje všech 7 sítí v jednom
+ *    katalogu.
+ *
+ * Jen text, žádné náhledy — stejný důvod jako u abecedního adresáře (D33).
+ */
+import Layout from '../../../layouts/Layout.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import Pagination from '../../../components/Pagination.astro';
+import { MODEL_PAGES, NETWORK_LABELS, countryName, canonicalCountry, pageWindow } from '../../../lib/data';
+import { crossNetworkNicks } from '../../../lib/cross-network';
+import { DIRECTORY_SIZE, pageCount } from '../../../lib/paging';
+import { SITE_NAME, fmt, approx } from '../../../lib/seo';
+
+const NICKS = crossNetworkNicks(MODEL_PAGES);
+
+export function getStaticPaths() {
+	const nicks = crossNetworkNicks(MODEL_PAGES);
+	const pages = pageCount(nicks.length, DIRECTORY_SIZE);
+	const out = [];
+	for (let n = 1; n <= pages; n++) {
+		// `undefined` = stránka 1 na `/models/same-nickname/`; rest parametr by
+		// jinak vyrobil `/1/` jako druhou URL s týmž obsahem.
+		out.push({ params: { page: n === 1 ? undefined : String(n) }, props: { n } });
+	}
+	return out;
+}
+
+const { n } = Astro.props;
+const win = pageWindow(NICKS, n, DIRECTORY_SIZE);
+const base = '/models/same-nickname/';
+const pageCountTotal = NICKS.reduce((a, x) => a + x.entries.length, 0);
+
+const title = win.page > 1
+	? `Same Nickname on Two Cam Sites – Page ${win.page} | ${SITE_NAME}`
+	: `Same Nickname on Two Cam Sites – ${approx(NICKS.length)} Names | ${SITE_NAME}`;
+---
+<Layout
+	title={title}
+	description={`${approx(NICKS.length)} nicknames broadcasting on more than one of the seven cam sites we track. We match names and public profile fields — we don't verify identity.`}
+	noindex={win.page > 1}
+>
+	<Breadcrumbs items={[
+		{ label: 'All models', href: '/models/' },
+		...(win.page > 1
+			? [{ label: 'Same nickname', href: base }, { label: `Page ${win.page}` }]
+			: [{ label: 'Same nickname' }]),
+	]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">The same nickname on more than one cam site</h1>
+
+	{win.page === 1 && (
+		<div class="mt-3 max-w-3xl space-y-3 text-sm leading-relaxed text-ink-200">
+			<p>
+				We track seven cam sites at once, which lets us notice something none of
+				those sites will tell you: <strong>{fmt(NICKS.length)} nicknames</strong> are
+				broadcasting under the same name on two or more of them, across
+				{' '}{fmt(pageCountTotal)} profiles in our catalogue. Performers do this on
+				purpose — a slow night on one site is a busy night on another.
+			</p>
+			<p>
+				<strong>A shared nickname is not proof of a shared person.</strong> Nicknames
+				are not reserved across cam sites, so two people can pick the same one. We
+				compare what the sites publish — country, age, gender — and each profile page
+				says exactly how much that comparison supports: whether both sites agree on
+				something, whether there is nothing to compare, or whether the two profiles
+				contradict each other.
+			</p>
+			<p>
+				One thing that looks like a contradiction but is not: the two sites often list
+				<strong> different countries</strong>. We measured it — 63&nbsp;% of those pairs
+				still give the same age, so it is usually one performer setting a different
+				location per site, not two people.
+			</p>
+		</div>
+	)}
+
+	<p class="mt-4 text-sm text-ink-400">
+		{fmt(win.from)}–{fmt(win.to)} of {fmt(win.total)} nicknames.
+		<a href="/models/" class="ml-1 text-accent underline hover:text-white">Full A–Z directory →</a>
+	</p>
+
+	<ul class="mt-6 space-y-2 text-sm">
+		{win.items.map((entry) => (
+			<li class="truncate">
+				{entry.entries.map((m, i) => (
+					<>
+						{i > 0 && <span class="text-ink-600"> · </span>}
+						<a href={`/live/${m.page}/`} class="text-ink-200 hover:text-white">
+							{m.displayName}<span class="text-ink-500"> on {NETWORK_LABELS[m.network]}</span>
+						</a>
+					</>
+				))}
+				{(() => {
+					const cc = entry.entries.map((m) => canonicalCountry(m.country)).filter(Boolean);
+					return cc.length >= 2 && new Set(cc).size === 1
+						? <span class="text-ink-600"> · both say {countryName(cc[0]!)}</span>
+						: null;
+				})()}
+			</li>
+		))}
+	</ul>
+
+	<Pagination
+		base={base} page={win.page} pages={win.pages}
+		from={win.from} to={win.to} total={win.total}
+		label="nicknames on more than one site"
+	/>
+</Layout>

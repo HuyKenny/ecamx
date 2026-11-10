@@ -1,0 +1,73 @@
+---
+/**
+ * Hubená šablona pro DRUHOU a další stránku mřížky (`/cams/bbw/2/`).
+ *
+ * Záměrně tu NENÍ SEO copy, JSON-LD ani křížové odkazy ze stránky 1 — to by
+ * byl duplicitní obsah na 425 URL. Stránka 2+ má jednu úlohu: dostat
+ * návštěvníka i crawler k modelkám, které se na stránku 1 nevešly.
+ *
+ * `noindex, follow`: obsah se mění každé 2 h a „bbw cams page 7" nikdo nehledá,
+ * přitom už dnes nabízíme k indexaci 8 122 URL. Odkazy z těchto stránek se
+ * přesto prolezou — a trvalou crawl cestou ke stránkám modelek je adresář
+ * `/models/`, ne stránkování (viz docs/DECISIONS.md D32).
+ */
+import GridFilters from './GridFilters.astro';
+import Layout from '../layouts/Layout.astro';
+import ModelCard from '../components/ModelCard.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import Pagination from '../components/Pagination.astro';
+import { fmt, SITE_URL } from '../lib/seo';
+import type { Model, PageWindow } from '../lib/data';
+
+interface Crumb { label: string; href?: string }
+
+interface Props {
+	/** Nadpis stránky 1 bez čísla — „Live BBW Cams". */
+	heading: string;
+	/** URL stránky 1 s koncovým lomítkem. */
+	base: string;
+	/** Prefix stránek 2+, když se liší od `base` (homepage: `/page/`). */
+	pageBase?: string;
+	win: PageWindow;
+	crumbs: Crumb[];
+	/** Kolik karet je vidět; zbytek je rezerva pro dopočet offline (viz Layout). */
+	visible: number;
+	/** Co se počítá ve „Showing 61–120 of …". */
+	countLabel?: string;
+}
+const { heading, base, pageBase = base, win, crumbs, visible, countLabel = 'live cams' } = Astro.props;
+
+const title = `${heading} – Page ${win.page} of ${win.pages} | eCamx`;
+const description =
+	`Page ${win.page} of ${heading.toLowerCase()} — models ${fmt(win.from)} to ${fmt(win.to)} of ${fmt(win.total)}.`;
+
+const models: Model[] = win.items;
+const prev = win.page > 2 ? `${pageBase}${win.page - 1}/` : win.page === 2 ? base : null;
+const next = win.page < win.pages ? `${pageBase}${win.page + 1}/` : null;
+---
+<Layout title={title} description={description} noindex>
+	{/* Google rel=prev/next ignoruje, Bing ne — a do Bing WM Tools vidíme. */}
+	{prev && <link rel="prev" href={new URL(prev, SITE_URL).toString()} slot="head" />}
+	{next && <link rel="next" href={new URL(next, SITE_URL).toString()} slot="head" />}
+
+	<Breadcrumbs items={[...crumbs, { label: `Page ${win.page}` }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{heading}</h1>
+	<p class="mt-2 text-ink-400">
+		Page {win.page} of {win.pages} · showing {fmt(win.from)}–{fmt(win.to)} of {fmt(win.total)} {countLabel}.
+		<a href={base} class="ml-1 text-accent underline hover:text-white">Back to page 1 →</a>
+	</p>
+
+	<GridFilters models={models} />
+	<div class="card-grid mt-6" data-grid data-visible={visible}>
+		{models.map((m, i) => (
+			<ModelCard
+				model={m}
+				eager={i < 10}
+				reserve={i >= visible}
+			/>
+		))}
+	</div>
+
+	<Pagination base={base} pageBase={pageBase} page={win.page} pages={win.pages} from={win.from} to={win.to} total={win.total} label={countLabel} />
+</Layout>

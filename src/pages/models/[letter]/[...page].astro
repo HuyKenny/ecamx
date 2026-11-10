@@ -1,0 +1,69 @@
+---
+/**
+ * Jedno písmeno adresáře, po 250 odkazech na stránku. **Jen text, žádné
+ * náhledy** — cílem je dát každé stránce modelky trvalý interní odkaz, ne
+ * postavit další mřížku. 250 karet by byla čtvrtmegabajtová stránka, 250
+ * odkazů je ~20 kB.
+ *
+ * Náhled by u archivní modelky navíc lhal (je offline) a Cam4 má v URL
+ * podepsanou expiraci.
+ */
+import Layout from '../../../layouts/Layout.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import Pagination from '../../../components/Pagination.astro';
+import { MODEL_LETTERS, MODELS_BY_LETTER, NETWORK_LABELS, pageWindow } from '../../../lib/data';
+import { DIRECTORY_SIZE, pageCount } from '../../../lib/paging';
+import { SITE_NAME, fmt } from '../../../lib/seo';
+
+export function getStaticPaths() {
+	const out = [];
+	for (const letter of MODEL_LETTERS) {
+		const pages = pageCount(MODELS_BY_LETTER.get(letter)!.length, DIRECTORY_SIZE);
+		for (let n = 1; n <= pages; n++) {
+			// `undefined` = stránka 1 na `/models/a/`; rest parametr jinak vyrobí
+			// `/models/a/1/` jako druhou URL s týmž obsahem.
+			out.push({ params: { letter, page: n === 1 ? undefined : String(n) }, props: { letter, n } });
+		}
+	}
+	return out;
+}
+
+const { letter, n } = Astro.props;
+const win = pageWindow(MODELS_BY_LETTER.get(letter)!, n, DIRECTORY_SIZE);
+const upper = letter.toUpperCase();
+const base = `/models/${letter}/`;
+
+const title = win.page > 1
+	? `Cam Models Starting With ${upper} – Page ${win.page} | ${SITE_NAME}`
+	: `Cam Models Starting With ${upper} – ${fmt(win.total)} Profiles | ${SITE_NAME}`;
+---
+<Layout
+	title={title}
+	description={`All ${fmt(win.total)} cam models on eCamx whose name starts with ${upper}. Free live webcam profiles, no signup.`}
+>
+	<Breadcrumbs items={[
+		{ label: 'All models', href: '/models/' },
+		...(win.page > 1 ? [{ label: upper, href: base }, { label: `Page ${win.page}` }] : [{ label: upper }]),
+	]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Cam Models Starting With {upper}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{fmt(win.from)}–{fmt(win.to)} of {fmt(win.total)} profiles.
+		<a href="/models/" class="ml-1 text-accent underline hover:text-white">All letters →</a>
+	</p>
+
+	<ul class="mt-6 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-3 lg:grid-cols-4">
+		{win.items.map((m) => (
+			<li class="truncate">
+				<a href={`/live/${m.page}/`} class="text-ink-200 hover:text-white">{m.displayName}</a>
+				<span class="text-ink-600"> · {NETWORK_LABELS[m.network]}</span>
+			</li>
+		))}
+	</ul>
+
+	<Pagination
+		base={base} page={win.page} pages={win.pages}
+		from={win.from} to={win.to} total={win.total}
+		label={`profiles under ${upper}`}
+	/>
+</Layout>

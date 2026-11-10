@@ -1,0 +1,115 @@
+---
+/**
+ * Stránka pro modelky.
+ *
+ * Dva důvody, proč existuje, a oba jsou skutečné:
+ *
+ * 1. **Ventil.** Publikujeme o reálných lidech víc než jen výpis: kde ještě
+ *    vysílají a (od konce srpna) kdy je vídáme online. To druhé je informace
+ *    o rutině konkrétní osoby a bez možnosti odhlášení by to bylo přes čáru.
+ *    Opt-out se dělá kódem v room subjectu, takže je **self-service a ověřitelný**
+ *    — do subjectu svého pokoje může psát jen ona.
+ * 2. **Odkazy.** Odkazy jsou strop tohohle webu (DR 13) a nekupují se. Když si
+ *    odznak dá do bia dvě stě modelek, je to dvě stě odkazů z cizích domén,
+ *    které si nikdo neobjednal.
+ *
+ * Stránka **nic neslibuje**, co nemáme: žádné „propagujeme tě", žádné placené
+ * pozice. Popisuje, co o ní publikujeme a odkud to máme.
+ */
+import Layout from '../layouts/Layout.astro';
+import Breadcrumbs from '../components/Breadcrumbs.astro';
+import { FACETS, MODEL_PAGES } from '../lib/data';
+import { SITE_NAME, SITE_URL, approx } from '../lib/seo';
+
+const networks = FACETS.networks.length;
+const profiles = MODEL_PAGES.length;
+const title = `For cam models – Your eCamx page, badge and opt-out | ${SITE_NAME}`;
+const description = `What eCamx publishes about you, how to get a free link back to your `
+	+ `profile page, and how to remove yourself in one line — no email needed.`;
+---
+<Layout title={title} description={description}>
+	<Breadcrumbs items={[{ label: 'For models' }]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">For cam models</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		eCamx lists {approx(profiles)} performers from {networks} cam sites in one place.
+		If you broadcast on any of them, you already have a page here — you did not sign up
+		for it and you can remove it. This page explains both.
+	</p>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="what-h">
+		<h2 id="what-h" class="mb-3 text-xl font-bold">What we publish about you</h2>
+		<ul class="space-y-2 text-sm leading-relaxed text-ink-200">
+			<li><strong>What the site's own feed says</strong> — your nickname, the room
+			subject you set, your tags, and whatever else that platform makes public
+			(age, country, HD flag; each site publishes a different subset).</li>
+			<li><strong>Our own observations</strong> — the days we saw you live, the highest
+			viewer count we recorded, and the two-hour windows in which we usually find you
+			online. Nothing about who you are; only when your room was open.</li>
+			<li><strong>The same nickname on another site</strong>, when we find one. We say
+			it is a <em>name</em> match and never claim it is the same person — nicknames are
+			not reserved across cam sites.</li>
+			<li><strong>Nothing else.</strong> No recordings, no screenshots we keep, no
+			private details, and no data from anywhere except the sites' own public feeds.</li>
+		</ul>
+		<p class="mt-3 text-sm text-ink-400">
+			Thumbnails are hot-linked from the cam site's own CDN — we do not copy or store
+			images.
+		</p>
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="out-h">
+		<h2 id="out-h" class="mb-3 text-xl font-bold">Removing yourself — one line, no email</h2>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			Put this anywhere in your <strong>room subject / status</strong> on the cam site:
+		</p>
+		<p class="mb-3 rounded border border-ink-800 bg-ink-900 px-4 py-3 font-mono text-sm text-white">
+			ecamx-out
+		</p>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			We read room subjects every two hours, so your profile disappears at the next
+			refresh — from the listings, from the search index and from the schedules. You can
+			take the line out again afterwards; nothing is kept in the meantime. We ask for it
+			this way on purpose: <strong>only you can edit your own room subject</strong>, so
+			nobody can remove a competitor and you do not have to prove anything to us.
+		</p>
+		<p class="text-sm leading-relaxed text-ink-200">
+			<strong>XLoveCam is the exception.</strong> Its feed does not include room subjects
+			at all, so the code cannot reach us. Write to
+			{' '}<a href="mailto:info@ecamx.com" class="text-accent underline">info@ecamx.com</a>
+			{' '}from any address and say which profile — we will not ask you to prove it.
+		</p>
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="badge-h">
+		<h2 id="badge-h" class="mb-3 text-xl font-bold">If you would rather be found</h2>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			Your eCamx page works as one link that does not die when you switch sites: it shows
+			whichever of your rooms is live right now, so a fan who follows you here sees which
+			site to open — even on a day you switched. Some performers put it in a bio next to
+			their socials.
+			It is free, there is nothing to claim, and we get nothing from it beyond the visit.
+		</p>
+		<p class="mb-3 text-sm leading-relaxed text-ink-200">
+			Your page address is <code>{SITE_URL}/live/your-nickname/</code> — search your name
+			in the {' '}<a href="/finder/" class="text-accent underline">finder</a> to get the exact one.
+		</p>
+		<p class="mb-2 text-sm text-ink-400">Badge for your bio (copy and paste):</p>
+		<pre class="overflow-x-auto rounded border border-ink-800 bg-ink-900 p-4 text-xs text-ink-200"><code>&lt;a href="{SITE_URL}/live/your-nickname/"&gt;&lt;img
+  src="{SITE_URL}/badge-ecamx.svg" alt="Watch me live on eCamx" width="160" height="32"&gt;&lt;/a&gt;</code></pre>
+		<p class="mt-3">
+			<img src="/badge-ecamx.svg" alt="Watch me live on eCamx" width="160" height="32" />
+		</p>
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="fair-h">
+		<h2 id="fair-h" class="mb-3 text-xl font-bold">The part most directories leave out</h2>
+		<p class="text-sm leading-relaxed text-ink-200">
+			We earn a commission when someone we sent to a cam site buys tokens there. That is
+			the whole business model, and it means our interest is in sending you real viewers
+			rather than in keeping them here. It also means we have no reason to rank you by
+			anything other than what the data says — there is nothing to buy on this site and
+			no paid placement to sell.
+		</p>
+	</section>
+</Layout>

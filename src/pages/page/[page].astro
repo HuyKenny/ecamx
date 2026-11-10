@@ -1,0 +1,27 @@
+---
+/**
+ * Homepage, stránka 2+ (`/page/2/`). Homepage sama hlásila 8 168 živých
+ * modelek a ukazovala 30 karet — tohle je zbytek katalogu.
+ */
+import GridPage from '../../components/GridPage.astro';
+import { allLive, gridWindow } from '../../lib/data';
+import { HOME_GRID as GRID, gridPageCount } from '../../lib/paging';
+
+export function getStaticPaths() {
+	const pages = gridPageCount(allLive().length, GRID);
+	const out = [];
+	for (let n = 2; n <= pages; n++) out.push({ params: { page: String(n) } });
+	return out;
+}
+
+const win = gridWindow(allLive(), Number(Astro.params.page), GRID);
+---
+<GridPage
+	heading="Live Sex Cams"
+	base="/"
+	pageBase="/page/"
+	win={win}
+	visible={GRID.visible}
+	crumbs={[{ label: 'All live cams', href: '/' }]}
+	countLabel="live cams"
+/>
