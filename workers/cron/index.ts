@@ -14,6 +14,7 @@
  * | cron (UTC)      | úloha        | nahrazuje (Malina)                    |
  * |-----------------|--------------|---------------------------------------|
  * | `*​/30 * * * *`  | deploy-watch | `bin/ecamx-deploy-watch.py` (záloha) |
+ * | `*​/5 * * * *`   | live-snapshot | — (nové 17. 11. 2026, D82: živý stav všech sítí do KV) |
  *
  * **Pingy do vyhledávačů z Cloudflare nejdou.** Bing Webmaster API vrací
  * `ErrorCode 17 ThrottleIP` a api.indexnow.org `429 TooManyRequests` —
@@ -32,11 +33,13 @@
 import { run as deployWatch } from "./deploy-watch.ts";
 import { run as indexnow } from "./indexnow.ts";
 import { run as demand } from "./demand.ts";
+import { run as liveSnapshot } from "./live.ts";
 import type { Env } from "./shared.ts";
 
 /** Úlohy, které Worker umí. Klíč je přesný výraz z `triggers.crons`. */
 const TASKS: Record<string, (env: Env) => Promise<unknown>> = {
 	"*/30 * * * *": (env) => deployWatch(env),
+	"*/5 * * * *": (env) => liveSnapshot(env),
 };
 
 /** Ruční spuštění podle jména (pro `/run?task=`). */
@@ -46,6 +49,7 @@ const BY_NAME: Record<string, (env: Env, dry: boolean, limit?: number) => Promis
 	"bing": (env, dry, limit) => indexnow(env, "bing", Math.min(limit ?? 100, 100), dry),
 	"indexnow": (env, dry, limit) => indexnow(env, "indexnow", Math.min(limit ?? 2000, 2000), dry),
 	"demand": (env, dry) => demand(env, dry),
+	"live-snapshot": (env, dry) => liveSnapshot(env, dry),
 };
 
 export default {

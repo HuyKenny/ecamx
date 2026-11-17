@@ -23,7 +23,8 @@
   // jinak se spustí a v logu bude hlasitá chyba `unknown-cron`.
   "triggers": {
     "crons": [
-      "*/30 * * * *" // deploy-watch
+      "*/30 * * * *", // deploy-watch
+      "*/5 * * * *" // live-snapshot (D82)
       // IndexNow, Bing `SubmitUrlBatch` ani měření poptávky tu NEJSOU:
       // z Cloudflare je vyhledávače škrtí (Bing ThrottleIP, api.indexnow.org
       // 429 TooManyRequests — ověřeno 28. 9. 2026, z Maliny týž požadavek 200).
@@ -35,7 +36,7 @@
   // (`ecamx-registry`). ID **není tajemství** — bez API tokenu s ním nikdo nic
   // neudělá, a v tomhle workspace je běžně v konfiguraci (pokector, qrflowy,
   // hlidamo). Worker smí číst a zapisovat VÝHRADNĚ tyhle klíče:
-  // `deploy-watch-state`, `indexnow-state`, `demand` — registry ani
+  // `deploy-watch-state`, `indexnow-state`, `demand`, `live-snapshot` (D82) — registry ani
   // `registry-gone` nesmí sáhnout (jsou to megabajty, isolate má 128 MB).
   "kv_namespaces": [{ "binding": "KV", "id": "158984aaec6c47eca3e3e6ea29e3cf17" }],
 
@@ -46,6 +47,10 @@
   //   BING_WEBMASTER_API_KEY  master klíč portfolia (SubmitUrlBatch)
   //   GSC_SERVICE_ACCOUNT     celý JSON service accountu (~2,4 kB)
   //   MANUAL_TOKEN        náhodný řetězec pro POST /run
+  //   + klíče sítí pro live-snapshot (D82): CHATURBATE_AFFILIATE, CAMSODA_AFFILIATE,
+  //     CAM4_SID, AMATEUR_API_KEY, BONGACAMS_USER_ID, XLOVE_AFFILIATE_ID, XLOVE_API_KEY,
+  //     LIVEJASMIN_USERID, LIVEJASMIN_API_KEY, CRAKREVENUE_TOKEN, CRAKREVENUE_API_KEY,
+  //     CRAKREVENUE_AFF_ID (+ CHATURBATE_TOUR/TRACK kvůli importu affiliate.ts)
 
   "observability": { "enabled": true }
 }

@@ -16,8 +16,10 @@
 
   "assets": { "binding": "ASSETS" },
 
-  // Registry modelek NEMÁ binding — čte/zapisuje se jen při buildu přes KV REST
-  // API (viz docs/DECISIONS.md D3), takže Worker k němu za běhu nepotřebuje přístup.
+  // Binding jen kvůli ŽIVÉMU SNÍMKU (`live-snapshot`, D82) — píše ho cron
+  // Worker á 5 min, web ho čte (`src/lib/live-snapshot.ts`). Registry a
+  // `registry-gone` web dál NEČTE (megabajty, D3) — ty zná jen sync přes REST.
+  "kv_namespaces": [{ "binding": "LIVE_KV", "id": "158984aaec6c47eca3e3e6ea29e3cf17" }],
 
   "observability": { "enabled": true }
 }
