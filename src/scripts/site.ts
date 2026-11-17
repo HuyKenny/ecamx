@@ -337,10 +337,12 @@ if (canPreview) {
 // ── mobilní panel kanálů ───────────────────────────────────────────────────
 {
 	const root = document.documentElement;
-	document.querySelector('[data-rail-toggle]')?.addEventListener('click', () => {
-		const open = root.classList.toggle('rail-open');
-		document.querySelector('[data-rail-toggle]')?.setAttribute('aria-expanded', String(open));
-	});
+	for (const btn of document.querySelectorAll('[data-rail-toggle]')) {
+		btn.addEventListener('click', () => {
+			const open = root.classList.toggle('rail-open');
+			document.querySelector('.topbar [data-rail-toggle]')?.setAttribute('aria-expanded', String(open));
+		});
+	}
 	// Klik mimo panel (do ztmavené plochy) ho zavře.
 	document.addEventListener('click', (e) => {
 		if (!root.classList.contains('rail-open')) return;

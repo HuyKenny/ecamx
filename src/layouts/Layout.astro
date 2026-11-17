@@ -328,6 +328,9 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 
 	<div class="shell">
 		<aside class="rail" id="rail" aria-label="Live channels">
+			<button type="button" class="rail-close" data-rail-toggle aria-label="Close menu">
+				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+			</button>
 			<div class="rail-h"><span>Live now</span><a href="/">See all</a></div>
 			{/* Sloty mají pevnou výšku; plní je `live.ts` ze snímku (D82). */}
 			<nav class="rail-list" data-rail data-n={RAIL_N} aria-label="Most watched live now">

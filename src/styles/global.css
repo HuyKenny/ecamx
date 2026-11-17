@@ -749,3 +749,18 @@ html.has-follows .watch-list { display: block; }
 	.card .net-dot { display: none; }
 	.card-meta { min-height: 4.1rem; }
 }
+
+/* Mobilní panel: přes celou výšku, nad lištami (nad ní je i věková lišta,
+   takže pevný `top` by první kanál schoval). Zavírá se křížkem, klikem mimo
+   nebo Escape. */
+.rail-close { display: none; }
+@media (max-width: 1023px) {
+	.rail { top: 0; z-index: 70; width: min(20rem, 86vw); padding-top: .5rem; }
+	.rail-close {
+		display: inline-grid; place-items: center; margin: 0 0 .25rem auto;
+		width: 2.25rem; height: 2.25rem; border-radius: .6rem; color: var(--color-ink-200);
+	}
+	.rail-close:hover { background: var(--color-ink-800); color: #fff; }
+	.rail-close svg { width: 1.25rem; height: 1.25rem; }
+	html.rail-open { overflow: hidden; }
+}
