@@ -206,6 +206,7 @@ const CSP = [
 	`frame-src ${join1(frameHosts)}`,
 	`connect-src 'self' ${join1(EXTRA.connect, mediaHosts, EXTRA.media)}`,
 	"font-src 'self'",
+	"manifest-src 'self'",
 	"object-src 'none'",
 	"base-uri 'none'",
 	"form-action 'none'",
