@@ -10,8 +10,8 @@
  * nechat být (výpadek nesmí zhasnout mřížku, chyba 1 z plánu).
  */
 import type { APIRoute } from 'astro';
-import { readSnapshot, isFresh } from '../../../lib/live-snapshot';
-import { FACET_RE, pick } from '../../../lib/live-grid';
+import { readSnapshot, isFresh, snapIndex } from '../../../lib/live-snapshot';
+import { ALLOWED_FACETS, NETWORK_IDS, roundN, pick } from '../../../lib/live-grid';
 
 export const prerender = false;
 
@@ -31,11 +31,11 @@ export const GET: APIRoute = async ({ request }) => {
 	const wants: Array<[string, number]> = [];
 	for (const part of (url.searchParams.get('q') ?? 'all~60').split(',').slice(0, 6)) {
 		const [key, n] = part.split('~');
-		if (!key || !FACET_RE.test(key)) continue;
-		wants.push([key, Math.min(120, Math.max(1, parseInt(n ?? '60', 10) || 60))]);
+		if (!key || !ALLOWED_FACETS.has(key)) continue;
+		wants.push([key, roundN(Math.min(120, Math.max(1, parseInt(n ?? '60', 10) || 60)))]);
 	}
 	if (!wants.length) return new Response('{"error":"bad q"}', { status: 400, headers: HEADERS });
-	const sites = new Set((url.searchParams.get('s') ?? '').split(',').filter((x) => NET_RE.test(x)));
+	const sites = new Set((url.searchParams.get('s') ?? '').split(',').filter((x) => NET_RE.test(x) && NETWORK_IDS.has(x)));
 	const xRaw = url.searchParams.get('x') ?? '';
 	const exclude = KEY_RE.test(xRaw) ? xRaw : undefined;
 
@@ -60,8 +60,14 @@ export const GET: APIRoute = async ({ request }) => {
 	const failed = Object.keys(snap.nets).filter((n) => !isFresh(snap, n, now));
 	const g: Record<string, unknown> = {};
 	const total: Record<string, number> = {};
+	// Výběr bez filtru a bez výjimky je pro všechny stejný → počítá se jednou
+	// na snímek (D85), ne při každém requestu (prokládání řadí ~6k záznamů).
+	const memo = snapIndex(snap).picks as Map<string, ReturnType<typeof pick>>;
 	for (const [key, n] of wants) {
-		const r = pick(snap.m, key, n, { sites, exclude });
+		const plain = !sites.size && !exclude;
+		const mk = `${key}~${n}`;
+		const r = (plain && memo.get(mk)) || pick(snap.m, key, n, { sites, exclude });
+		if (plain && !memo.has(mk)) memo.set(mk, r);
 		g[key] = r.cards;
 		total[key] = r.total;
 	}

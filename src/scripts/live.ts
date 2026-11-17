@@ -97,25 +97,30 @@ function fillGrid(grid: HTMLElement, data: GridResp): boolean {
 function fillRail(data: GridResp): void {
 	if (!rail || !data.fresh) return;
 	const list = data.g.rail ?? [];
-	const slots = Array.from(rail.querySelectorAll<HTMLAnchorElement>('.rail-item'));
-	slots.forEach((a, i) => {
+	// Sloty jsou v HTML `<span>` (prázdné odkazy na `/` by v každé stránce
+	// tvořily 10 bezobsažných odkazů, D85); tady se nahradí skutečnými.
+	const slots = Array.from(rail.querySelectorAll<HTMLElement>('.rail-item'));
+	slots.forEach((slot, i) => {
 		const c = list[i];
-		if (!c) { a.hidden = true; return; }
-		a.hidden = false;
+		if (!c) { slot.hidden = true; return; }
+		const a = document.createElement('a');
+		a.className = 'rail-item';
 		a.href = `/live/${encodeURIComponent(c.p)}/`;
-		const img = a.querySelector('img') ?? Object.assign(document.createElement('img'), { alt: '', width: 32, height: 32, loading: 'lazy', decoding: 'async', referrerPolicy: 'no-referrer' });
-		img.src = c.t;
-		a.querySelector('.rail-ph')?.replaceWith(img);
-		const name = a.querySelector<HTMLElement>('.rail-name');
-		if (name) {
-			name.textContent = c.u;
-			const sub = document.createElement('span');
-			sub.className = 'rail-sub';
-			sub.textContent = NETWORK_LABELS[c.n] ?? c.n;
-			name.appendChild(sub);
-		}
-		const v = a.querySelector<HTMLElement>('.rail-v');
-		if (v) v.textContent = c.v ? viewersText(c.v) : '';
+		const img = Object.assign(document.createElement('img'), {
+			alt: '', width: 32, height: 32, loading: 'lazy', decoding: 'async', referrerPolicy: 'no-referrer', src: c.t,
+		});
+		const name = document.createElement('span');
+		name.className = 'rail-name';
+		name.textContent = c.u;
+		const sub = document.createElement('span');
+		sub.className = 'rail-sub';
+		sub.textContent = NETWORK_LABELS[c.n] ?? c.n;
+		name.appendChild(sub);
+		const v = document.createElement('span');
+		v.className = 'rail-v';
+		v.textContent = c.v ? viewersText(c.v) : '';
+		a.appendChild(img); a.appendChild(name); a.appendChild(v);
+		slot.replaceWith(a);
 	});
 }
 

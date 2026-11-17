@@ -16,10 +16,10 @@
 
   "assets": { "binding": "ASSETS" },
 
-  // Binding jen kvůli ŽIVÉMU SNÍMKU (`live-snapshot`, D82) — píše ho cron
+  // Binding jen na namespace `ecamx-live` se ŽIVÝM SNÍMKEM (D82, od D85 oddělený od registry) — píše ho cron
   // Worker á 5 min, web ho čte (`src/lib/live-snapshot.ts`). Registry a
   // `registry-gone` web dál NEČTE (megabajty, D3) — ty zná jen sync přes REST.
-  "kv_namespaces": [{ "binding": "LIVE_KV", "id": "158984aaec6c47eca3e3e6ea29e3cf17" }],
+  "kv_namespaces": [{ "binding": "LIVE_KV", "id": "0c5a6fee4bcf4a45916324a697912c24" }],
 
   "observability": { "enabled": true }
 }

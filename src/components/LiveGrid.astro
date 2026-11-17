@@ -49,7 +49,10 @@ const pad = Math.max(0, n - shown.length);
 	aria-label={label}
 	aria-live="off"
 >
-	{shown.map((c, i) => <Fragment set:html={cardHtml(c, { eager: i < eager, priority: i === 0 && eager > 0 })} />)}
+	{/* Statické karty bez `eager`/`fetchpriority` (D85): klient je stejně
+	    vymění za živé, takže by se 8 obrázků stahovalo zbytečně před LCP.
+	    Prioritu dostanou až živé karty (`live.ts`, `data-eager`). */}
+	{shown.map((c) => <Fragment set:html={cardHtml(c)} />)}
 	{Array.from({ length: pad }, () => (
 		<article class="card is-stale" aria-hidden="true"><div class="thumb-wrap"></div><div class="card-meta"></div></article>
 	))}

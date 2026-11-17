@@ -137,17 +137,16 @@ function toRec(m: Omit<Model, "network">, net: NetworkId, pages: PageIndex | nul
 	if (m.toy) r.ty = 1;
 	if (m.status === "private") r.pr = 1;
 	if (m.embedRef) r.e = m.embedRef;
-	if (m.subject) r.j = m.subject.slice(0, 140);
+	if (m.subject) r.j = m.subject.slice(0, 100);
 	if (m.previewVideo) r.pv = m.previewVideo;
-	if (m.onlineSeconds) r.os = m.onlineSeconds;
-	if (m.languages?.length) r.l = m.languages.slice(0, 4);
 	return r;
 }
 
 export async function run(env: Env, dry = false): Promise<unknown> {
 	const t0 = Date.now();
 	const secrets = env as unknown as Record<string, string>;
-	const prev = await env.KV.get<Snapshot>(SNAPSHOT_KEY, { type: "json" }).catch(() => null);
+	const prev = (await env.LIVE.get<Snapshot>(SNAPSHOT_KEY, { type: "json" }).catch(() => null))
+		?? (await env.KV.get<Snapshot>(SNAPSHOT_KEY, { type: "json" }).catch(() => null));
 	const pages = await loadPageIndex();
 
 	const fetched = new Map<NetworkId, Omit<Model, "network">[]>();
@@ -210,6 +209,14 @@ export async function run(env: Env, dry = false): Promise<unknown> {
 	const failed = Object.entries(nets).filter(([, v]) => !v.ok);
 	// Všechno spadlé = nepřepisovat dobrý snímek prázdným.
 	if (!dry && m.length && failed.length < NETWORKS.length) {
+		// Do samostatného namespace `ecamx-live` (D85) — web má binding jen na
+		// něj (čtení), registry v `ecamx-registry` nevidí. Pořadí: snímek, pak
+		// jeho čas (čtenář podle `:ts` pozná nový snímek), pak cesty pro catch-all.
+		await env.LIVE.put(SNAPSHOT_KEY, body);
+		await env.LIVE.put(`${SNAPSHOT_KEY}:ts`, String(snap.ts));
+		await env.LIVE.put('live-paths', JSON.stringify(m.filter((r) => !r.st).map((r) => r.p)));
+		// PŘECHOD (17. 11. 2026): dokud běží web se starým bindingem, zapisovat
+		// i do `ecamx-registry`. Smazat po nasazení webu s `ecamx-live` (D85).
 		await env.KV.put(SNAPSHOT_KEY, body);
 		await recordPresence(env, m, nets).catch((e) =>
 			console.error(JSON.stringify({ task: "live-presence", error: String((e as Error)?.message ?? e) })));

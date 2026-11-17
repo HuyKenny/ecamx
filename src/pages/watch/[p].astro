@@ -19,21 +19,27 @@
 import { env } from 'cloudflare:workers';
 import Layout from '../../layouts/Layout.astro';
 import LiveGrid from '../../components/LiveGrid.astro';
-import { readSnapshot } from '../../lib/live-snapshot';
+import { readSnapshot, snapIndex, safeDecode } from '../../lib/live-snapshot';
 import { embedUrl, goLink } from '../../lib/affiliate';
 import { NETWORK_LABELS, countryName, facetLabel } from '../../lib/labels';
 import { pick, toCardData } from '../../lib/live-grid';
 import { SITE_NAME } from '../../lib/site';
 import { viewersText } from '../../lib/card';
+import { withSecurityHeaders } from '../../lib/security-headers';
+import { countryPhrase } from '../../lib/taxonomy';
 
 export const prerender = false;
 
 const CSP = '__ECAMX_CSP__';
 /** Stream běží hned po otevření (Kenny 17. 11., D84) — u všech sítí s rámcem. */
 const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'stripchat', 'imlive', 'streamate', 'livejasmin', 'xlovecam']);
-const p = decodeURIComponent(Astro.params.p ?? '');
+// Přímá adresa `/watch/…` není kanonická — patří jí `/live/{p}/` (D85).
+if (!Astro.originPathname.startsWith('/live/')) {
+	return Astro.redirect(`/live/${encodeURIComponent(Astro.params.p ?? '')}/`, 301);
+}
+const p = safeDecode(Astro.params.p ?? '') ?? '';
 const snap = await readSnapshot();
-const rec = snap?.m.find((r) => r.p === p);
+const rec = snap ? snapIndex(snap).byP.get(p) : undefined;
 if (!rec) {
 	// Mezi kliknutím a načtením modelka dovysílala → rozcestník s živými.
 	return Astro.redirect('/', 302);
@@ -51,14 +57,11 @@ const topKey = rec.f.find((k) => k.startsWith('m:') || k.startsWith('t:')) ?? (r
 const similar = snap ? pick(snap.m, topKey, 12, { exclude: `${rec.n}:${rec.s}` }).cards : [];
 const cta = goLink(rec.n as never, rec.u, 'profile');
 const title = `${rec.u} Live Cam on ${label} — Watch Free | ${SITE_NAME}`;
-const description = `${rec.u} is live on ${label} right now${rec.c ? ` from ${countryName(rec.c)}` : ''}. Watch the stream free on eCamx, no signup — plus who else is live like her.`;
+const description = `${rec.u} is live on ${label} right now${rec.c ? ` from ${countryPhrase(countryName(rec.c))}` : ''}. Watch the stream free on eCamx, no signup — plus who else is live like her.`;
 
-Astro.response.headers.set('content-security-policy', CSP);
+withSecurityHeaders(Astro.response.headers, CSP);
 Astro.response.headers.set('cache-control', 'public, max-age=60');
 Astro.response.headers.set('x-robots-tag', 'noindex, follow');
-Astro.response.headers.set('x-frame-options', 'DENY');
-Astro.response.headers.set('x-content-type-options', 'nosniff');
-Astro.response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
 ---
 <Layout title={title} description={description} noindex ogType="profile" built={new Date(snap!.ts).toISOString()}>
 	<div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">

@@ -33,6 +33,11 @@ import facets from '../data/facets.json';
 import { canonicalLanguage, canonicalTerm, modelLetter } from './taxonomy.ts';
 import { shardOf } from './redirect-shard.ts';
 
+/** Rozbitá %-sekvence = neexistující stránka (404), ne pád Workeru (D85). */
+function safeDecode(s: string): string | null {
+	try { return decodeURIComponent(s); } catch { return null; }
+}
+
 /** Slugy, které kdy měly imprese v GSC — i ty, které registry nezná. */
 const LEGACY = legacyGone as Record<string, string>;
 
@@ -151,7 +156,9 @@ export async function redirectFor(pathname: string, load: ShardLoader): Promise<
 		 * pro modelky, jejichž stránku máme (`/live-pages.json`), a neznámý
 		 * `/live/{nick}/` končí tam, kde končil vždycky — na naší stránce.
 		 */
-		const to = await redirectForModel(decodeURIComponent(model[1]), load);
+		const nick = safeDecode(model[1]);
+		if (nick === null) return null;
+		const to = await redirectForModel(nick, load);
 		// 302: modelka se běžně vrátí a její stránka se znovu postaví.
 		return to ? { to, permanent: false } : null;
 	}
@@ -185,10 +192,14 @@ export async function redirectFor(pathname: string, load: ShardLoader): Promise<
 	}
 
 	const cat = LEGACY_CATEGORY.exec(pathname);
-	if (cat) return { to: categoryTarget(decodeURIComponent(cat[1])), permanent: true };
+	if (cat) {
+		const c = safeDecode(cat[1]);
+		return c === null ? null : { to: categoryTarget(c), permanent: true };
+	}
 	const lang = LEGACY_LANGUAGE.exec(pathname);
 	if (lang) {
-		const raw = decodeURIComponent(lang[1]);
+		const raw = safeDecode(lang[1]);
+		if (raw === null) return null;
 		// Jazykové stránky web nemá (jazyk je faseta, ne URL), takže jazyk míří
 		// na rozcestník. Nick v jazykové taxonomii ale znamená, že člověk hledal
 		// modelku — `/webcam_languages/nicedoll54/` má 3 kliky.

@@ -38,7 +38,11 @@
   // hlidamo). Worker smí číst a zapisovat VÝHRADNĚ tyhle klíče:
   // `deploy-watch-state`, `indexnow-state`, `demand`, `live-snapshot` (D82) — registry ani
   // `registry-gone` nesmí sáhnout (jsou to megabajty, isolate má 128 MB).
-  "kv_namespaces": [{ "binding": "KV", "id": "158984aaec6c47eca3e3e6ea29e3cf17" }],
+  "kv_namespaces": [
+    { "binding": "KV", "id": "158984aaec6c47eca3e3e6ea29e3cf17" },
+    // `ecamx-live` — živý snímek, `:ts` a `live-paths` pro web (D85)
+    { "binding": "LIVE", "id": "0c5a6fee4bcf4a45916324a697912c24" }
+  ],
 
   // Secrets (přes `wrangler secret put`, nikdy do tohohle souboru):
   //   GITHUB_TOKEN        fine-grained PAT na HuyKenny/ecamx, Actions: read+write

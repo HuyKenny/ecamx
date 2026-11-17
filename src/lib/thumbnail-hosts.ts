@@ -11,13 +11,17 @@
  * vyčíst nedají a chybějící host by se poznal až u návštěvníka.
  */
 export const THUMBNAIL_HOSTS = [
-	'thumb.live.mmcdn.com', 'media.livemediahost.com', 'snapshots.xcdnpro.com',
-	'www.amateur.tv', 'i.bgicdn.com', 'img1.wlresources.com',
+	// Prvních šest = preconnect v <head>. Pořadí podle sítí, které nejčastěji
+	// obsazují první karty mřížky (Chaturbate má váhu 4, D63), přeměřeno
+	// 17. 11. 2026 na živých mřížkách (D85).
+	'thumb.live.mmcdn.com', 'img.doppiocdn.com', 'media.livemediahost.com',
+	'snapshots.xcdnpro.com', 'i.bgicdn.com', 'imagetransform.icfcdn.com',
+	// Zbytek jen dns-prefetch (a CSP img-src v `build-csp.ts`).
 	'galleryn0.vcmdiawe.com', 'galleryn1.vcmdiawe.com', 'galleryn2.vcmdiawe.com',
-	// Sítě přes CrakRevenue (D54). `img.doppiocdn.com` a `imagetransform.icfcdn.com`
-	// nesou živé snapshoty, ostatní statické avatary.
-	'img.doppiocdn.com', 'static-cdn.strpst.com', 'static-proxy.strpst.com',
-	'imagetransform.icfcdn.com', 'i0.imlmediahub.com',
+	'galleryn3.vcmdiawe.com', 'img1.wlresources.com', 'i0.imlmediahub.com',
+	// Amateur.tv: adresa náhledu je `www.amateur.tv`, ale přesměruje na a0s.net.
+	'www.amateur.tv', 'f-stream-captures.a0s.net',
+	'static-cdn.strpst.com', 'static-proxy.strpst.com',
 	// Náhradní obrázky Cam4, když snapshot chybí (D69).
 	'stackvaults-media.xcdnpro.com', 'static.cam4.com',
 ];

@@ -71,6 +71,10 @@ const EXTRA = {
 		'https://*.bcvcdn.com',
 		// Cam4 od D70 taky hraje v našem `<video>`; shard se liší podle modelky.
 		'https://*.xcdnpro.com',
+		// Hover náhled CamSody (`data-preview`, MP4 smyčka). Karty se od D82
+		// plní za běhu, takže v HTML z buildu být nemusí — a bez téhle položky
+		// CSP náhled tiše zablokovala (audit 17. 11. 2026, D85).
+		'https://public-media.livemediahost.com',
 	],
 };
 
@@ -147,6 +151,9 @@ for (const file of html) {
 				h.endsWith('.bcvcdn.com') ? 'https://*.bcvcdn.com'
 					: h.endsWith('.xcdnpro.com') ? 'https://*.xcdnpro.com' : h);
 		}
+	}
+	for (const m of text.matchAll(/\bdata-preview=["'](https:[^"']+)["']/g)) {
+		const h = hostOf(m[1]); if (h) mediaHosts.add(h);
 	}
 	for (const m of text.matchAll(/<video[^>]*\bposter=["'](https:[^"']+)["']/g)) {
 		const h = hostOf(m[1]); if (h) imgHosts.add(h);

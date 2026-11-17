@@ -26,6 +26,7 @@
  */
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
+import { readSnapshot, snapIndex, isFresh } from '../../../../lib/live-snapshot';
 
 export const prerender = false;
 
@@ -57,13 +58,35 @@ const json = (body: unknown, status = 200, ttl = 0) => new Response(JSON.stringi
  *
  * Adresa je krátkodobá: 12 h stará vracela 404 u 8 z 8 zkoušených. Viz D70.
  */
-async function cam4Stream(user: string, e: Record<string, string>): Promise<string> {
+/**
+ * Celý feed Cam4 (~1,5 MB) se drží v edge cache pod JEDNÍM pevným klíčem na
+ * 45 s (D85). Dřív se stahoval znovu pro každý nový nick — a náhodné nicky
+ * tak uměly nutit Worker opakovaně tahat feed s naším `sid`.
+ */
+const CAM4_FEED_KEY = 'https://ecamx.com/__internal/cam4-feed';
+async function cam4Feed(e: Record<string, string>): Promise<string> {
+	let cache: Cache | null = null;
+	try {
+		cache = (caches as any)?.default ?? null;
+		const hit = cache ? await cache.match(CAM4_FEED_KEY) : null;
+		if (hit) return await hit.text();
+	} catch { cache = null; }
 	const res = await fetch(
 		`https://api.cam4pays.com/api/v1/cams/online.json?limit=1000&order_by=viewers_desc&sid=${encodeURIComponent(e.CAM4_SID ?? '')}`,
 		{ headers: { 'User-Agent': 'ecamx/1.0 (+https://ecamx.com)' }, signal: AbortSignal.timeout(8000) },
 	);
 	if (!res.ok) throw new Error(`upstream ${res.status}`);
 	const raw = await res.text();
+	if (cache) {
+		try {
+			await cache.put(CAM4_FEED_KEY, new Response(raw, { headers: { 'cache-control': 'public, s-maxage=45' } }));
+		} catch { /* bonus */ }
+	}
+	return raw;
+}
+
+async function cam4Stream(user: string, e: Record<string, string>): Promise<string> {
+	const raw = await cam4Feed(e);
 	// **Hledá se jen ten jeden nick, ne všechny dvojice.** Globální regex přes
 	// 1,5 MB by musel mít okno přes tisíc znaků (mezi `nickname` a
 	// `preview_url` je jich 1 100) a u modelky bez streamu — 14 z 300 ho nemá —
@@ -102,6 +125,25 @@ export const GET: APIRoute = async ({ params, request }) => {
 	} catch { cache = null; }
 
 	const e = env as unknown as Record<string, string>;
+
+	/**
+	 * **Jen modelky, které podle snímku vysílají** (D85). Čerstvý snímek zná
+	 * celé seznamy sítí, takže nick mimo něj je offline (nebo vymyšlený) —
+	 * odpověď bez dotazu na síť. Cam4 navíc posílá adresu streamu přímo ve
+	 * feedu, takže ze snímku (max. 5 min starého) se vrací rovnou.
+	 */
+	const snap = await readSnapshot();
+	const rec = snap ? snapIndex(snap).byUser.get(`${net}:${user.toLowerCase()}`) : undefined;
+	if (snap && isFresh(snap, net) && !rec) {
+		const off = json({ offline: true }, 200, TTL);
+		try { if (cache && cacheKey) await cache.put(cacheKey, off.clone()); } catch { /* bonus */ }
+		return off;
+	}
+	if (net === 'cam4' && rec?.e && /^https:\/\/[a-z0-9.-]+\.xcdnpro\.com\//i.test(rec.e)) {
+		const ok = json({ url: rec.e }, 200, TTL);
+		try { if (cache && cacheKey) await cache.put(cacheKey, ok.clone()); } catch { /* bonus */ }
+		return ok;
+	}
 
 	if (net === 'cam4') {
 		let out: Response;

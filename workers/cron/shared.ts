@@ -15,6 +15,8 @@
 export interface Env {
 	/** Namespace `ecamx-registry` — stejný jako pro registry a `demand`. */
 	KV: KVNamespace;
+	/** Namespace `ecamx-live` — živý snímek pro web (D85). */
+	LIVE: KVNamespace;
 	/** Fine-grained PAT na `HuyKenny/ecamx` (Actions: read + write). */
 	GITHUB_TOKEN: string;
 	/** Bot token z `/home/kenny/Discord/.env`. */

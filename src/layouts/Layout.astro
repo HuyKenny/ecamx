@@ -256,11 +256,11 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 	<link rel="icon" href="/logo-mark.svg" type="image/svg+xml" />
 	<link rel="apple-touch-icon" href="/favicon-180.png" />
 	<link rel="manifest" href="/manifest.webmanifest" />
-	<link rel="preload" href="/fonts/bricolage-latin.woff2" as="font" type="font/woff2" crossorigin />
+	<link rel="preload" href="/fonts/bricolage-latin.v1.woff2" as="font" type="font/woff2" crossorigin />
 
 	{/* Náhledy jdou z cizích CDN — preconnect na 6 nejčastějších, zbytek dns-prefetch. */}
 	{THUMBNAIL_HOSTS.slice(0, 6).map((h) => (
-		<link rel="preconnect" href={`https://${h}`} crossorigin />
+		<link rel="preconnect" href={`https://${h}`} />
 	))}
 	{THUMBNAIL_HOSTS.slice(6).map((h) => (
 		<link rel="dns-prefetch" href={`https://${h}`} />
@@ -335,11 +335,11 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 			{/* Sloty mají pevnou výšku; plní je `live.ts` ze snímku (D82). */}
 			<nav class="rail-list" data-rail data-n={RAIL_N} aria-label="Most watched live now">
 				{Array.from({ length: RAIL_N }, () => (
-					<a class="rail-item" href="/">
-						<span class="rail-ph" aria-hidden="true"></span>
+					<span class="rail-item" aria-hidden="true">
+						<span class="rail-ph"></span>
 						<span class="rail-name">&nbsp;</span>
 						<span class="rail-v"></span>
-					</a>
+					</span>
 				))}
 			</nav>
 			<div class="rail-sep"></div>

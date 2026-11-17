@@ -50,7 +50,10 @@ if (video) {
 			return ((await r.json()) as { url?: string }).url ?? null;
 		} catch { return null; }
 	};
-	const first = async () => (net === 'cam4' ? await fresh() : null) ?? video.dataset.src ?? null;
+	// Adresa ze snímku jen z hostů sítí — stejná kontrola jako v `/api/stream/` (D85).
+	const SAFE = /^https:\/\/[a-z0-9.-]+\.(bcvcdn|xcdnpro)\.com\//i;
+	const snapSrc = SAFE.test(video.dataset.src ?? '') ? video.dataset.src! : null;
+	const first = async () => (net === 'cam4' ? await fresh() : null) ?? snapSrc;
 	if (video.canPlayType('application/vnd.apple.mpegurl')) {
 		video.addEventListener('error', () => { void fresh().then((u) => { if (u) { video.src = u; void video.play().catch(() => {}); } }); });
 		void first().then((u) => { if (u) { video.src = u; void video.play().catch(() => {}); } });

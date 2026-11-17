@@ -23,7 +23,8 @@
 import type { APIRoute } from 'astro';
 import { env as workerEnv } from 'cloudflare:workers';
 import { redirectFor, type ShardLoader } from '../lib/gone';
-import { readSnapshot } from '../lib/live-snapshot';
+import { readLivePaths, safeDecode } from '../lib/live-snapshot';
+import { withSecurityHeaders } from '../lib/security-headers';
 
 
 /**
@@ -96,9 +97,26 @@ export const GET: APIRoute = async ({ url, rewrite }) => {
 	 */
 	const live = /^\/live\/([^/]+)\/?$/.exec(url.pathname);
 	if (live) {
-		const p = decodeURIComponent(live[1]!);
-		const snap = await readSnapshot();
-		if (snap?.m.some((r) => r.p === p)) return rewrite(`/watch/${live[1]}/`);
+		const p = safeDecode(live[1]!);
+		// Malý klíč `live-paths` místo 5 MB snímku: crawler chodí hlavně na
+		// zaniklé slugy a ty by jinak parsovaly celý snímek (D85).
+		const paths = p === null ? null : await readLivePaths();
+		if (p !== null && paths?.has(p)) {
+			// Edge cache 60 s (D85): stránka se bez ní vykreslovala ve Workeru
+			// při každém zobrazení. Klíč je kanonická `/live/` adresa.
+			let cache: Cache | null = null;
+			const key = new Request(`${url.origin}/live/${live[1]}/`);
+			try {
+				cache = (caches as any)?.default ?? null;
+				const hit = cache ? await cache.match(key) : null;
+				if (hit) return hit;
+			} catch { cache = null; }
+			const res = await rewrite(`/watch/${live[1]}/`);
+			if (cache && res.status === 200) {
+				try { await cache.put(key, res.clone()); } catch { /* cache je bonus */ }
+			}
+			return res;
+		}
 	}
 	const paged = PAGED.exec(url.pathname);
 	if (paged) {
@@ -133,20 +151,15 @@ export const GET: APIRoute = async ({ url, rewrite }) => {
 				// takže tahle 404 byla jediná HTML odpověď na webu bez
 				// bezpečnostních hlaviček — dala se zarámovat do cizí stránky.
 				// Držet v souladu s `public/_headers`. Viz D63.
-				headers: {
+				headers: withSecurityHeaders(new Headers({
 					'content-type': 'text/html; charset=utf-8',
 					'cache-control': 'public, max-age=300',
-					'x-content-type-options': 'nosniff',
-					'x-frame-options': 'DENY',
-					'referrer-policy': 'strict-origin-when-cross-origin',
-					'strict-transport-security': 'max-age=31536000; includeSubDomains',
-					'content-security-policy': CSP,
-				},
+				}), CSP),
 			});
 		}
 	}
 	return new Response('Not found', {
 		status: 404,
-		headers: { 'content-type': 'text/plain; charset=utf-8' },
+		headers: withSecurityHeaders(new Headers({ 'content-type': 'text/plain; charset=utf-8' })),
 	});
 };

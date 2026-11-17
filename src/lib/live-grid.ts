@@ -20,6 +20,22 @@ const CATEGORY = new Set<string>([
 
 export const FACET_RE = /^(all|rail|[gtmehbcn]:[a-z0-9-]{1,60})$/;
 
+/**
+ * Klíče faset, které na webu EXISTUJÍ (D85). API dřív bralo jakýkoli slug,
+ * každý nesmysl se spočítal nad ~12k záznamy a uložil do edge cache — snadný
+ * způsob, jak ji zahltit. `facets.json` je výstup syncu, tedy pravda buildu.
+ */
+const ff = facets as unknown as Record<string, Array<{ slug: string }>>;
+export const ALLOWED_FACETS = new Set<string>(['all', 'rail', ...[
+	['t', 'categories'], ['m', 'curated'], ['e', 'ethnicities'], ['h', 'hairColors'],
+	['b', 'bodyTypes'], ['c', 'countries'], ['g', 'genders'], ['n', 'networks'],
+].flatMap(([pre, list]) => (ff[list!] ?? []).map((x) => `${pre}:${x.slug}`))]);
+/** Všechny sítě (filtr `s=`). */
+export const NETWORK_IDS = new Set((ff.networks ?? []).map((n) => n.slug));
+/** Povolené velikosti dotazu — klient si pak ořízne sám (méně klíčů v cache). */
+const N_STEPS = [6, 12, 24, 48, 60, 120];
+export const roundN = (n: number) => N_STEPS.find((x) => x >= n) ?? 120;
+
 export function matches(r: LiveRec, key: string): boolean {
 	if (key === 'all' || key === 'rail') return true;
 	if (key.startsWith('n:')) return r.n === key.slice(2);
