@@ -66,23 +66,24 @@ const checked = new Date(`${rates.checkedOn}T00:00:00Z`).toLocaleDateString('en-
 	day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
 });
 
+// D91: since 17. 11. 2026 two listings agree on the 1,000 bundle, so the
+// answer can be a number. Without a verified 1,000 bundle it falls back to
+// the honest range (sources disagreed on it before: $79.99 vs $90.99).
+const thousand = rates.bundles.find((b) => b.tokens === 1000);
 const faq = [
 	{
 		q: `How much is 1,000 ${rates.unit} on ${label}?`,
-		// Rozpětí, ne číslo: na ceně tisícového balíčku se zdroje neshodly
-		// ($79,99 vs $90,99), takže tvrdit jedno z nich by byla falešná přesnost
-		// právě u dotazu, kvůli kterému stránka existuje. Horní hranice je ale
-		// JISTÁ — tolik stojí opakovaný nákup největšího ověřeného balíčku.
-		a: `Between $${approxRange(rates, 1000).min.toFixed(2)} and ` +
-			`$${approxRange(rates, 1000).max.toFixed(2)}. The upper figure is certain: that is what ` +
-			`${1000 / rates.bundles[rates.bundles.length - 1].tokens} of the ` +
-			`${fmt(rates.bundles[rates.bundles.length - 1].tokens)}-token bundles cost. The lower one is ` +
-			`what the bigger bundles work out to if the listings we found are right — ${label} does not ` +
-			`publish those prices to anyone who is not signed in, and the listings disagree on them. ` +
-			`Checked ${checked}.`,
+		a: thousand
+			? `$${thousand.usd.toFixed(2)} as a single 1,000-${rates.unit.replace(/s$/, '')} bundle — about ` +
+				`$${(thousand.usd / 1000).toFixed(2)} each. Buying the same amount in small bundles costs ` +
+				`$${smallestBundlePrice(rates, 1000).usd.toFixed(2)}. ${label} does not publish prices to anyone ` +
+				`who is not signed in; this is the figure independent listings agree on. Checked ${checked}.`
+			: `Between $${approxRange(rates, 1000).min.toFixed(2)} and ` +
+				`$${approxRange(rates, 1000).max.toFixed(2)}. ${label} does not publish those prices to anyone ` +
+				`who is not signed in, and the listings we found disagree on them. Checked ${checked}.`,
 	},
 	{
-		q: `What is one ${rates.unit.replace(/s$/, '')} worth in dollars on ${label}?`,
+		q: `How much is 1 ${rates.unit.replace(/s$/, '')} worth on ${label}?`,
 		a: `Between $${rates.perTokenRange.min.toFixed(2)} and $${rates.perTokenRange.max.toFixed(2)}. ` +
 			`There is no single rate: the price per ${rates.unit.replace(/s$/, '')} falls as the bundle ` +
 			`gets bigger, and it only applies if you buy that much at once.`,

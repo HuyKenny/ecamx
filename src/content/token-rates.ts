@@ -87,23 +87,25 @@ export interface TokenRates {
 export const TOKEN_RATES: Partial<Record<NetworkId, TokenRates>> = {
 	chaturbate: {
 		unit: 'tokens',
+		// Re-checked 17. 11. 2026 (D91): DatingScout (updated 9. 10. 2026) and
+		// NavThemes agree on 100 = $10.99 and 1,000 = $79.99. DatingScout no
+		// longer lists 200, so that bundle is out (one source is not a price).
 		bundles: [
 			{ tokens: 100, usd: 10.99 },
-			{ tokens: 200, usd: 20.99 },
+			{ tokens: 1000, usd: 79.99 },
 		],
-		// $0,08 (největší balíčky podle NavThemes) až $0,12 (balíček 50 podle
-		// DatingScout) — tedy celé rozpětí, které zdroje uvádějí.
-		perTokenRange: { min: 0.08, max: 0.12 },
-		checkedOn: '2026-08-20',
+		// $0.08 (1,000 bundle, both sources) to $0.11 (100 bundle).
+		perTokenRange: { min: 0.08, max: 0.11 },
+		checkedOn: '2026-11-17',
 		sources: [
-			{ label: 'DatingScout', url: 'https://www.datingscout.com/chaturbate/cost', date: '2026-07-11' },
+			{ label: 'DatingScout', url: 'https://www.datingscout.com/chaturbate/cost', date: '2026-10-09' },
 			{ label: 'NavThemes', url: 'https://www.navthemes.com/how-much-are-chaturbate-tokens/', date: '2026-07-01' },
 			{ label: 'UFO VPN', url: 'https://ufovpn.io/blog/chaturbate-tokens-guide', date: '2025-07-16' },
 		],
 		provenance: 'Chaturbate does not publish token prices to anyone who is not signed in, '
 			+ 'so these come from independent listings rather than from the checkout page. We only '
-			+ 'state a bundle price where at least two of them agree; where they disagree — which '
-			+ 'is everything above 200 tokens — we give a range instead of a number.',
+			+ 'state a bundle price where at least two of them agree; where they disagree — the 200, 500 and 2,000 '
+			+ 'bundles — we give a range instead of a number.',
 	},
 };
 
