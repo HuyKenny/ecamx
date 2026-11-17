@@ -120,7 +120,13 @@ Astro.response.headers.set('x-robots-tag', 'noindex, follow');
 				</p>
 			)}
 		</div>
-		<a href={cta} class="btn-cta" rel="nofollow sponsored" target="_blank">Chat &amp; tip {rec.u} on {label} →</a>
+		<div class="flex flex-wrap items-center gap-2">
+			<button type="button" class="zap-btn" data-zap-next
+				data-zap-q={topKey} data-zap-x={`${rec.n}:${rec.s}`}
+				data-zap-name={rec.u}
+				title="Next live cam (N)">Next <span aria-hidden="true">▶</span></button>
+			<a href={cta} class="btn-cta" rel="nofollow sponsored" target="_blank">Chat &amp; tip {rec.u} on {label} →</a>
+		</div>
 	</div>
 	<p class="mt-3 text-xs text-ink-500">Free to watch. eCamx earns a commission if you buy tokens on {label} — it costs you nothing extra.</p>
 
@@ -133,5 +139,6 @@ Astro.response.headers.set('x-robots-tag', 'noindex, follow');
 
 	<script>
 		import '../../scripts/watch';
+		import '../../scripts/zap';
 	</script>
 </Layout>

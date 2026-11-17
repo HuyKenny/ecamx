@@ -311,9 +311,15 @@ if (canPreview) {
 	// Stav tlačítek po načtení. Tlačítka jsou v HTML od začátku, mění se
 	// jen jejich text a třída — nic se nezjevuje (past 52).
 	const watched = new Set(readWatch().map((w) => w.page));
-	for (const btn of document.querySelectorAll<HTMLElement>('[data-watch-toggle]')) {
-		if (btn.dataset.page && watched.has(btn.dataset.page)) paintToggle(btn, true);
-	}
+	const paintAll = () => {
+		const now = new Set(readWatch().map((w) => w.page));
+		for (const btn of document.querySelectorAll<HTMLElement>('[data-watch-toggle]')) {
+			if (btn.dataset.page && now.has(btn.dataset.page)) paintToggle(btn, true);
+		}
+	};
+	paintAll();
+	// Výměna stránky bez načtení (D88, `zap.ts`).
+	document.addEventListener('ecamx:zapped', paintAll);
 
 	/**
 	 * Odznak „N z tvých je live". Ptáme se **jen sítí, které v seznamu

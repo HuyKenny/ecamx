@@ -99,6 +99,8 @@ interface SnapIndex {
 	byP: Map<string, LiveRec>;
 	/** `síť:username malými` */
 	byUser: Map<string, LiveRec>;
+	/** `síť:slug` — klíč stránky modelky (`/api/live/is/`, D88) */
+	byKey: Map<string, LiveRec>;
 	/** výsledky `pick()` podle klíče — počítá `live-grid.ts` líně */
 	picks: Map<string, unknown>;
 }
@@ -108,10 +110,11 @@ const indexes = new WeakMap<Snapshot, SnapIndex>();
 export function snapIndex(snap: Snapshot): SnapIndex {
 	let ix = indexes.get(snap);
 	if (ix) return ix;
-	ix = { byP: new Map(), byUser: new Map(), picks: new Map() };
+	ix = { byP: new Map(), byUser: new Map(), byKey: new Map(), picks: new Map() };
 	for (const r of snap.m) {
 		ix.byP.set(r.p, r);
 		ix.byUser.set(`${r.n}:${r.u.toLowerCase()}`, r);
+		ix.byKey.set(`${r.n}:${r.s}`, r);
 	}
 	indexes.set(snap, ix);
 	return ix;

@@ -38,7 +38,8 @@ interface GridResp {
 	g: Record<string, CardData[]>;
 }
 
-const grids = Array.from(document.querySelectorAll<HTMLElement>('[data-live-grid]'));
+// `let`: po výměně stránky bez načtení (D88, `zap.ts`) se sbírají znovu.
+let grids = Array.from(document.querySelectorAll<HTMLElement>('[data-live-grid]'));
 const rail = document.querySelector<HTMLElement>('[data-rail]');
 /** Jak dlouho smí mřížka čekat na data, než ukáže statické karty. */
 const WAIT_MS = 1600;
@@ -196,7 +197,7 @@ void hydrate(storedSites(), true);
 // Stránka (statická i dynamická) nese `[data-live-scope]` s odznakem
 // `data-live-badge="síť:slug"`. Přehrávač řídí skript stránky; tady se mu jen
 // ohlásí stav (`ecamx:model-offline` / `ecamx:model-online`, D63/D68).
-{
+function checkModelLive(): void {
 	const badge = document.querySelector<HTMLElement>('[data-live-scope] [data-live-badge]');
 	const [net, slug] = (badge?.dataset.liveBadge ?? '').split(':');
 	if (badge && net && slug) {
@@ -235,6 +236,14 @@ void hydrate(storedSites(), true);
 			.catch(() => { /* zůstává stav z buildu */ });
 	}
 }
+checkModelLive();
+
+// Výměna stránky bez načtení (D88): nové mřížky naplnit, stav modelky znovu.
+document.addEventListener('ecamx:zapped', () => {
+	grids = Array.from(document.querySelectorAll<HTMLElement>('main [data-live-grid]'));
+	void hydrate(storedSites(), true);
+	checkModelLive();
+});
 
 // ── CTA „Open {síť}" na recenzi sítě: mířit na někoho, kdo teď vysílá ──────
 {

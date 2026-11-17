@@ -806,3 +806,24 @@ html.has-follows .watch-list { display: block; }
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
 	.is-list .card:hover .thumb-wrap { transform: none; box-shadow: none; }
 }
+
+/* ── Next ▶ — přepínání streamů (D88, `src/scripts/zap.ts`) ─────────────── */
+.zap-btn {
+	display: inline-flex; align-items: center; gap: .35rem;
+	border-radius: 9999px; border: 0; cursor: pointer;
+	padding: .375rem 1rem; font-size: .875rem; font-weight: 800;
+	background: var(--color-ink-50); color: var(--color-ink-950);
+	transition: transform .12s ease, background-color .12s ease;
+	/* V HTML od začátku, ukáže se až s JS — `visibility` nic neposune (CLS 0). */
+	visibility: hidden;
+}
+.live-js .zap-btn { visibility: visible; }
+.zap-btn:hover { background: #fff; transform: translateX(2px); }
+.zap-btn:focus-visible { outline: 2px solid var(--color-live); outline-offset: 2px; }
+.zap-btn[aria-busy="true"] { opacity: .6; cursor: progress; }
+.zap-overlay {
+	position: absolute; inset: 0; z-index: 40;
+	display: flex; flex-direction: column; align-items: center; justify-content: center;
+	padding: 1.5rem; text-align: center;
+	background: rgb(10 10 14 / .82); backdrop-filter: blur(6px);
+}
