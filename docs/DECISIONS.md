@@ -4017,3 +4017,55 @@ the moment X goes live." a sticky lišta „Follow X →". Cíl odkazu se neměn
 Když modelka mezitím začne vysílat, klient přepne CTA na „Chat & tip" jako
 dřív a větu o upozornění schová. Vyhodnotit v `revenue.py`/`ga4.py money`:
 placement `offline` proti výchozím 9 za 28 dní.
+
+## D82 — živý snímek á 5 min místo výřezů z prohlížeče; statické stránky jen pro stabilní množinu (17. 11. 2026)
+
+Kenny: „zdá se mi, že to funguje špatně" — mají se ukazovat jen modelky online.
+Průzkum našel pět příčin: (1) výpadek upstreamu vracel `{online:{}}` a klient
+zhasl celou síť i s přehrávači; (2) runtime feed viděl jen výřez (Chaturbate
+top 300 z ~6 000, BongaCams 150, CrakRevenue 100), takže u 7 z 10 sítí nešla
+offline karta skrýt; (3) build 2× denně GitHub zdržoval o 7–8 h → stránky
+11–14 h staré a `seen`/`hours` ze dvou vzorků dne; (4) kolotoč ~9 000 URL
+stránka ↔ 302 každý běh; (5) `registry-gone` rostl ~90 kB/den k limitu 25 MB.
+
+**Řešení.**
+- Cron Worker `ecamx-cron` úloha `live-snapshot` (`*/5`) stáhne KOMPLETNÍ feedy
+  všech sítí (definice ze `scripts/cam-networks.ts`) a zapíše KV `live-snapshot`
+  (~12,7k modelek, ~6 MB, fasety předpočítané). Spadlá síť drží poslední stav
+  30 min a nese `ok:false`. Hodinově zapisuje `presence:YYYY-MM-DD`.
+- Web čte snímek přes binding `LIVE_KV` (`src/lib/live-snapshot.ts`):
+  `/api/online/{síť}/` (kontrakt beze změny, ale úplný seznam jen při čerstvém
+  snímku) a nový `/api/live/grid/` (karty pro fasetu, prokládání sítí).
+- Změřeno 17. 11.: průnik rosterů z Cloudflare a z Maliny 97–100 % u všech
+  deseti sítí — „roster podle IP" (past 104) byl ve skutečnosti rozdíl výřezů.
+- Statickou stránku má jen živá modelka, která ji měla minule (`pub`), je
+  viděná ≥ `INDEX_MIN_DAYS` dní, nebo má poptávku. Ostatní živé obslouží
+  `/watch/[p]` (SSR ze snímku, `noindex`), na kterou catch-all přepíše
+  `/live/{p}/`. Přesměrování dostane jen stránka s `pub` → konec kolotoče
+  i růstu `registry-gone`.
+- Build jednou za noc (01:17 UTC) + rychlý režim pro pushe, které mění jen
+  vzhled. `seen`/`hours` dopočítává sync z hodinové přítomnosti.
+
+**Cena.** Cron ~0,3 s CPU × 8 640 běhů/měs ≈ 2,6 M ms ≈ 0,05 $ (CPU účtu je
+nad zahrnutým limitem); naopak odpadá 10 upstream fetchů s parsováním při
+každém zobrazení stránky. KV: 288 + 24 zápisů/den. Ověřit po 7 dnech
+`python3 ~/ai/bin/cf-spotreba.py`.
+
+## D83 — redesign „Twitch pro cam modelky" (17. 11. 2026)
+
+Kenny: moderní, jednoduchý, hravý, ne AI-slop, jako Twitch. Rozvržení převzato
+(horní lišta s hledáním, levý panel „Live now", velká mřížka 16:9, police
+kategorií, adresář kategorií jako dlaždice, „divadelní" profil), **barvy
+vlastní**: grafit, korálová (akce, tmavý text na ní kvůli kontrastu 6:1),
+limetková (LIVE), žlutá (samolepky). Display písmo Bricolage Grotesque jen
+na nadpisy (self-hosted, metrický fallback → CLS 0), text systémový.
+
+Značka: mrkající webkamera z Canvy (`design/src/`), překreslená do SVG
+(`public/logo-mark.svg`) — favicony, maskable ikony a manifest generuje
+`scripts/assets.mjs`. OG obrázek a spící maskot (prázdné stavy, 404) z Canvy.
+
+Karta má JEDNU šablonu (`src/lib/card.ts`) pro build i prohlížeč. Mřížka
+(`LiveGrid.astro`) má ve statickém HTML N karet z buildu, prohlížeč je za
+skeletonem jednou nahradí živými (`src/scripts/live.ts`) — bez přeskládávání
+pod rukou (D57) a se stejnou výškou (CLS 0). Stránkování mřížek zrušeno
+(statické „stránky 2+" ukazovaly mrtvé pokoje), staré URL → 301.
