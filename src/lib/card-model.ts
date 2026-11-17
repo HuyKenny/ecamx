@@ -26,3 +26,14 @@ export function toCard(m: Model, stale = true): CardData {
 export function toCards(models: Model[]): CardData[] {
 	return models.map((m) => toCard(m));
 }
+
+/**
+ * Odkazy v textech kategorií na `/cams/{slug}/`, které v tomhle buildu
+ * neexistují (faseta spadla pod práh, D44), se mění v obyčejný text — jinak
+ * by každý pokles nabídky rozbil build guardem rozbitých odkazů (17. 11. 2026
+ * `findom` → `goddess`).
+ */
+export function unlinkMissingCategories(html: string, exists: (slug: string) => boolean): string {
+	return html.replace(/<a href="\/cams\/([a-z0-9-]+)\/">([^<]*)<\/a>/g,
+		(m, slug: string, label: string) => (exists(slug) ? m : label));
+}

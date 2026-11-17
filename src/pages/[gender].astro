@@ -7,10 +7,10 @@
 import GridFilters from '../components/GridFilters.astro';
 import Layout from '../layouts/Layout.astro';
 import LiveGrid from '../components/LiveGrid.astro';
-import { toCards } from '../lib/card-model';
+import { toCards, unlinkMissingCategories } from '../lib/card-model';
 import { facetKey, liveQueryFor } from '../lib/live-grid';
 import Breadcrumbs from '../components/Breadcrumbs.astro';
-import { FACETS, allByGender, gridWindow, topCategories, facetLabel } from '../lib/data';
+import { FACETS, allByGender, gridWindow, topCategories, facetLabel, allCategoryFacets } from '../lib/data';
 import { GRID } from '../lib/paging';
 import { safeJsonLd } from '../lib/jsonld';
 import { genderSeo, SITE_URL, fmt } from '../lib/seo';
@@ -37,7 +37,9 @@ const VISIBLE = GRID.visible;
 const win = gridWindow(all, 1, GRID);
 const models = win.items;
 const seo = genderSeo(label, all.length);
-const copy = (COPY as Record<string, string>)[gender] ?? null;
+const rawCopy = (COPY as Record<string, string>)[gender] ?? null;
+const catSlugs = new Set(allCategoryFacets().map((c) => c.slug));
+const copy = rawCopy ? unlinkMissingCategories(rawCopy, (s) => catSlugs.has(s)) : null;
 
 const jsonLd = {
 	'@context': 'https://schema.org',

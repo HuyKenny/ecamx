@@ -2,7 +2,7 @@
 import GridFilters from '../../components/GridFilters.astro';
 import Layout from '../../layouts/Layout.astro';
 import LiveGrid from '../../components/LiveGrid.astro';
-import { toCards } from '../../lib/card-model';
+import { toCards, unlinkMissingCategories } from '../../lib/card-model';
 import { facetKey, liveQueryFor } from '../../lib/live-grid';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import {
@@ -43,9 +43,11 @@ const girls = CURATED_BY_SLUG.get(facet.slug)?.girls ?? false;
 const seo = categorySeo(label, facet.count, girls);
 const countries = topCountries(10);
 // Text ze starého webu, jinak ručně psaný pro kurátorské kategorie.
-const copy = (COPY as Record<string, string>)[facet.slug]
+const rawCopy = (COPY as Record<string, string>)[facet.slug]
 	?? (CURATED_COPY as Record<string, string>)[facet.slug]
 	?? null;
+const catSlugs = new Set(allCategoryFacets().map((c) => c.slug));
+const copy = rawCopy ? unlinkMissingCategories(rawCopy, (s) => catSlugs.has(s)) : null;
 
 const jsonLd = {
 	'@context': 'https://schema.org',
