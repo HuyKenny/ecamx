@@ -136,8 +136,10 @@ export function canonicalTerm(raw: string): string | null {
 	if (NICHE_ARTIFACT.test(s)) return null;
 	if (JUNK.has(s)) return null;
 	if (/^\d+$/.test(s)) return null; // holá čísla nejsou kategorie
-	if (CATEGORY_TO_COUNTRY[s]) return null; // země mají /country/ (D85)
-	return CANONICAL[s] ?? s;
+	const c = CANONICAL[s] ?? s;
+	// Země mají /country/ (D85) — i když na ni vede synonymum (colombiana).
+	if (CATEGORY_TO_COUNTRY[s] || CATEGORY_TO_COUNTRY[c]) return null;
+	return c;
 }
 
 /** Věk → skupina. 103 samostatných věkových URL nedává smysl, 4 skupiny ano. */

@@ -15,6 +15,7 @@ import { GRID } from '../lib/paging';
 import { safeJsonLd } from '../lib/jsonld';
 import { genderSeo, SITE_URL, fmt } from '../lib/seo';
 import COPY from '../content/category-copy.json';
+import CURATED_COPY from '../content/curated-copy.json';
 
 export function getStaticPaths() {
 	const routes: Record<string, { gender: string; label: string }> = {
@@ -37,7 +38,7 @@ const VISIBLE = GRID.visible;
 const win = gridWindow(all, 1, GRID);
 const models = win.items;
 const seo = genderSeo(label, all.length);
-const rawCopy = (COPY as Record<string, string>)[gender] ?? null;
+const rawCopy = (CURATED_COPY as Record<string, string>)[gender] ?? (COPY as Record<string, string>)[gender] ?? null;
 const catSlugs = new Set(allCategoryFacets().map((c) => c.slug));
 const copy = rawCopy ? unlinkMissingCategories(rawCopy, (s) => catSlugs.has(s)) : null;
 

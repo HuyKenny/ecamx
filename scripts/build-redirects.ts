@@ -56,7 +56,8 @@ function resolve(dst: string): string {
 	const cat = /^\/cams\/([a-z0-9-]+)\/$/.exec(d);
 	if (cat) {
 		const slug = cat[1]!;
-		const country = CATEGORY_TO_COUNTRY[slug];
+		const merged = CATEGORY_MERGES[slug] ?? slug;
+		const country = CATEGORY_TO_COUNTRY[slug] ?? CATEGORY_TO_COUNTRY[merged];
 		if (country) d = `/country/${country}/`;
 		else d = `/cams/${CATEGORY_MERGES[slug] ?? canonicalTerm(slug) ?? slug}/`;
 	}

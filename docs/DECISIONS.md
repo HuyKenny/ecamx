@@ -4089,3 +4089,35 @@ běží živý stream a nemusím klikat na play".
   keep watching" (klik = interakce = výjimka). Měří `player_intervention`.
   Dynamická stránka `/watch/` hraje Cam4/BongaCams přes HLS jako statická.
   Amateur.tv přehrávač nemá (klíč k feedu, D63) — tam zůstává odkaz.
+
+## D85 — zabezpečení, rychlost a technické SEO po redesignu (17. 11. 2026)
+
+Kenny: „zabezpeč web, aby nás nikdo nehacknul, zrychli ho, aniž bys ho rozbil,
+technicky uprav pro SEO podle best practices". Dva audity (bezpečnost+výkon,
+SEO, ~160 GET) nenašly nic kritického (escapování, redirecty, SSRF, klíče OK).
+
+**Zóna:** min TLS 1.2; DNSSEC zapnutý v CF (DS se zadává ručně ve WEDOS panelu
+— WAPI to pro .com neumí); WP cache rule vypnutá; rate limit 40/10 s na celé
+`/api/` (`/go/` mimo); 301 na koncové lomítko (asset vrstva dávala 307).
+Záloha: `~/ai/backups/cf-ecamx-pred-zpevneni-2026-11-17.json`.
+
+**Worker:** `safeDecode` (rozbité %-sekvence dávaly 500), `SECURITY_HEADERS`
+pro HTML z Workeru, `/watch/` přímo → 301 na `/live/`, `/api/live/grid`
+bere jen existující fasety a sítě, `/api/stream` odpovídá jen pro modelky ve
+snímku (feed Cam4 v cache pod jedním klíčem), CSP povoluje náhled CamSody,
+web má binding jen na nový KV namespace `ecamx-live` (bez zápisu do registry).
+
+**Rychlost:** snímek se parsuje jen při změně `live-snapshot:ts`, indexy
+`byP`/`byUser` a memo výběrů na snímek, catch-all čte malé `live-paths`,
+`/watch/` edge cache 60 s, menší snímek, preconnect bez `crossorigin`,
+font s verzí a `immutable`, statické karty bez `eager`.
+
+**SEO:** přesměrování na jeden skok (guard na řetězy v `build-redirects`),
+neznámé `/cams/x/` a `/site/x/` = 404 (ne soft 404), stálý titulek a H1 stránek
+modelek bez `BroadcastEvent` (build 1×/noc), druhé kolo sloučení + kategorie
+zemí → `/country/`, noindex nehledaných faset, ručně psané texty mají přednost
+a 98 starých WP textů přepsáno.
+
+**Přijaté riziko:** klíč Amateur.tv je zároveň affiliate ID a je vidět
+v přesměrování `/go/amateur/…`. Kódem nejde oddělit — vyřeší jen samostatné
+affiliate ID od Amateur.tv.

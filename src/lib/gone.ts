@@ -30,7 +30,8 @@
 // jednorázový, commitnutý seznam z GSC historie (viz scripts/build-legacy-gone).
 import legacyGone from '../../seed/legacy-gone.json';
 import facets from '../data/facets.json';
-import { canonicalLanguage, canonicalTerm, modelLetter, CATEGORY_TO_COUNTRY } from './taxonomy.ts';
+import { canonicalLanguage, canonicalTerm, modelLetter, CATEGORY_TO_COUNTRY, CANONICAL } from './taxonomy.ts';
+const CANONICAL_SLUG = (s: string) => CANONICAL[s] ?? s;
 
 /** Vypnuté sítě — jejich `/site/{x}/` vede trvale na srovnání sítí (D59). */
 const RETIRED_NETWORKS = new Set(['mfc', 'myfreecams']);
@@ -200,7 +201,7 @@ export async function redirectFor(pathname: string, load: ShardLoader): Promise<
 		if (kind === 'cams') {
 			const canon = canonicalTerm(slug);
 			if (canon && canon !== slug && VALID.has(`/cams/${canon}/`)) return { to: `/cams/${canon}/`, permanent: true };
-			const country = CATEGORY_TO_COUNTRY[slug];
+			const country = CATEGORY_TO_COUNTRY[slug] ?? CATEGORY_TO_COUNTRY[CANONICAL_SLUG(slug)];
 			if (country && VALID.has(`/country/${country}/`)) return { to: `/country/${country}/`, permanent: true };
 			return null;
 		}

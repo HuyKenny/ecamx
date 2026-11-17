@@ -44,8 +44,10 @@ const girls = CURATED_BY_SLUG.get(facet.slug)?.girls ?? false;
 const seo = categorySeo(label, facet.count, girls);
 const countries = topCountries(10);
 // Text ze starého webu, jinak ručně psaný pro kurátorské kategorie.
-const rawCopy = (COPY as Record<string, string>)[facet.slug]
-	?? (CURATED_COPY as Record<string, string>)[facet.slug]
+// Ručně psaný text má přednost (D85): staré texty z WP mají šablonovitou
+// strukturu („Securing the…", „Conclusion: Command…") = vzorec scaled content.
+const rawCopy = (CURATED_COPY as Record<string, string>)[facet.slug]
+	?? (COPY as Record<string, string>)[facet.slug]
 	?? null;
 const catSlugs = new Set(allCategoryFacets().map((c) => c.slug));
 const copy = rawCopy ? unlinkMissingCategories(rawCopy, (s) => catSlugs.has(s)) : null;
