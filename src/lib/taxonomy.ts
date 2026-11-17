@@ -28,6 +28,35 @@ export const JUNK = new Set([
 ]);
 
 /**
+ * Synonymní kategorie sloučené 17. 11. 2026 (Kenny: „sluč kategorie, které
+ * jsou synonyma"). Každá dvojice byla samostatná stránka se stejnou mřížkou —
+ * kanibalizovaly se v SERPu. Vlevo zaniklý slug, vpravo cíl. Stará URL
+ * dostane 301 (`scripts/build-redirects.ts` generuje pravidla z téhle mapy),
+ * odkazy v textech kategorií se přepisují na cíl. Cíl musí být stránka, která
+ * existuje; kurátorské slugy (`money-categories.ts`) mají přednost.
+ */
+export const CATEGORY_MERGES: Record<string, string> = {
+	'anal-sex': 'anal', 'ass-fuck': 'anal', 'atm': 'ass-to-mouth', 'bigcock': 'big-cock',
+	'big-cocks': 'big-cock', 'bigdick': 'big-cock', 'blond': 'blonde', 'blond-hair': 'blonde',
+	'blonde-hair': 'blonde', 'brown-hair': 'brown', 'red': 'redhead', 'red-hair': 'redhead',
+	'dyed-hair': 'dyed', 'c2c': 'cam2cam', 'camel-toe': 'cameltoe', 'close-up': 'closeup',
+	'dirtytalk': 'dirty-talk', 'dance': 'dancing', 'dominant': 'domination', 'foot': 'feet',
+	'foot-fetish': 'feet', 'fuckmachine': 'fuck-machine', 'hairypussy': 'hairy-pussy', 'hidden': 'hidden-cam',
+	'india': 'indian', 'jerk-off-instruction': 'joi', 'masturbating': 'masturbation', 'huge-tits': 'big-tits',
+	'large-tits': 'big-tits', 'lovense-toys': 'lovense', 'milfs': 'milf', 'mistresses': 'mistress',
+	'muscle': 'muscular', 'muscles': 'muscular', 'stockings-nylons': 'stockings', 'nylon': 'stockings',
+	'piss': 'pee', 'privates': 'private', 'pvt': 'private', 'role-play': 'roleplay',
+	'sex-toy': 'toys', 'sex-toys': 'toys', 'shaved-pussy': 'shaved', 'shavedpussy': 'shaved',
+	'smalltits': 'small-tits', 'tiny-tits': 'small-tits', 'smoke': 'smoking', 'smoke-cigarette': 'smoking',
+	'smokers': 'smoking', 'spank': 'spanking', 'spanking-paddling': 'spanking', 'squirter': 'squirt',
+	'strap-on': 'strapon', 'strip': 'striptease', 'teen-18': 'teen', 'teens': 'teen',
+	'voyeurism': 'voyeur', 'zoom': 'zoom-cam', 'slim': 'skinny', 'slender': 'skinny',
+	'thin': 'skinny', 'colombiana': 'colombia', 'curvaceous': 'curvy', 'dick-rating': 'cock-rating',
+	'fingers': 'fingering', 'young-adult': 'young', 'boobs': 'tits', 'live-orgasm': 'orgasm',
+	'body-massage': 'massage', 'dildo-or-vibrator': 'dildo',
+};
+
+/**
  * Slučování duplicit. Vlevo varianty, které feedy posílají, vpravo kanonický tvar.
  * Bez tohohle má web zvlášť `bigass`, `big-ass` i `big-ass-babe` — tři stránky
  * o tomtéž, které si navzájem kanibalizují.
@@ -55,6 +84,8 @@ export const CANONICAL: Record<string, string> = {
 	'woman': 'female', 'girl': 'female', 'girls': 'female',
 	'transsexual': 'trans', 'shemale': 'trans', 'tranny': 'trans',
 	'couples': 'couple',
+	// synonyma kategorií (D84)
+	...CATEGORY_MERGES,
 };
 
 /** Slugifikace bez slučování — společný základ pro termy i pro jiné taxonomie. */

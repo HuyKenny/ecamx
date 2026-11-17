@@ -4069,3 +4069,23 @@ Karta má JEDNU šablonu (`src/lib/card.ts`) pro build i prohlížeč. Mřížka
 skeletonem jednou nahradí živými (`src/scripts/live.ts`) — bez přeskládávání
 pod rukou (D57) a se stejnou výškou (CLS 0). Stránkování mřížek zrušeno
 (statické „stránky 2+" ukazovaly mrtvé pokoje), staré URL → 301.
+
+## D84 — sloučení synonymních kategorií; stream hned po otevření stránky (17. 11. 2026)
+
+Kenny: „sluč kategorie, které jsou synonyma" a „když kliknu na modelku, ať hned
+běží živý stream a nemusím klikat na play".
+
+- **70 synonym** (`blond`/`blond-hair`/`blonde-hair` → `blonde`, `bigcock`/
+  `big-cocks`/`bigdick` → `big-cock`, `teens`/`teen-18` → `teen`, …) je
+  v `CATEGORY_MERGES` (`src/lib/taxonomy.ts`) a vstupuje do `CANONICAL`, takže
+  se slučuje už při syncu i ve snímku. Staré URL mají 301 v `_redirects`
+  (generuje `build-redirects.ts`), texty zaniklých slugů jsou smazané a odkazy
+  v textech přepsané na cíl. Cílem je vždy existující stránka, kurátorské
+  slugy mají přednost.
+- **Autoplay u všech sítí s rámcem**: do `AUTOPLAY_SAFE` přibyly Streamate
+  (embed má `volumelevel=0`), LiveJasmin a XLoveCam. Ty dva jsou na EasyListu
+  (D13) — Heavy Ad Intervention může rámec bez interakce po ~4 MB odstranit;
+  pozná se to podle druhého `load` rámce po > 8 s a vrátí se tlačítko „Tap to
+  keep watching" (klik = interakce = výjimka). Měří `player_intervention`.
+  Dynamická stránka `/watch/` hraje Cam4/BongaCams přes HLS jako statická.
+  Amateur.tv přehrávač nemá (klíč k feedu, D63) — tam zůstává odkaz.

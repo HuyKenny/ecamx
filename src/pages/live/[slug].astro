@@ -134,7 +134,16 @@ const popular = demandRotation(model.page, 16, new Set(searched.map((m) => m.pag
  *     klik. XLoveCam a LiveJasmin jsou na EasyListu → klik navždy.
  * Viz D59.
  */
-const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'cam4', 'stripchat', 'imlive', 'bongacams']);
+const AUTOPLAY_SAFE = new Set([
+	'chaturbate', 'camsoda', 'cam4', 'stripchat', 'imlive', 'bongacams',
+	// 17. 11. 2026 (D84) Kenny: „když kliknu na modelku, ať hned běží živý
+	// stream a nemusím klikat na play". Rámec se proto vkládá hned i u tří
+	// sítí, které dřív čekaly na klik. Streamate má v embedu `volumelevel=0`
+	// (ztlumeno), takže autoplay projde; LiveJasmin a XLoveCam jsou na
+	// EasyListu (Heavy Ad Intervention, D13) — pojistka ve skriptu níž pozná,
+	// že Chrome rámec odstranil, a vrátí tlačítko „pokračovat".
+	'streamate', 'livejasmin', 'xlovecam',
+]);
 
 /**
  * Sítě, u kterých se nad stream vkládá klikací vrstva (`.player-hit`).
@@ -1031,6 +1040,31 @@ const jsonLd = {
 				el.setAttribute('tabindex', '-1');
 				el.focus({ preventScroll: true });
 			}
+			/**
+			 * Pojistka pro sítě na EasyListu (D84): Heavy Ad Intervention rámec
+			 * bez interakce po ~4 MB nahradí chybovou stránkou — a to vyvolá
+			 * DRUHÝ `load` rámce. Když přijde později než za 8 s, vrátí se nad
+			 * stream tlačítko; klik do něj vloží rámec znovu, tentokrát s
+			 * interakcí uživatele (ta ho z intervence vyjímá, past 14).
+			 */
+			if (mode === 'auto' && (frame.dataset.network === 'livejasmin' || frame.dataset.network === 'xlovecam')) {
+				let loads = 0;
+				const t0 = performance.now();
+				el.addEventListener('load', () => {
+					loads++;
+					if (loads < 2 || performance.now() - t0 < 8000 || !frame) return;
+					const again = document.createElement('button');
+					again.type = 'button';
+					again.className = 'play-overlay';
+					again.innerHTML = '<span class="play-icon" aria-hidden="true">▶</span><span>Tap to keep watching</span>';
+					again.addEventListener('click', () => {
+						const fresh = el.cloneNode() as HTMLIFrameElement;
+						frame!.replaceChildren(fresh);
+					}, { once: true });
+					frame.appendChild(again);
+					ga('player_intervention', { network: frame.dataset.network });
+				});
+			}
 			// `started` hlídá, že se to nedá nasčítat opakovaným spuštěním.
 			ga('player_start', {
 				network: frame.dataset.network,
@@ -1280,6 +1314,30 @@ const jsonLd = {
 					mode: 'auto',
 				});
 			}, { once: true });
+			// Pojistka pro LiveJasmin/XLoveCam (EasyList, D84): druhý `load`
+			// rámce po víc než 8 s = Chrome ho nahradil chybovou stránkou
+			// (Heavy Ad Intervention). Vrátí se tlačítko; klik rámec vloží
+			// znovu s interakcí uživatele, která ho z intervence vyjímá.
+			const net = host?.dataset.network ?? '';
+			if (host && (net === 'livejasmin' || net === 'xlovecam')) {
+				let loads = 0;
+				const t0 = performance.now();
+				autoFrame.addEventListener('load', () => {
+					loads++;
+					if (loads < 2 || performance.now() - t0 < 8000 || host.querySelector('.play-overlay')) return;
+					const again = document.createElement('button');
+					again.type = 'button';
+					again.className = 'play-overlay';
+					again.innerHTML = '<span class="play-icon" aria-hidden="true">▶</span><span>Tap to keep watching</span>';
+					again.addEventListener('click', () => {
+						const fresh = autoFrame.cloneNode() as HTMLIFrameElement;
+						autoFrame.replaceWith(fresh);
+						again.remove();
+					}, { once: true });
+					host.appendChild(again);
+					ga('player_intervention', { network: net });
+				});
+			}
 		}
 	</script>
 	{/* Lepivý pásek. Místo pro něj je rezervované v CSS (`.sticky-cta`), takže

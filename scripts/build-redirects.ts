@@ -18,6 +18,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CATEGORY_MERGES } from '../src/lib/taxonomy.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LEGACY = join(ROOT, 'seed', 'legacy-redirects.txt');
@@ -29,10 +30,13 @@ const HARD_LIMIT = 2000;
 const log = (m: string) => console.log(`[redirects] ${m}`);
 
 const legacy = existsSync(LEGACY) ? readFileSync(LEGACY, 'utf8').trimEnd() : '';
-const rules = legacy.split('\n').filter((l) => l.startsWith('/')).length;
+const rules = legacy.split('\n').filter((l) => l.startsWith('/')).length + Object.keys(CATEGORY_MERGES).length;
 
 writeFileSync(OUT, [
 	legacy,
+	'',
+	'# Sloučené synonymní kategorie (D84, src/lib/taxonomy.ts CATEGORY_MERGES).',
+	...Object.entries(CATEGORY_MERGES).map(([from, to]) => `/cams/${from}/ /cams/${to}/ 301`),
 	'',
 	'# Zaniklé stránky modelek řeší Worker (src/pages/[...path].ts) — tady nejsou',
 	'# schválně: limit 2 000 pravidel by je uřízl a URL by padaly na 404 (D35).',

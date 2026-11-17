@@ -29,8 +29,8 @@ import { viewersText } from '../../lib/card';
 export const prerender = false;
 
 const CSP = '__ECAMX_CSP__';
-/** Sítě s ověřeným autoplayem rámce (D59/D68) — stejný seznam jako statický profil. */
-const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'stripchat', 'imlive']);
+/** Stream běží hned po otevření (Kenny 17. 11., D84) — u všech sítí s rámcem. */
+const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'stripchat', 'imlive', 'streamate', 'livejasmin', 'xlovecam']);
 const p = decodeURIComponent(Astro.params.p ?? '');
 const snap = await readSnapshot();
 const rec = snap?.m.find((r) => r.p === p);
@@ -43,6 +43,8 @@ const get = (k: string) => String((env as unknown as Record<string, string>)[k] 
 let embed = '';
 try { embed = embedUrl(rec.n as never, rec.u, get, rec.e ?? null); } catch { embed = ''; }
 const iframe = /^https:\/\//.test(embed) ? embed : '';
+/** Cam4 a BongaCams hrají HLS v našem `<video>` (D62/D70); adresu si skript bere čerstvou. */
+const hls = embed.startsWith('hls:');
 const card = toCardData(rec);
 const tags = (card.tg ?? []);
 const topKey = rec.f.find((k) => k.startsWith('m:') || k.startsWith('t:')) ?? (rec.g ? `g:${rec.g}` : 'all');
@@ -63,7 +65,11 @@ Astro.response.headers.set('referrer-policy', 'strict-origin-when-cross-origin')
 		<div>
 			<div class="player-frame" data-watch-player data-embed={iframe || undefined} data-autoplay={iframe && AUTOPLAY_SAFE.has(rec.n) && !rec.pr ? '1' : undefined}>
 				<img src={rec.t} alt={`${rec.u} live on ${label}`} class="absolute inset-0 h-full w-full object-cover" referrerpolicy="no-referrer" fetchpriority="high" />
-				{iframe ? (
+				{hls ? (
+					<video class="absolute inset-0 h-full w-full bg-black object-contain" data-watch-hls
+						data-network={rec.n} data-nick={rec.u} data-src={embed.slice(4)} poster={rec.t}
+						muted autoplay playsinline controls></video>
+				) : iframe ? (
 					<button type="button" class="play-overlay" data-watch-play aria-label={`Play ${rec.u}'s stream`}>
 						<span class="play-icon" aria-hidden="true">▶</span>
 						<span>Watch {rec.u} live</span>
