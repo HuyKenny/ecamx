@@ -173,8 +173,9 @@ export function siteHubSeo(networks: number, models: number): PageSeo {
 export function alternativesSeo(label: string, others: number, models: number): PageSeo {
 	return {
 		title: `${others} Sites Like ${label} – Compared With Live Numbers | ${SITE_NAME}`,
-		description: `Real alternatives to ${label}, checked against ${approx(models)} models we see live ` +
-			`right now. What each site does differently, who broadcasts there, and what it hides.`,
+		// ≤ 155 znaků i pro nejdelší název sítě (dřív 160, SERP ořezával konec).
+		description: `Real ${label} alternatives, checked against ${approx(models)} models live right now: `
+			+ `what each site does differently and who broadcasts there.`,
 	};
 }
 
@@ -227,68 +228,41 @@ export function profileSeo(o: {
 		.trim()
 		.slice(0, 90);
 
-	if (o.online === false) {
-		return {
-			// „Webcam" i „Cam" schválně obojí: GSC měří `<nick> cam` (197 impresí)
-			// i `<nick> webcam` (133) jako nejčastější tvary dotazu na nick.
-			//
-			// **A/B test od 28. 9. 2026 (D80).** Nejčastější tvar dotazu na Bingu je
-			// „`<nick>` live cam" (kotogal live cam: 226 impresí, nejvíc ze všech),
-			// a varianta A tu frázi v celku nemá. B ji dává dopředu a „Webcam"
-			// nechává za sítí, takže pokrývá `cam`, `live cam` i `webcam`. Není to
-			// slib, že vysílá — „live cam" je jméno té věci, ne stav. Vyhodnocuje
-			// `~/ai/scripts/ecamx/title-test.py` (rozdíl v rozdílech proti A).
-			title: o.variant === 'b'
-				? fitTitle(
-					`${o.name} Live Cam – ${o.network} Webcam Profile & Schedule | ${SITE_NAME}`,
-					`${o.name} Live Cam – ${o.network} Webcam Profile | ${SITE_NAME}`,
-					`${o.name} Live Cam – ${o.network} | ${SITE_NAME}`,
-				)
-				: fitTitle(
-					`${o.name} Webcam – ${o.network} Cam Profile & Live Schedule | ${SITE_NAME}`,
-					`${o.name} Webcam – ${o.network} Cam Profile | ${SITE_NAME}`,
-				),
-			// Popisek NEZAČÍNÁ „is offline right now": na to nikdo neklikne.
-			// Vede tím, co hledající chce — profil, obvyklé časy, kdo jede teď.
-			description: fitDescription(
-				`${o.name}${who ? who.replace(' — ', ' (') + ')' : ''} on ${o.network}. `,
-				[topics ? `Known for ${topics}. ` : ''],
-				o.archived
-					? `Open ${o.name}'s room on ${o.network} — and see which cams are online right now.`
-					: `See ${o.name}'s cam profile, when she was last live and which cams are online now.`,
-			),
-		};
-	}
-	// **Slovo „Free" smí jen tam, kde je veřejná show opravdu zdarma.**
-	// LiveJasmin, XLoveCam, Streamate a ImLive účtují show po minutě a volný je
-	// jen náhled — slibovat u nich „free webcam show, no signup" je lež, kterou
-	// návštěvník odhalí na první kliknutí. (Do 25. 8. to tak stálo na všech
-	// stránkách včetně premiových; s Streamate a ImLive by se to týkalo dalších
-	// 1 100 URL.) Freemium sítě to mají dál, protože u nich to platí.
-	const freemium = !PER_MINUTE_NETWORKS.has(o.networkId ?? '');
+	/**
+	 * **Jeden titulek pro online i offline** (D85). Statická stránka se staví
+	 * jednou za noc, takže „is live right now" v titulku a popisku bylo až
+	 * 24 h nepravdivé a titulek URL se denně měnil podle toho, jestli modelka
+	 * zrovna vysílala v minutě buildu. Živý stav ukazuje stránka za běhu.
+	 * Šablona je ta z A/B testu D80 (varianta podle slugu), takže test běží dál.
+	 */
 	return {
-		// „Live Sex Cam" táhne i z `live sex cams` (28 000/měs, KD 0) — a je to
-		// pravda, ne keyword stuffing: je to živý přenos.
-		// Žebřík: u dlouhého nicku se nejdřív obětuje „Free" (u freemium sítí),
-		// pak „Webcam Show". „Live Sex Cam" a nick zůstávají vždycky — nick je
-		// dotaz a „live sex cams" má 28 000 hledání/měs. Změřeno 4. 9.: bez
-		// žebříku bylo 8 % titulků modelek nad 65 znaků, nejdelší 80 (D74).
-		title: freemium
+		// „Webcam" i „Cam" schválně obojí: GSC měří `<nick> cam` (197 impresí)
+		// i `<nick> webcam` (133) jako nejčastější tvary dotazu na nick.
+		//
+		// **A/B test od 28. 9. 2026 (D80).** Nejčastější tvar dotazu na Bingu je
+		// „`<nick>` live cam" (kotogal live cam: 226 impresí, nejvíc ze všech),
+		// a varianta A tu frázi v celku nemá. B ji dává dopředu a „Webcam"
+		// nechává za sítí, takže pokrývá `cam`, `live cam` i `webcam`. Není to
+		// slib, že vysílá — „live cam" je jméno té věci, ne stav. Vyhodnocuje
+		// `~/ai/scripts/ecamx/title-test.py` (rozdíl v rozdílech proti A).
+		title: o.variant === 'b'
 			? fitTitle(
-				`${o.name} Live Sex Cam – Free ${o.network} Webcam Show | ${SITE_NAME}`,
-				`${o.name} Live Sex Cam – ${o.network} Webcam Show | ${SITE_NAME}`,
-				`${o.name} Live Sex Cam – ${o.network} | ${SITE_NAME}`,
+				`${o.name} Live Cam – ${o.network} Webcam Profile & Schedule | ${SITE_NAME}`,
+				`${o.name} Live Cam – ${o.network} Webcam Profile | ${SITE_NAME}`,
+				`${o.name} Live Cam – ${o.network} | ${SITE_NAME}`,
 			)
 			: fitTitle(
-				`${o.name} Live Sex Cam – ${o.network} Webcam Show | ${SITE_NAME}`,
-				`${o.name} Live Sex Cam – ${o.network} | ${SITE_NAME}`,
+				`${o.name} Webcam – ${o.network} Cam Profile & Live Schedule | ${SITE_NAME}`,
+				`${o.name} Webcam – ${o.network} Cam Profile | ${SITE_NAME}`,
 			),
+		// Popisek NEZAČÍNÁ „is offline right now": na to nikdo neklikne.
+		// Vede tím, co hledající chce — profil, obvyklé časy, kdo jede teď.
 		description: fitDescription(
-			`${o.name} is live on ${o.network} right now${who}. `,
-			[subject ? `“${subject}”. ` : '', topics ? `Known for ${topics}. ` : ''],
-			freemium
-				? `Free webcam show, no signup.`
-				: `Free preview; private shows are billed by the minute.`,
+			`${o.name}${who ? who.replace(' — ', ' (') + ')' : ''} on ${o.network}. `,
+			[topics ? `Known for ${topics}. ` : ''],
+			o.archived
+				? `Open ${o.name}'s room on ${o.network} — and see which cams are online right now.`
+				: `See ${o.name}'s cam profile, when she was last live and which cams are online now.`,
 		),
 	};
 }

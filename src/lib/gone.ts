@@ -30,7 +30,10 @@
 // jednorázový, commitnutý seznam z GSC historie (viz scripts/build-legacy-gone).
 import legacyGone from '../../seed/legacy-gone.json';
 import facets from '../data/facets.json';
-import { canonicalLanguage, canonicalTerm, modelLetter } from './taxonomy.ts';
+import { canonicalLanguage, canonicalTerm, modelLetter, CATEGORY_TO_COUNTRY } from './taxonomy.ts';
+
+/** Vypnuté sítě — jejich `/site/{x}/` vede trvale na srovnání sítí (D59). */
+const RETIRED_NETWORKS = new Set(['mfc', 'myfreecams']);
 import { shardOf } from './redirect-shard.ts';
 
 /** Rozbitá %-sekvence = neexistující stránka (404), ne pád Workeru (D85). */
@@ -179,16 +182,30 @@ export async function redirectFor(pathname: string, load: ShardLoader): Promise<
 	if (deep) {
 		const base = deep.length === 4 ? `/${deep[1]}/${deep[2]}/` : `/${deep[1]}/`;
 		// `/page/2/` je stránkování homepage — základ je kořen webu.
-		return { to: base === '/page/' ? '/' : base, permanent: false };
+		return { to: base === '/page/' ? '/' : base, permanent: true };
 	}
 
+	/**
+	 * **Neznámá kategorie/síť = 404, ne 302 na rozcestník** (D85). Dřív vedla
+	 * na `/cams/` resp. `/site/` jakákoli vymyšlená adresa — nekonečný prostor
+	 * URL, které Google bere jako soft 404 a pálí na nich crawl budget.
+	 * Přesměruje se jen to, co má smysl: slug, který kanonizace převede na
+	 * existující kategorii (`big-ass` → `bigass`, sloučená synonyma), a sítě,
+	 * které jsme vypnuli (MyFreeCams, D59).
+	 */
 	const hub = /^\/(site|cams)\/([^/]+)\/?$/.exec(pathname);
 	if (hub) {
-		const [, kind, slug] = hub;
-		const known = VALID.has(`/${kind}/${slug}/`);
-		// Existující rozcestník sem nikdy nedojde (obsluhuje ho statický soubor),
-		// takže tady zbývají jen ty zaniklé.
-		if (!known) return { to: `/${kind}/`, permanent: false };
+		const [, kind, rawSlug] = hub;
+		const slug = safeDecode(rawSlug!) ?? '';
+		if (kind === 'cams') {
+			const canon = canonicalTerm(slug);
+			if (canon && canon !== slug && VALID.has(`/cams/${canon}/`)) return { to: `/cams/${canon}/`, permanent: true };
+			const country = CATEGORY_TO_COUNTRY[slug];
+			if (country && VALID.has(`/country/${country}/`)) return { to: `/country/${country}/`, permanent: true };
+			return null;
+		}
+		if (RETIRED_NETWORKS.has(slug)) return { to: '/site/', permanent: true };
+		return null;
 	}
 
 	const cat = LEGACY_CATEGORY.exec(pathname);

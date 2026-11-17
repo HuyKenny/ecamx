@@ -7,6 +7,7 @@
  * Obsah se od 19. 8. nezměnil, jen se přestěhoval z `sitemap.xml`, ze kterého
  * je teď sitemapindex. Viz D53.
  */
+import { NOINDEX_FACETS } from '../lib/taxonomy';
 import type { APIRoute } from 'astro';
 import { ALTERNATIVES_FOR } from '../content/network-compare';
 import { TOKEN_RATES } from '../content/token-rates';
@@ -24,7 +25,8 @@ export const GET: APIRoute = () => {
 		urlNode(abs('/cams/'), lastmod),
 		// allCategoryFacets(), ne FACETS.categories — jinak vypadne 12 atributových
 		// stránek (/cams/latin/, /cams/blonde/, …), které existují, ale nikdo je nenajde.
-		...allCategoryFacets().map((c) => urlNode(abs(`/cams/${c.slug}/`), lastmod)),
+		// Nehledané fasety (znamení, velikosti feedů) jsou noindex → ne do sitemapy (D85).
+		...allCategoryFacets().filter((c) => !NOINDEX_FACETS.has(c.slug)).map((c) => urlNode(abs(`/cams/${c.slug}/`), lastmod)),
 		// Rozcestník zemí — do 28. 9. neexistoval a drobeček „Countries“ vedl donikam.
 		urlNode(abs('/country/'), lastmod),
 		...FACETS.countries.map((c) => urlNode(abs(`/country/${c.slug}/`), lastmod)),

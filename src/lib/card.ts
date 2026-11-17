@@ -93,7 +93,7 @@ export function cardHtml(d: CardData, opts: { eager?: boolean; priority?: boolea
 		+ `<div class="card-meta">`
 		+ `<span class="net-dot net-${esc(d.n)}" aria-hidden="true">${esc(label.charAt(0))}</span>`
 		+ `<div class="card-text">`
-		+ `<h3 class="card-name"><a href="${href}" class="stretch">${esc(d.u)}</a></h3>`
+		+ `<p class="card-name"><a href="${href}" class="stretch">${esc(d.u)}</a></p>`
 		+ `<p class="card-sub">${esc(meta)}</p>`
 		+ (tags ? `<p class="card-tags">${tags}</p>` : '')
 		+ `</div></div></article>`;

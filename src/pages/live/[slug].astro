@@ -306,7 +306,14 @@ const startedAt = model.online && model.onlineSeconds
 	? new Date(Date.now() - model.onlineSeconds * 1000).toISOString()
 	: null;
 
-const videoObject = model.online ? {
+/**
+ * **Statická stránka už nevydává VideoObject/BroadcastEvent** (D85). Staví se
+ * jednou za noc, takže `isLiveBroadcast: true` bez `endDate` platilo až 24 h
+ * po konci vysílání — nesoulad mezi schema a stránkou, který Google trestá
+ * zahozením rich results. Živý stav ukazuje stránka skriptem; dynamická
+ * `/watch/` je noindex. Ponecháno vypnuté přes `false &&`, ať je vidět proč.
+ */
+const videoObject = false && model.online ? {
 	'@type': 'VideoObject',
 	'@id': `${SITE_URL}/live/${model.page}/#stream`,
 	name: `${model.displayName} live webcam on ${label}`,
@@ -338,7 +345,6 @@ const jsonLd = {
 			name: `${model.displayName} — live cam on ${label}`,
 			dateModified: model.last,
 			isFamilyFriendly: false,
-			...(videoObject ? { mainEntityOfPage: { '@id': `${SITE_URL}/live/${model.page}/#stream` } } : {}),
 			mainEntity: {
 				'@type': 'Person',
 				name: model.displayName,
@@ -381,9 +387,8 @@ const jsonLd = {
 			    a samotný nick (151, 14,5) — tvary, na které stránka reálně sedí. */}
 			<div class="flex flex-wrap items-start justify-between gap-3">
 				<h1 class="text-2xl font-extrabold sm:text-3xl">
-					{model.online
-						? `${model.displayName} Live Sex Cam — ${label}`
-						: `${model.displayName} Webcam — ${label} Cam Profile`}
+					{/* Stejný nadpis online i offline (D85) — stav ukáže odznak za běhu. */}
+					{`${model.displayName} Live Cam — ${label} Webcam Profile`}
 				</h1>
 				{/*
 				  Sledování. Tlačítko je v HTML od prvního snímku a skript mu jen

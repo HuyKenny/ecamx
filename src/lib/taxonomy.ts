@@ -36,6 +36,9 @@ export const JUNK = new Set([
  * existuje; kurátorské slugy (`money-categories.ts`) mají přednost.
  */
 export const CATEGORY_MERGES: Record<string, string> = {
+	// 2. kolo (D85, SEO audit): duplicitní titulek a překryvy významu
+	'black-hair': 'black', 'cumming': 'cum', 'bj': 'blowjob', 'oral': 'blowjob',
+	'pinay': 'filipina', 'domi': 'domination', 'lean': 'skinny',
 	'anal-sex': 'anal', 'ass-fuck': 'anal', 'atm': 'ass-to-mouth', 'bigcock': 'big-cock',
 	'big-cocks': 'big-cock', 'bigdick': 'big-cock', 'blond': 'blonde', 'blond-hair': 'blonde',
 	'blonde-hair': 'blonde', 'brown-hair': 'brown', 'red': 'redhead', 'red-hair': 'redhead',
@@ -55,6 +58,27 @@ export const CATEGORY_MERGES: Record<string, string> = {
 	'fingers': 'fingering', 'young-adult': 'young', 'boobs': 'tits', 'live-orgasm': 'orgasm',
 	'body-massage': 'massage', 'dildo-or-vibrator': 'dildo',
 };
+
+/**
+ * Tagy, které jsou ve skutečnosti ZEMĚ (D85). Měly vlastní `/cams/{x}/`, která
+ * kanibalizovala `/country/{kód}/`. Jako kategorie zanikají (canonicalTerm →
+ * null) a stará URL vede 301 na stránku země (`gone.ts`, `build-redirects.ts`).
+ */
+export const CATEGORY_TO_COUNTRY: Record<string, string> = {
+	colombia: 'co', romania: 'ro', ukraine: 'ua',
+	'united-states': 'us', 'united-kingdom': 'gb', british: 'gb',
+};
+
+/**
+ * Fasety, které nejsou hledaný pojem (znamení, velikostní hodnoty feedů,
+ * vatové tagy). Stránka zůstává kvůli navigaci, ale je `noindex, follow`
+ * a není v sitemapě (D85) — jinak to jsou tenké stránky v indexu.
+ */
+export const NOINDEX_FACETS = new Set<string>([
+	'aquarius', 'aries', 'cancer', 'capricorn', 'gemini', 'leo', 'libra', 'pisces',
+	'sagittarius', 'scorpio', 'taurus', 'virgo',
+	'large', 'medium', 'average', 'just-me', 'hot', 'nasty', 'sexwebcam',
+]);
 
 /**
  * Slučování duplicit. Vlevo varianty, které feedy posílají, vpravo kanonický tvar.
@@ -112,6 +136,7 @@ export function canonicalTerm(raw: string): string | null {
 	if (NICHE_ARTIFACT.test(s)) return null;
 	if (JUNK.has(s)) return null;
 	if (/^\d+$/.test(s)) return null; // holá čísla nejsou kategorie
+	if (CATEGORY_TO_COUNTRY[s]) return null; // země mají /country/ (D85)
 	return CANONICAL[s] ?? s;
 }
 
