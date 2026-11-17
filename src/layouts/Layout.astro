@@ -269,7 +269,7 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 	{/* Živá data mřížky se začnou stahovat UŽ TEĎ (D63) — stejná URL, jakou
 	    pak složí `src/scripts/live.ts`, jinak by se přednačtení nevyužilo. */}
 	{liveQuery && (
-		<link rel="preload" as="fetch" crossorigin="anonymous" href={`/api/live/grid/?q=${liveQuery}`} />
+		<link rel="preload" as="fetch" crossorigin="anonymous" href={`/api/live/grid/?v=2&q=${liveQuery}`} />
 	)}
 
 	<slot name="head" />

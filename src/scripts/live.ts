@@ -59,7 +59,9 @@ function buildQuery(sites: string[]): string {
 	// Ručně, ne přes URLSearchParams: ten zakóduje `:` a `,` a URL by se
 	// pak neshodovala s přednačtením v <head> (`Layout.astro`, `liveQuery`).
 	// Všechny znaky jsou z [a-z0-9:~,-], takže kódovat není co.
-	let url = `/api/live/grid/?q=${q}`;
+	// `v=` jen mění URL: do 17. 11. 2026 zóna přepisovala Browser TTL na rok,
+	// takže prohlížeče měly starou odpověď uloženou pod původní adresou.
+	let url = `/api/live/grid/?v=2&q=${q}`;
 	if (sites.length) url += `&s=${[...sites].sort().join(',')}`;
 	if (x) url += `&x=${encodeURIComponent(x)}`;
 	return url;
@@ -239,7 +241,7 @@ void hydrate(storedSites(), true);
 	const a = document.querySelector<HTMLAnchorElement>('[data-cta-retarget]');
 	const m = a && /^\/go\/([a-z0-9]+)\//.exec(new URL(a.href, location.href).pathname);
 	if (a && m) {
-		void fetchLive(`/api/live/grid/?q=n:${m[1]}~1`).then((d) => {
+		void fetchLive(`/api/live/grid/?v=2&q=n:${m[1]}~1`).then((d) => {
 			const c = d?.fresh ? d.g[`n:${m[1]}`]?.[0] : undefined;
 			if (c) a.href = `/go/${m[1]}/${encodeURIComponent(c.u)}/?p=network`;
 		});

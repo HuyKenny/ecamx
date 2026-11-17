@@ -4150,3 +4150,10 @@ kterému stream na našem webu nefunguje, klidně odstraň".
 - Chaturbate v rámci má stránku vysokou min. ~500 px s vlastním `overflow: scroll`. V nižším rámci se dalo scrollovat a `scrolling="no"` to cross-origin nezastaví.
 - `mountEmbed()` v `src/lib/fit-embed.ts` proto vykreslí rámec v logické výšce ≥ 500 px a zmenší ho přes `transform: scale` do přehrávače.
 - Embed s chatem jede jen v `.theater.is-chat` od 900 px. Stránka stavěná offline, kde modelka mezitím vysílá, dostane jen video.
+
+**D87 (17. 11. 2026): prázdný levý panel „Live now“ + roční cache API.**
+- **Příčina 1:** obnova snímku v `readSnapshot()` běžela mimo `waitUntil`. Když ji runtime utnul s koncem requestu, `memo.refresh` zůstal navždy rozdělaný a isolate servíroval starý snímek. API pak vracelo `fresh: false` (věk 17 min) a `fillRail` panel nenaplnil.
+  - Oprava: zaseklá obnova se po 15 s zahodí a snímek starší než 7 min čeká na obnovu.
+- **Příčina 2:** zóna měla Browser Cache TTL 1 rok, který přepsal `max-age=30` odpovědí API z edge cache.
+  - Přepnuto na „Respect existing headers“ (0).
+  - URL API dostala `v=2`, aby prohlížeče s roční kopií načetly novou.

@@ -24,7 +24,12 @@ export const LIVE_PATHS_KEY = 'live-paths';
 
 const kv = (): KVNamespace | undefined => (env as unknown as { LIVE_KV?: KVNamespace }).LIVE_KV;
 
-let memo: { checked: number; snap: Snapshot | null; refresh?: Promise<Snapshot | null> } | null = null;
+let memo: { checked: number; snap: Snapshot | null; refresh?: Promise<Snapshot | null>; refreshAt?: number } | null = null;
+
+/** Obnova starší než tohle = runtime ji zrušil s koncem requestu (není ve `waitUntil`). */
+const REFRESH_STUCK_MS = 15_000;
+/** Snímek starší než tohle se neservíruje „stale“: request na obnovu počká. */
+const MAX_STALE_MS = 7 * 60_000;
 
 async function load(k: KVNamespace): Promise<Snapshot | null> {
 	const snap = await k.get<Snapshot>(SNAPSHOT_KEY, { type: 'json', cacheTtl: 60 }).catch(() => null);
@@ -32,27 +37,39 @@ async function load(k: KVNamespace): Promise<Snapshot | null> {
 	return snap ?? memo?.snap ?? null;
 }
 
-/** Snímek s pamětí isolate; stale-while-revalidate podle `live-snapshot:ts`. */
+/**
+ * Snímek s pamětí isolate; stale-while-revalidate podle `live-snapshot:ts`.
+ * Pozor (17. 11. 2026): obnova běží mimo `waitUntil`. Když ji runtime utne
+ * s koncem requestu, `refresh` by zůstal navždy rozdělaný a isolate by
+ * servíroval starý snímek do konce života (API pak `fresh: false`, prázdný
+ * panel). Proto se zaseklá obnova zahodí a příliš starý snímek se nevrací.
+ */
 export async function readSnapshot(): Promise<Snapshot | null> {
 	const k = kv();
 	if (!k) return null;
 	const now = Date.now();
+	if (memo?.refresh && now - (memo.refreshAt ?? 0) > REFRESH_STUCK_MS) memo.refresh = undefined;
 	if (!memo?.snap) {
 		if (memo?.refresh) return memo.refresh;
 		const refresh = load(k).then((snap) => { memo = { checked: Date.now(), snap }; return snap; });
-		memo = { checked: now, snap: null, refresh };
+		memo = { checked: now, snap: null, refresh, refreshAt: now };
 		return refresh;
 	}
 	if (now - memo.checked >= 60_000 && !memo.refresh) {
 		memo.checked = now;
 		const cur = memo.snap;
+		memo.refreshAt = now;
 		memo.refresh = (async () => {
 			const ts = Number(await k.get(SNAPSHOT_TS_KEY, { cacheTtl: 60 }).catch(() => null));
 			const snap = ts && ts !== cur.ts ? await load(k) : cur;
 			memo = { checked: Date.now(), snap };
 			return snap;
-		})().catch(() => cur);
+		})().catch(() => {
+			if (memo) memo.refresh = undefined;
+			return cur;
+		});
 	}
+	if (memo.refresh && now - memo.snap.ts > MAX_STALE_MS) return memo.refresh;
 	return memo.snap;
 }
 
