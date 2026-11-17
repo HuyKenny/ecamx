@@ -34,21 +34,31 @@ export type EnvGet = (key: string) => string;
  * `AMATEUR_API_KEY` tu schválně NENÍ: je to i credential k feedu (past 19),
  * build ho nedostane a odkaz na Amateur.tv staví jen `/go/` z Worker secrets.
  */
-const BUILD_PUBLIC: Record<string, string | undefined> = {
-	CHATURBATE_AFFILIATE: import.meta.env.PUBLIC_CHATURBATE_AFFILIATE,
-	CHATURBATE_TOUR: import.meta.env.PUBLIC_CHATURBATE_TOUR,
-	CHATURBATE_TRACK: import.meta.env.PUBLIC_CHATURBATE_TRACK,
-	CAMSODA_AFFILIATE: import.meta.env.PUBLIC_CAMSODA_AFFILIATE,
-	CAM4_SID: import.meta.env.PUBLIC_CAM4_SID,
-	CAM4_AID: import.meta.env.PUBLIC_CAM4_AID,
-	CAM4_RP: import.meta.env.PUBLIC_CAM4_RP,
-	BONGACAMS_USER_ID: import.meta.env.PUBLIC_BONGACAMS_USER_ID,
-	XLOVE_AFFILIATE_ID: import.meta.env.PUBLIC_XLOVE_AFFILIATE_ID,
-	LIVEJASMIN_USERID: import.meta.env.PUBLIC_LIVEJASMIN_USERID,
-	LIVEJASMIN_PSPROGRAM: import.meta.env.PUBLIC_LIVEJASMIN_PSPROGRAM,
-	CRAKREVENUE_AFF_ID: import.meta.env.PUBLIC_CRAKREVENUE_AFF_ID,
-};
-const buildEnv: EnvGet = (k) => BUILD_PUBLIC[k] ?? '';
+function readBuildPublic(): Record<string, string | undefined> {
+	// Mimo Vite (sync v Node, cron Worker přes esbuild) `import.meta.env`
+	// neexistuje a přístup by shodil import celého modulu — tam se build
+	// cesta stejně nepoužívá (volající předávají vlastní `env`).
+	try {
+		return {
+			CHATURBATE_AFFILIATE: import.meta.env.PUBLIC_CHATURBATE_AFFILIATE,
+			CHATURBATE_TOUR: import.meta.env.PUBLIC_CHATURBATE_TOUR,
+			CHATURBATE_TRACK: import.meta.env.PUBLIC_CHATURBATE_TRACK,
+			CAMSODA_AFFILIATE: import.meta.env.PUBLIC_CAMSODA_AFFILIATE,
+			CAM4_SID: import.meta.env.PUBLIC_CAM4_SID,
+			CAM4_AID: import.meta.env.PUBLIC_CAM4_AID,
+			CAM4_RP: import.meta.env.PUBLIC_CAM4_RP,
+			BONGACAMS_USER_ID: import.meta.env.PUBLIC_BONGACAMS_USER_ID,
+			XLOVE_AFFILIATE_ID: import.meta.env.PUBLIC_XLOVE_AFFILIATE_ID,
+			LIVEJASMIN_USERID: import.meta.env.PUBLIC_LIVEJASMIN_USERID,
+			LIVEJASMIN_PSPROGRAM: import.meta.env.PUBLIC_LIVEJASMIN_PSPROGRAM,
+			CRAKREVENUE_AFF_ID: import.meta.env.PUBLIC_CRAKREVENUE_AFF_ID,
+		};
+	} catch {
+		return {};
+	}
+}
+let buildPublic: Record<string, string | undefined> | null = null;
+const buildEnv: EnvGet = (k) => (buildPublic ??= readBuildPublic())[k] ?? '';
 
 /**
  * Odkud klik odešel. Bez tohohle nejde poznat, jestli vydělává karta v mřížce,
