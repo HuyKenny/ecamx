@@ -107,6 +107,13 @@ interface RegistryEntry {
 	 * měřením v čase. Právě tím se dá odlišit od sítě samotné i od konkurence.
 	 */
 	hours?: string;
+	/**
+	 * 1 = stránka byla v posledním buildu ZVEŘEJNĚNÁ jako statický soubor
+	 * (D82). Přesměrování (`gone`) dostane jen taková — živá modelka, která
+	 * měla jen dynamickou stránku `/watch/`, po sobě žádnou URL nezanechává,
+	 * takže nevzniká kolotoč stránka ↔ 302 ani přírůstek v `registry-gone`.
+	 */
+	pub?: 1;
 }
 type Registry = Record<string, RegistryEntry>;
 
@@ -866,6 +873,20 @@ function demandFor(page: string | undefined | null): number {
 const DEMAND_KEEP = 1;
 
 const liveKeys = new Set(models.map((m) => `${m.network}:${m.slug}`));
+
+/**
+ * **Kdo měl v minulém buildu statickou stránku** (D82). Do 17. 11. 2026 ji
+ * měla každá živá modelka a ~9 000 URL se každý běh přepínalo mezi stránkou
+ * a 302 (past 119). Teď živá modelka bez historie dostane dynamickou stránku
+ * ze snímku (`/watch/`) a statickou až když je stabilní — a jednou zveřejněná
+ * stránka drží, dokud nevyprší `GRACE_DAYS` (hystereze).
+ *
+ * První běh po nasazení pole `pub` ještě nezná → bere se starý význam
+ * „má slug a není přesměrovaná".
+ */
+const hasPubField = Object.values(registry).some((e) => e.pub);
+const wasPublished = (e: RegistryEntry): boolean => (hasPubField ? !!e.pub : !!e.page && !e.gone);
+const prevHolders = new Set(Object.entries(registry).filter(([, e]) => wasPublished(e)).map(([k]) => k));
 const yesterday = isoDay(started.getTime() - 86_400_000);
 const cutoffPage = isoDay(started.getTime() - GRACE_DAYS * 86_400_000);
 const cutoffNoDemand = isoDay(started.getTime() - GRACE_DAYS_NO_DEMAND * 86_400_000);
@@ -911,6 +932,45 @@ for (const m of optOuts) {
  * z logu vůbec poznat. Viz D75.
  */
 let revived = 0;
+
+// 0b. Přítomnost z cronu (D82): `presence:YYYY-MM-DD` = { klíč: maska hodin }.
+//     Build jede jednou denně, takže sám by viděl jen modelky živé v tu
+//     minutu — `seen` (práh indexace i stránky) a rozvrh `hours` by stály na
+//     jednom vzorku denně. Cron zapisuje každou hodinu, tady se to dopočítá.
+//     Nové záznamy se z přítomnosti NEZAKLÁDAJÍ (registry je u 77 % limitu
+//     KV a bez snapshotu by z nich stejně stránka nevznikla).
+let presenceDays = 0, presenceHits = 0;
+{
+	const { CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID, CF_API_TOKEN } = process.env;
+	if (!NO_KV && CF_ACCOUNT_ID && CF_KV_NAMESPACE_ID && CF_API_TOKEN) {
+		const doneRaw = await kvRead('presence-done').catch(() => null) as unknown as { day?: string } | null;
+		const done = doneRaw?.day ?? isoDay(started.getTime() - 2 * 86_400_000);
+		for (let d = 8; d >= 1; d--) {
+			const day = isoDay(started.getTime() - d * 86_400_000);
+			if (day <= done) continue;
+			const pres = await kvRead(`presence:${day}`).catch(() => null) as unknown as Record<string, number> | null;
+			if (!pres) continue;
+			presenceDays++;
+			const before = isoDay(Date.parse(day) - 86_400_000);
+			for (const [k, mask] of Object.entries(pres)) {
+				const e = registry[k];
+				if (!e || e.last >= day) continue;
+				e.seen += 1;
+				e.streak = e.last === before ? e.streak + 1 : 1;
+				e.last = day;
+				for (let b = 0; b < 12; b++) if (mask & (3 << (b * 2))) e.hours = bumpHour(e.hours, b);
+				presenceHits++;
+			}
+		}
+		if (!DRY && presenceDays) {
+			const body = new FormData();
+			body.set('value', JSON.stringify({ day: yesterday }));
+			body.set('metadata', '{}');
+			await fetch(kvUrl('presence-done'), { method: 'PUT', headers: { Authorization: `Bearer ${CF_API_TOKEN}` }, body });
+		}
+	}
+	log(`přítomnost z cronu: ${presenceDays} dní, ${presenceHits} záznamů dopočítáno`);
+}
 
 // 1. Zaznamenat dnešní výskyt a uložit čerstvý snapshot.
 for (const m of models) {
@@ -982,7 +1042,20 @@ for (const [k, e] of Object.entries(registry)) {
 // našel (imprese v GSC) nebo na jejíž nick je měřený objem hledání, se do
 // rozpočtu vejde vždycky. Bez toho web mazal vlastní pozice — 89 % impresí
 // končilo na 404, včetně dvou nejsilnějších stránek webu.
-const archiveBudget = Math.max(0, MAX_MODEL_PAGES - models.length);
+/**
+ * Živé modelky se STATICKOU stránkou (D82): zveřejněné minule, viděné aspoň
+ * `INDEX_MIN_DAYS` dní, nebo s měřenou poptávkou. Ostatní živé dostanou
+ * dynamickou stránku ze snímku a do katalogu (mřížky z buildu, adresář,
+ * sitemapa) nejdou.
+ */
+const staticLive = models.filter((m) => {
+	const k = `${m.network}:${m.slug}`;
+	const e = registry[k]!;
+	return prevHolders.has(k) || e.seen >= INDEX_MIN_DAYS || demandFor(e.page) >= DEMAND_KEEP;
+});
+const staticKeys = new Set(staticLive.map((m) => `${m.network}:${m.slug}`));
+log(`živé: ${models.length}, z toho se statickou stránkou ${staticLive.length} (zbytek /watch/ ze snímku)`);
+const archiveBudget = Math.max(0, MAX_MODEL_PAGES - staticLive.length);
 /**
  * Měřená poptávka přebíjí VŠECHNY ostatní podmínky — i `snap` a `gone`.
  *
@@ -1044,7 +1117,7 @@ const archiveKeys = archiveRanked.slice(0, archiveBudget).map(([k]) => k);
 const evicted = archiveRanked.slice(archiveBudget);
 const evictedWithDemand = evicted.filter(([, e]) => wanted(e)).length;
 
-const pageKeys = new Set<string>([...liveKeys, ...archiveKeys]);
+const pageKeys = new Set<string>([...staticKeys, ...archiveKeys]);
 
 /**
  * **Do sitemapy patří jen stránka, která tam bude i příští build.**
@@ -1110,6 +1183,8 @@ for (const [k, e] of Object.entries(registry)) {
 	// přesměrování musí zmizet, jinak by v mapě zůstalo navěky.
 	if (pageKeys.has(k) && e.gone) { delete e.gone; returned++; continue; }
 	if (pageKeys.has(k) || !e.page || e.gone) continue;
+	// Nikdy nezveřejněná (jen dynamická `/watch/`) → žádná URL k přesměrování.
+	if (!wasPublished(e)) continue;
 	// Stránka s měřenou poptávkou se nepřesměrovává. Když se nevešla do
 	// rozpočtu, je to chyba rozpočtu — ne důvod zahodit pozici v Googlu.
 	if (demandFor(e.page) >= DEMAND_KEEP) { keptByDemand++; continue; }
@@ -1119,8 +1194,17 @@ for (const [k, e] of Object.entries(registry)) {
 	// modelek pod prahem mělo URL, které se v okamžiku konce vysílání změnilo
 	// v tvrdou 404. Od 19. 8. mapu čte Worker, kde limit není (D35).
 	e.gone = redirectTarget(e); retired++;
+	delete e.pub;
 	// Snapshot už není k čemu — stránka neexistuje. Šetří to megabajty v KV.
 	delete e.snap;
+}
+
+// 4b. Co se teď zveřejňuje, si to pamatuje pro příští hysterezi.
+for (const [k, e] of Object.entries(registry)) {
+	// Jen nastavit: zrušení `pub` dělá krok 4 spolu s přesměrováním. Stránka
+	// držená poptávkou mimo rozpočet si `pub` nechává, ať se příště správně
+	// přesměruje, až o poptávku přijde.
+	if (pageKeys.has(k)) e.pub = 1;
 }
 
 // 5. Úklid. Slug se uvolní až po vypršení přesměrování, jinak by ho zabrala jiná
@@ -1218,7 +1302,7 @@ function minimalArchive(key: string, e: RegistryEntry): CatalogModel {
 	};
 }
 
-const onlineCatalog = models.map((m) => decorate(m, registry[`${m.network}:${m.slug}`]!, true));
+const onlineCatalog = staticLive.map((m) => decorate(m, registry[`${m.network}:${m.slug}`]!, true));
 const archiveCatalog = archiveKeys.map((k) => {
 	const e = registry[k]!;
 	return e.snap ? decorate(e.snap, e, false) : minimalArchive(k, e);

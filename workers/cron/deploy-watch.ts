@@ -11,7 +11,7 @@
  * (past 117). Zůstává nakopnutí CI a hláška, což je přesně to, co se dá dělat
  * poctivě.
  *
- * Prahy: kick 16 h, poplach 18 h. Mezera mezi buildy je 12 h a GitHub
+ * Prahy: kick 30 h, poplach 36 h (od 17. 11. 2026 noční build, D82). Dřív 16/18 h při 12h mezeře; GitHub
  * plánované běhy odkládá (naměřeno 2–5 h), takže stáří běžně vystoupá na ~15 h.
  * Nižší prahy by kickovaly každý den a spálily minuty, které se tím šetří —
  * přesně to se dělo 22. 9. (past 113).
@@ -23,8 +23,9 @@ import {
 } from "./shared.ts";
 
 /** Normální mezera je 12 h; kick je mezera + 4, poplach + 6. */
-const KICK_AFTER_HOURS = 16;
-const MAX_AGE_HOURS = 18;
+// 17. 11. 2026 (D82): build jen jednou za noc (01:17 UTC) → mezera 24 h + zpoždění GitHubu.
+const KICK_AFTER_HOURS = 30;
+const MAX_AGE_HOURS = 36;
 /** Jak dlouho mlčet o témže incidentu (a 24 h, když web drží záloha). */
 const REPEAT_HOURS = 6;
 const REPEAT_HOURS_FRESH = 24;
