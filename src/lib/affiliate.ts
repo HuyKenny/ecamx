@@ -24,8 +24,31 @@ import type { NetworkId } from './data';
  */
 export type EnvGet = (key: string) => string;
 
-const buildEnv: EnvGet = (k) =>
-	(import.meta.env as Record<string, string | undefined>)[`PUBLIC_${k}`] ?? '';
+/**
+ * **Explicitní whitelist, ne `import.meta.env[\`PUBLIC_${k}\`]`.** Dynamický
+ * přístup nutí Vite zapéct do bundlu CELÝ objekt `import.meta.env` — takže
+ * cokoli s prefixem `PUBLIC_` v prostředí buildu (třeba omylem vyplněný
+ * `PUBLIC_AMATEUR_API_KEY` z `.env`) by skončilo ve veřejném kódu (past 95).
+ * Statické `import.meta.env.PUBLIC_X` vloží jen tyhle hodnoty, a jsou to
+ * veřejná affiliate ID, která stejně stojí v každém odchozím odkazu.
+ * `AMATEUR_API_KEY` tu schválně NENÍ: je to i credential k feedu (past 19),
+ * build ho nedostane a odkaz na Amateur.tv staví jen `/go/` z Worker secrets.
+ */
+const BUILD_PUBLIC: Record<string, string | undefined> = {
+	CHATURBATE_AFFILIATE: import.meta.env.PUBLIC_CHATURBATE_AFFILIATE,
+	CHATURBATE_TOUR: import.meta.env.PUBLIC_CHATURBATE_TOUR,
+	CHATURBATE_TRACK: import.meta.env.PUBLIC_CHATURBATE_TRACK,
+	CAMSODA_AFFILIATE: import.meta.env.PUBLIC_CAMSODA_AFFILIATE,
+	CAM4_SID: import.meta.env.PUBLIC_CAM4_SID,
+	CAM4_AID: import.meta.env.PUBLIC_CAM4_AID,
+	CAM4_RP: import.meta.env.PUBLIC_CAM4_RP,
+	BONGACAMS_USER_ID: import.meta.env.PUBLIC_BONGACAMS_USER_ID,
+	XLOVE_AFFILIATE_ID: import.meta.env.PUBLIC_XLOVE_AFFILIATE_ID,
+	LIVEJASMIN_USERID: import.meta.env.PUBLIC_LIVEJASMIN_USERID,
+	LIVEJASMIN_PSPROGRAM: import.meta.env.PUBLIC_LIVEJASMIN_PSPROGRAM,
+	CRAKREVENUE_AFF_ID: import.meta.env.PUBLIC_CRAKREVENUE_AFF_ID,
+};
+const buildEnv: EnvGet = (k) => BUILD_PUBLIC[k] ?? '';
 
 /**
  * Odkud klik odešel. Bez tohohle nejde poznat, jestli vydělává karta v mřížce,

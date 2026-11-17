@@ -16,7 +16,8 @@ from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
 SECRET_NAMES = ["CLOUDFLARE_API_TOKEN", "AMATEUR_API_KEY", "XLOVE_API_KEY", "LIVEJASMIN_API_KEY", "CRAKREVENUE_TOKEN",
-                "CRAKREVENUE_API_KEY", "MALINA_WARM_TOKEN", "CF_API_KEY", "CF_GLOBAL_API_KEY"]
+                "CRAKREVENUE_API_KEY", "MALINA_WARM_TOKEN", "CF_API_KEY", "CF_GLOBAL_API_KEY",
+                "GA4_MP_API_SECRET", "CHATURBATE_STATS_TOKEN", "CHATURBATE_EVENTS_TOKEN", "CF_API_TOKEN"]
 # public by design: CJ_PID / CID (in every affiliate link / not usable without the key), IndexNow key (served as a file)
 PATTERNS = [
     (r"-----BEGIN [A-Z ]*PRIVATE KEY-----\s*\n?[A-Za-z0-9+/]{40,}", "private key"),

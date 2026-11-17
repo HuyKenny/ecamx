@@ -54,7 +54,7 @@ const jsonLd = {
 	url: `${SITE_URL}/cams/${facet.slug}/`,
 	mainEntity: {
 		'@type': 'ItemList',
-		numberOfItems: models.length,
+		numberOfItems: Math.min(models.length, 20),
 		itemListElement: models.slice(0, 20).map((m, i) => ({
 			'@type': 'ListItem',
 			position: i + 1,

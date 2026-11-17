@@ -297,7 +297,10 @@ const videoObject = model.online ? {
 	// pro schema je to pořád platný thumbnail, jen nesmí být povinný.
 	...(model.thumbnail ? { thumbnailUrl: [model.thumbnail] } : {}),
 	uploadDate: model.first,
-	embedUrl: embed,
+	// Jen skutečná https adresa. `embedUrl()` vrací pro BongaCams/Cam4 marker
+	// `hls:…` a pro Amateur `widget:…` (nejsou to URL rámce) nebo `''` — to
+	// by byla neplatná hodnota schema.org (17. 11. 2026, audit).
+	...(/^https:\/\//.test(embed) ? { embedUrl: embed } : {}),
 	...(startedAt ? {
 		publication: {
 			'@type': 'BroadcastEvent',
