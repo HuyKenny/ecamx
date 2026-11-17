@@ -1012,7 +1012,7 @@ const jsonLd = {
 	<div class="h-[68px] md:hidden" aria-hidden="true"></div>
 
 	<script>
-		import { fitEmbed } from "../../lib/fit-embed";
+		import { mountEmbed } from "../../lib/fit-embed";
 		// Vloží iframe teprve po kliknutí. Klik je zároveň ta uživatelská
 		// interakce, která rámec vyjímá z Chrome Heavy Ad Intervention.
 		// `gtag` je globál z `is:inline` stubu v <head> (AGENTS.md bod 31), takže
@@ -1057,7 +1057,6 @@ const jsonLd = {
 			if (!src) return;
 			started = true;
 			const el = document.createElement('iframe');
-			el.src = fitEmbed(src);
 			el.title = frame!.dataset.title ?? 'Live webcam';
 			el.allowFullscreen = true;
 			// Site-wide politika stačí — plnou URL profilu sítím posílat nemusíme.
@@ -1069,6 +1068,7 @@ const jsonLd = {
 			// Bez toho by klik do videa na povýšené stránce nevydělal nic.
 			const hit = frame.querySelector<HTMLElement>('.player-hit');
 			frame.replaceChildren(el);
+			mountEmbed(el, frame, src);
 			if (hit) { hit.hidden = false; frame.appendChild(hit); }
 			if (mode === 'click') {
 				// Tlačítko zmizelo i s fokusem; bez tohohle spadne focus na <body>
@@ -1343,8 +1343,8 @@ const jsonLd = {
 		// v datech vůbec nebylo. Měří se `load`, ne přítomnost elementu:
 		// zajímá nás, že se stream opravdu načetl.
 		const autoFrame = document.querySelector<HTMLIFrameElement>('[data-player]:not([data-embed]) iframe');
-		// Chaturbate s chatem na mobilu → jen video (D86, `fit-embed.ts`).
-		if (autoFrame && fitEmbed(autoFrame.src) !== autoFrame.src) autoFrame.src = fitEmbed(autoFrame.src);
+		// Chaturbate: jen video mimo divadlo s chatem + zmenšení bez scrollu (D86, `fit-embed.ts`).
+		if (autoFrame?.parentElement) mountEmbed(autoFrame, autoFrame.parentElement, autoFrame.getAttribute('src') ?? '');
 		if (autoFrame) {
 			const host = autoFrame.closest<HTMLElement>('[data-player]');
 			autoFrame.addEventListener('load', () => {

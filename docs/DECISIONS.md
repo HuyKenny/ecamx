@@ -4145,3 +4145,8 @@ kterému stream na našem webu nefunguje, klidně odstraň".
   → 301 `/site/`, `/go/` zůstává. Texty kategorií je přestaly zmiňovat.
 
 **D86 dodatek (17. 11. 2026):** Chaturbate embed s chatem má pevné desktopové rozvržení — na 390 px useknuté video nad bílou plochou. Pod 900 px proto `src/lib/fit-embed.ts` přidá `embed_video_only=1` a rámec drží 16:9; chat je přes CTA. Od 900 px výš embed s chatem.
+
+**D86 dodatek 2 (17. 11. 2026):**
+- Chaturbate v rámci má stránku vysokou min. ~500 px s vlastním `overflow: scroll`. V nižším rámci se dalo scrollovat a `scrolling="no"` to cross-origin nezastaví.
+- `mountEmbed()` v `src/lib/fit-embed.ts` proto vykreslí rámec v logické výšce ≥ 500 px a zmenší ho přes `transform: scale` do přehrávače.
+- Embed s chatem jede jen v `.theater.is-chat` od 900 px. Stránka stavěná offline, kde modelka mezitím vysílá, dostane jen video.
