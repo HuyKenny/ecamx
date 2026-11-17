@@ -34,7 +34,7 @@ import { canonicalLanguage, canonicalTerm, modelLetter, CATEGORY_TO_COUNTRY, CAN
 const CANONICAL_SLUG = (s: string) => CANONICAL[s] ?? s;
 
 /** Vypnuté sítě — jejich `/site/{x}/` vede trvale na srovnání sítí (D59). */
-const RETIRED_NETWORKS = new Set(['mfc', 'myfreecams']);
+const RETIRED_NETWORKS = new Set(['mfc', 'myfreecams', 'livejasmin', 'imlive']);
 import { shardOf } from './redirect-shard.ts';
 
 /** Rozbitá %-sekvence = neexistující stránka (404), ne pád Workeru (D85). */

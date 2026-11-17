@@ -764,3 +764,45 @@ html.has-follows .watch-list { display: block; }
 	.rail-close svg { width: 1.25rem; height: 1.25rem; }
 	html.rail-open { overflow: hidden; }
 }
+
+/* ── divadlo stránky modelky (Twitch rozvržení, D86) ─────────────────────────
+   Přehrávač + chatový sloupec mají výšku omezenou na viewport, takže se celý
+   vejde na obrazovku a NIC uvnitř neroluje (Kenny: „vypadá hnusně, když se
+   v tom dá scrollovat"). Rámce mají `scrolling="no"` a přesně rozměr plochy. */
+:root { --theater-h: min(calc((100vw - var(--rail-w) - 3.5rem - 340px - 1rem) * 0.5625), calc(100vh - var(--topbar-h) - 9rem)); }
+.theater { display: grid; gap: 1rem; margin-top: .75rem; }
+.theater-main .player-frame { width: 100%; aspect-ratio: 16 / 9; border-radius: var(--radius-card); overflow: hidden; }
+.player-frame iframe, .player-frame video { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; overflow: hidden; }
+@media (min-width: 1200px) {
+	.theater { grid-template-columns: minmax(0, 1fr) 340px; }
+	.theater-main .player-frame { aspect-ratio: auto; height: var(--theater-h); min-height: 360px; }
+	.theater-side { height: var(--theater-h); min-height: 360px; }
+	/* Chaturbate: video + jejich chat v jednom rámci přes celou šířku. */
+	.theater.is-chat { grid-template-columns: minmax(0, 1fr); }
+	.theater.is-chat .player-frame { height: max(var(--theater-h), 480px); }
+}
+@media (max-width: 1199px) {
+	/* Chat v rámci Chaturbate potřebuje výšku — na mobilu pod videem. */
+	.theater.is-chat .player-frame { aspect-ratio: auto; height: min(90vh, 640px); }
+}
+.theater-side {
+	display: flex; flex-direction: column; gap: .5rem; overflow: hidden;
+	padding: .75rem; border-radius: var(--radius-card);
+	background: var(--color-ink-900); border: 1px solid var(--color-ink-800);
+}
+.side-h { display: flex; align-items: center; gap: .45rem; font-size: .75rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--color-ink-400); }
+.live-dot { width: .5rem; height: .5rem; border-radius: 99px; background: var(--color-live); }
+.side-cta { padding: .75rem; border-radius: .6rem; background: var(--color-ink-850); font-size: .875rem; color: var(--color-ink-200); }
+.side-cta p { margin-bottom: .6rem; }
+.watch-bar { margin-top: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--color-ink-800); }
+
+/* Kompaktní seznam živých v chatovém sloupci — karta jako řádek. */
+.card-grid.is-list { display: flex; flex-direction: column; gap: .5rem; overflow: hidden; }
+.is-list .card { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: .6rem; align-items: center; }
+.is-list .thumb-wrap { aspect-ratio: 16 / 9; }
+.is-list .card-meta { padding-top: 0; min-height: 0; }
+.is-list .net-dot, .is-list .card-tags, .is-list .sticker { display: none; }
+.is-list .card-name { font-size: .85rem; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.is-list .card:hover .thumb-wrap { transform: none; box-shadow: none; }
+}

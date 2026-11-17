@@ -16,7 +16,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
+import { DISABLED_NETWORKS,
 	NETWORKS, stripLoneSurrogates,
 	type NetworkDef, type Model, type NetworkId,
 } from './cam-networks.ts';
@@ -1072,6 +1072,8 @@ const archiveBudget = Math.max(0, MAX_MODEL_PAGES - staticLive.length);
 const wanted = (e: RegistryEntry) => demandFor(e.page) >= DEMAND_KEEP;
 const archiveCandidates = Object.entries(registry)
 	.filter(([k, e]) =>
+		// Vypnuté sítě (D86) stránku nedostanou — ani archivní.
+		!DISABLED_NETWORKS.has(e.network) &&
 		!liveKeys.has(k) && !!e.page
 		&& (wanted(e) || (!!e.snap && !e.gone
 			&& e.seen >= INDEX_MIN_DAYS && e.last >= cutoffNoDemand)));

@@ -1041,6 +1041,18 @@ NETWORKS.push(
 	}),
 );
 
+/**
+ * **Sítě vypnuté na webu** (D86, Kenny 17. 11. 2026): jejich stream na našem
+ * webu nefunguje — LiveJasmin ukazoval jen malý náhled v rohu, ImLive bílou
+ * plochu. Nestahuje je sync ani cron snímku, takže zmizí z mřížek, stránky
+ * jejich modelek dostanou přesměrování (D35) a `/site/{síť}/` vede na `/site/`.
+ * `/go/` pro ně zůstává, ať staré odkazy u lidí nedávají 404.
+ */
+export const DISABLED_NETWORKS = new Set<NetworkId>(['livejasmin', 'imlive']);
+for (let i = NETWORKS.length - 1; i >= 0; i--) {
+	if (DISABLED_NETWORKS.has(NETWORKS[i]!.id)) NETWORKS.splice(i, 1);
+}
+
 export const NETWORK_BY_ID: Record<string, NetworkDef> =
 	Object.fromEntries(NETWORKS.map((n) => [n.id, n]));
 

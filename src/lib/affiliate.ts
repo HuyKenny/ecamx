@@ -75,7 +75,9 @@ export type Placement =
 	// karty z buildu už nevysílaly. Nemá u nás stránku, takže klik jde rovnou
 	// do pokoje — a musí se dát odlišit od běžné karty, aby šlo změřit, kolik
 	// prokliků vzniklo právě takhle. Viz D67.
-	| 'rescue';
+	| 'rescue'
+	// Chatový sloupec vedle přehrávače (Twitch rozvržení, D86).
+	| 'chat';
 
 /**
  * Chaturbate vybírá program podle parametru `tour`, ne podle nastavení účtu.
@@ -167,7 +169,11 @@ export function embedUrl(
 		// NE `/in/` — viz komentář výše. Chrome by iframe označil za reklamu
 		// a po překročení 4 MB ho odstranil.
 		case 'chaturbate': {
-			// `embed_video_only=1` — VĚDOMÉ ROZHODNUTÍ, ne úspora bajtů.
+			// **Od 17. 11. 2026 (D86) zase S CHATEM** — Kenny: „chaturbate má chat,
+			// to mi tam vrať" (Twitch rozvržení). Cena je dole: klik do chatu/tipu
+			// v rámci nenese provizi; vydělává CTA přes `/go/` pod přehrávačem.
+			//
+			// Původní zdůvodnění `embed_video_only=1` (D34):
 			//
 			// Bez něj je v iframu celý pokoj Chaturbate: chat, SEND TIP, PM,
 			// Cam To Cam, Start Private Show, „Purchase Tokens". Změřeno
@@ -187,7 +193,6 @@ export function embedUrl(
 			//
 			// `show_avatars` odešlo s chatem — bez chatu nemá co dělat.
 			const q = new URLSearchParams({
-				embed_video_only: '1',
 				campaign: env('CHATURBATE_AFFILIATE'),
 				bgcolor: 'black',
 			});

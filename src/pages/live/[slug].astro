@@ -159,8 +159,12 @@ const AUTOPLAY_SAFE = new Set([
  * uvnitř rámce ztracený být nemusí — audit každé z nich je samostatná položka
  * v HANDOFF.md, ne odhad. Viz D34.
  */
-const STREAM_LINK = new Set(['chaturbate']);
+// D86: u Chaturbate je v rámci zase chat, vrstva by ho zakryla → vypnuto.
+const STREAM_LINK = new Set<string>();
 const autoplay = AUTOPLAY_SAFE.has(model.network);
+/** Chaturbate s chatem v rámci (D86) — přehrávač zabere celé divadlo. */
+const chatEmbed = model.online && model.network === 'chaturbate';
+const ctaChat = goLink(model.network, model.username, 'chat');
 
 const embed = embedUrl(model.network, model.username, undefined, model.embedRef);
 /**
@@ -380,59 +384,14 @@ const jsonLd = {
 		{ label: model.displayName },
 	]} />
 
-	<div class="mt-2 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-		<div>
-			{/* „Live Sex Cam" / „Webcam" podle měřených dotazů: GSC ukazuje
-			    `<nick> cam` (197 impresí, pozice 11), `<nick> webcam` (133, 9,3)
-			    a samotný nick (151, 14,5) — tvary, na které stránka reálně sedí. */}
-			<div class="flex flex-wrap items-start justify-between gap-3">
-				<h1 class="text-2xl font-extrabold sm:text-3xl">
-					{/* Stejný nadpis online i offline (D85) — stav ukáže odznak za běhu. */}
-					{`${model.displayName} Live Cam — ${label} Webcam Profile`}
-				</h1>
-				{/*
-				  Sledování. Tlačítko je v HTML od prvního snímku a skript mu jen
-				  přepíše text — nic se nezjevuje ani nemění šířku (past 52).
-				  Stav i logika jsou klientské, viz src/lib/watchlist.ts.
-				*/}
-				<button
-					type="button" class="watch-btn" aria-pressed="false"
-					data-watch-toggle data-watch-source="profile"
-					data-page={model.page}
-					data-network={model.network}
-					data-username={model.username}
-				><span data-watch-label>Follow</span></button>
-			</div>
-
-			{/*
-			  `data-live-scope` napojuje tenhle blok na klientský živý stav
-			  v Layout.astro. Bez toho zůstal odznak na hodnotě z buildu, takže
-			  stránka hlásila „Live now, 58 433 watching", zatímco přehrávač
-			  vedle psal „Room is currently offline".
-			*/}
-			<div class="mt-2 flex flex-wrap items-center gap-2 text-sm" data-live-scope>
-				{model.online
-					? <span class="badge bg-live" data-live-badge={`${model.network}:${model.slug}`}
-					        data-build-viewers={model.viewers ?? 0}>Live now</span>
-					: <span class="badge bg-ink-700" data-live-badge={`${model.network}:${model.slug}`}
-					        data-build-viewers="0">Offline</span>}
-				{roomState === 'private' && (
-					<span class="badge bg-ink-700">Private show — stream hidden</span>
-				)}
-				{roomState === 'away' && <span class="badge bg-ink-700">Away from cam</span>}
-				{model.isHd && <span class="badge bg-ink-700">HD</span>}
-				{model.isNew && <span class="badge bg-ink-700">New</span>}
-				{model.toy && <span class="badge bg-toy">Interactive toy</span>}
-				{model.online && model.viewers != null && (
-					<span class="text-ink-400" data-viewers={`${model.network}:${model.slug}`}>
-						{model.viewers.toLocaleString('en-US')} watching
-					</span>
-				)}
-				{!model.online && !model.archived && (
-					<span class="text-ink-400">Last live {since(model.last)}</span>
-				)}
-			</div>
-
+	{/*
+	  Rozvržení „divadlo" jako Twitch (D86): přehrávač nahoře, vpravo chatový
+	  sloupec, pod tím lišta s modelkou. U Chaturbate je chat přímo v jejich
+	  rámci, takže přehrávač zabere oba sloupce. Výška je omezená na viewport
+	  (bez posuvníků uvnitř) — stránka pod divadlem pokračuje normálně.
+	*/}
+	<div class:list={['theater', chatEmbed && 'is-chat']}>
+		<div class="theater-main">
 			{model.online ? (
 				<>
 					{/*
@@ -444,7 +403,7 @@ const jsonLd = {
 					  2) Kdo profil jen prolétne, nestahuje desítky MB videa.
 					*/}
 					<div
-						class="player-frame mt-4"
+						class="player-frame"
 						data-player
 						data-embed={isHls || autoplay || !hasPlayer ? undefined : embed}
 						data-title={`${model.displayName} live webcam`}
@@ -501,6 +460,7 @@ const jsonLd = {
 								referrerpolicy="strict-origin-when-cross-origin"
 								allow="autoplay; fullscreen"
 								loading="eager"
+								scrolling="no"
 							></iframe>
 							{STREAM_LINK.has(model.network) && (
 								/* Klik do plochy streamu = jediný klik, který v rámci nic
@@ -622,7 +582,7 @@ const jsonLd = {
 				   z profilu na živý pokoj. Bez toho návštěvník, který přišel na její
 				   nick právě když vysílá, dostal „nevysílá" a odešel. */
 				<div
-					class="player-frame mt-4 flex items-center justify-center"
+					class="player-frame flex items-center justify-center"
 					data-player
 					data-embed={isHls || !hasPlayer ? undefined : embed}
 					{...(autoplay ? { 'data-autoplay': '' } : {})}
@@ -691,6 +651,76 @@ const jsonLd = {
 				</div>
 			)}
 
+		</div>
+		{!chatEmbed && (
+			<aside class="theater-side" aria-label="Live chat">
+				<div class="side-h"><span class="live-dot"></span>Live chat</div>
+				<div class="side-cta">
+					<p>Chat, tips and private shows with {model.displayName} happen on {label} — free account, no card needed to watch.</p>
+					<a href={ctaChat} rel="nofollow sponsored noopener" target={outTarget} class="btn-cta w-full">Chat with {model.displayName} →</a>
+				</div>
+				<div class="side-h">Live now like {model.displayName}</div>
+				<LiveGrid cards={toCards(similar.slice(0, 6))} q={simKey} n={6} exclude={`${model.network}:${model.slug}`} class="is-list" />
+			</aside>
+		)}
+	</div>
+
+	<div class="watch-bar">
+			{/* „Live Sex Cam" / „Webcam" podle měřených dotazů: GSC ukazuje
+			    `<nick> cam` (197 impresí, pozice 11), `<nick> webcam` (133, 9,3)
+			    a samotný nick (151, 14,5) — tvary, na které stránka reálně sedí. */}
+			<div class="flex flex-wrap items-start justify-between gap-3">
+				<h1 class="text-2xl font-extrabold sm:text-3xl">
+					{/* Stejný nadpis online i offline (D85) — stav ukáže odznak za běhu. */}
+					{`${model.displayName} Live Cam — ${label} Webcam Profile`}
+				</h1>
+				{/*
+				  Sledování. Tlačítko je v HTML od prvního snímku a skript mu jen
+				  přepíše text — nic se nezjevuje ani nemění šířku (past 52).
+				  Stav i logika jsou klientské, viz src/lib/watchlist.ts.
+				*/}
+				<button
+					type="button" class="watch-btn" aria-pressed="false"
+					data-watch-toggle data-watch-source="profile"
+					data-page={model.page}
+					data-network={model.network}
+					data-username={model.username}
+				><span data-watch-label>Follow</span></button>
+			</div>
+
+			{/*
+			  `data-live-scope` napojuje tenhle blok na klientský živý stav
+			  v Layout.astro. Bez toho zůstal odznak na hodnotě z buildu, takže
+			  stránka hlásila „Live now, 58 433 watching", zatímco přehrávač
+			  vedle psal „Room is currently offline".
+			*/}
+			<div class="mt-2 flex flex-wrap items-center gap-2 text-sm" data-live-scope>
+				{model.online
+					? <span class="badge bg-live" data-live-badge={`${model.network}:${model.slug}`}
+					        data-build-viewers={model.viewers ?? 0}>Live now</span>
+					: <span class="badge bg-ink-700" data-live-badge={`${model.network}:${model.slug}`}
+					        data-build-viewers="0">Offline</span>}
+				{roomState === 'private' && (
+					<span class="badge bg-ink-700">Private show — stream hidden</span>
+				)}
+				{roomState === 'away' && <span class="badge bg-ink-700">Away from cam</span>}
+				{model.isHd && <span class="badge bg-ink-700">HD</span>}
+				{model.isNew && <span class="badge bg-ink-700">New</span>}
+				{model.toy && <span class="badge bg-toy">Interactive toy</span>}
+				{model.online && model.viewers != null && (
+					<span class="text-ink-400" data-viewers={`${model.network}:${model.slug}`}>
+						{model.viewers.toLocaleString('en-US')} watching
+					</span>
+				)}
+				{!model.online && !model.archived && (
+					<span class="text-ink-400">Last live {since(model.last)}</span>
+				)}
+			</div>
+
+	</div>
+
+	<div class="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+		<div>
 			{model.goalText && model.online && (
 				<p class="mt-3 rounded-lg border border-ink-800 bg-ink-900 px-3 py-2 text-sm">
 					<span class="font-semibold text-accent">Tip goal:</span> {model.goalText}
@@ -1032,6 +1062,7 @@ const jsonLd = {
 			// Site-wide politika stačí — plnou URL profilu sítím posílat nemusíme.
 			el.referrerPolicy = 'strict-origin-when-cross-origin';
 			el.setAttribute('allow', 'autoplay; fullscreen');
+			el.setAttribute('scrolling', 'no');
 			// `replaceChildren()` smete i klikací vrstvu nad streamem — na offline
 			// stránce je předrenderovaná a skrytá, takže ji vrátíme a odkryjeme.
 			// Bez toho by klik do videa na povýšené stránce nevydělal nic.
@@ -1299,6 +1330,7 @@ const jsonLd = {
 					el.allowFullscreen = true;
 					el.referrerPolicy = 'strict-origin-when-cross-origin';
 					el.setAttribute('allow', 'autoplay; fullscreen');
+			el.setAttribute('scrolling', 'no');
 					frame.appendChild(el);
 					done();
 				}

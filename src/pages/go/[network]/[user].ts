@@ -116,7 +116,7 @@ const USERNAME = /^[A-Za-z0-9_.-]{1,64}$/;
 // a měření placementu začne lhát bez jediné chybové hlášky.
 const PLACEMENTS = new Set<Placement>([
 	'card', 'grid', 'profile', 'player', 'offline', 'network', 'finder', 'watchlist',
-	'sticky', 'rescue',
+	'sticky', 'rescue', 'chat',
 ]);
 
 const notFound = () =>

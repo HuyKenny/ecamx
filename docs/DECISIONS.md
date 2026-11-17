@@ -4121,3 +4121,25 @@ a 98 starých WP textů přepsáno.
 **Přijaté riziko:** klíč Amateur.tv je zároveň affiliate ID a je vidět
 v přesměrování `/go/amateur/…`. Kódem nejde oddělit — vyřeší jen samostatné
 affiliate ID od Amateur.tv.
+
+## D86 — stránka streamu jako Twitch, Chaturbate s chatem, pryč LiveJasmin a ImLive (17. 11. 2026)
+
+Kenny: „chci, aby to vypadalo víc jako Twitch, Chaturbate má chat — to mi
+tam vrať; vypadá to hnusně a divně, když se v tom dá scrollovat; partnera,
+kterému stream na našem webu nefunguje, klidně odstraň".
+
+- **Divadlo** na `/live/{p}/` i `/watch/{p}/`: přehrávač nahoře, vpravo
+  chatový sloupec (340 px), pod tím lišta s modelkou. Výška omezená na
+  viewport (`--theater-h`), rámce `scrolling="no"` a přesně rozměr plochy.
+- **Chaturbate s chatem — otáčí D34.** Embed bez `embed_video_only`, rámec
+  přes celé divadlo, `.player-hit` vypnutá (zakryla by chat). Cena: klik do
+  chatu/tipu v rámci nenese provizi (`/embed/` nenastaví cookie). Provize jde
+  přes CTA „Chat & tip" pod přehrávačem. Měřit `go_click` placement
+  `profile`/`chat` proti týdnu před 17. 11.
+- **Ostatní sítě:** chatový sloupec bez falešného chatu — CTA „Chat with …"
+  (`?p=chat`, nová hodnota `Placement`) a kompaktní seznam živých
+  (`LiveGrid class="is-list"`).
+- **Vypnuté sítě** `DISABLED_NETWORKS` (`scripts/cam-networks.ts`):
+  LiveJasmin (jen malý náhled v rohu) a ImLive (bílá plocha). Nestahuje je
+  sync ani cron, archivní stránky zanikají přesměrováním (D35), `/site/x/`
+  → 301 `/site/`, `/go/` zůstává. Texty kategorií je přestaly zmiňovat.

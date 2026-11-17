@@ -56,6 +56,9 @@ const tags = (card.tg ?? []);
 const topKey = rec.f.find((k) => k.startsWith('m:') || k.startsWith('t:')) ?? (rec.g ? `g:${rec.g}` : 'all');
 const similar = snap ? pick(snap.m, topKey, 12, { exclude: `${rec.n}:${rec.s}` }).cards : [];
 const cta = goLink(rec.n as never, rec.u, 'profile');
+const ctaChat = goLink(rec.n as never, rec.u, 'chat');
+/** Chaturbate má chat přímo v rámci (D86) → přehrávač přes celé divadlo. */
+const chatEmbed = rec.n === 'chaturbate' && !!iframe;
 const title = `${rec.u} Live Cam on ${label} — Watch Free | ${SITE_NAME}`;
 const description = `${rec.u} is live on ${label} right now${rec.c ? ` from ${countryPhrase(countryName(rec.c))}` : ''}. Watch the stream free on eCamx, no signup — plus who else is live like her.`;
 
@@ -64,8 +67,10 @@ Astro.response.headers.set('cache-control', 'public, max-age=60');
 Astro.response.headers.set('x-robots-tag', 'noindex, follow');
 ---
 <Layout title={title} description={description} noindex ogType="profile" built={new Date(snap!.ts).toISOString()}>
-	<div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-		<div>
+	{/* Divadlo jako na statické stránce (D86): u Chaturbate chat v rámci přes
+	    celou šířku, jinde chatový sloupec s CTA a živými. */}
+	<div class:list={['theater', chatEmbed && 'is-chat']}>
+		<div class="theater-main">
 			<div class="player-frame" data-watch-player data-embed={iframe || undefined} data-autoplay={iframe && AUTOPLAY_SAFE.has(rec.n) && !rec.pr ? '1' : undefined}>
 				<img src={rec.t} alt={`${rec.u} live on ${label}`} class="absolute inset-0 h-full w-full object-cover" referrerpolicy="no-referrer" fetchpriority="high" />
 				{hls ? (
@@ -84,34 +89,47 @@ Astro.response.headers.set('x-robots-tag', 'noindex, follow');
 					</a>
 				)}
 			</div>
-
-			<div class="mt-4 flex flex-wrap items-start gap-3" data-live-scope>
-				<span class={`net-dot net-${rec.n}`} aria-hidden="true">{label.charAt(0)}</span>
-				<div class="min-w-0 flex-1">
-					<h1 class="text-2xl font-extrabold sm:text-3xl">{rec.u}</h1>
-					<p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-400">
-						<span class="badge bg-live" data-live-badge={`${rec.n}:${rec.s}`}>Live now</span>
-						{rec.pr && <span class="badge bg-ink-700">Private show</span>}
-						{rec.v ? <span data-viewers>{viewersText(rec.v)} watching</span> : null}
-						<span>{label}{rec.c ? ` · ${countryName(rec.c)}` : ''}{rec.a ? ` · ${rec.a}` : ''}</span>
-					</p>
-					{rec.j && <p class="mt-2 max-w-2xl text-sm text-ink-200">“{rec.j}”</p>}
-					{tags.length > 0 && (
-						<p class="mt-3 flex flex-wrap gap-2">
-							{tags.map((t) => <a class="pill" href={`/cams/${t}/`}>{facetLabel(t, t.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))}</a>)}
-						</p>
-					)}
-				</div>
-				<a href={cta} class="btn-cta" rel="nofollow sponsored" target="_blank">Chat with {rec.u} →</a>
-			</div>
-			<p class="mt-3 text-xs text-ink-500">Free to watch. eCamx earns a commission if you buy tokens on {label} — it costs you nothing extra.</p>
 		</div>
+		{!chatEmbed && (
+			<aside class="theater-side" aria-label="Live chat">
+				<div class="side-h"><span class="live-dot"></span>Live chat</div>
+				<div class="side-cta">
+					<p>Chat, tips and private shows with {rec.u} happen on {label} — free account, no card needed to watch.</p>
+					<a href={ctaChat} rel="nofollow sponsored" target="_blank" class="btn-cta w-full">Chat with {rec.u} →</a>
+				</div>
+				<div class="side-h">Live now like {rec.u}</div>
+				<LiveGrid cards={similar.slice(0, 6)} q={topKey} n={6} exclude={`${rec.n}:${rec.s}`} class="is-list" />
+			</aside>
+		)}
+	</div>
 
-		<aside>
+	<div class="watch-bar flex flex-wrap items-start gap-3" data-live-scope>
+		<span class={`net-dot net-${rec.n}`} aria-hidden="true">{label.charAt(0)}</span>
+		<div class="min-w-0 flex-1">
+			<h1 class="text-2xl font-extrabold sm:text-3xl">{rec.u}</h1>
+			<p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-400">
+				<span class="badge bg-live" data-live-badge={`${rec.n}:${rec.s}`}>Live now</span>
+				{rec.pr && <span class="badge bg-ink-700">Private show</span>}
+				{rec.v ? <span data-viewers>{viewersText(rec.v)} watching</span> : null}
+				<span>{label}{rec.c ? ` · ${countryName(rec.c)}` : ''}{rec.a ? ` · ${rec.a}` : ''}</span>
+			</p>
+			{rec.j && <p class="mt-2 max-w-2xl text-sm text-ink-200">“{rec.j}”</p>}
+			{tags.length > 0 && (
+				<p class="mt-3 flex flex-wrap gap-2">
+					{tags.map((t) => <a class="pill" href={`/cams/${t}/`}>{facetLabel(t, t.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))}</a>)}
+				</p>
+			)}
+		</div>
+		<a href={cta} class="btn-cta" rel="nofollow sponsored" target="_blank">Chat &amp; tip {rec.u} on {label} →</a>
+	</div>
+	<p class="mt-3 text-xs text-ink-500">Free to watch. eCamx earns a commission if you buy tokens on {label} — it costs you nothing extra.</p>
+
+	{chatEmbed && similar.length > 0 && (
+		<section class="mt-8">
 			<h2 class="mb-3 text-lg font-bold">Live now, similar to {rec.u}</h2>
 			<LiveGrid cards={similar.slice(0, 6)} q={topKey} n={6} exclude={`${rec.n}:${rec.s}`} />
-		</aside>
-	</div>
+		</section>
+	)}
 
 	<script>
 		import '../../scripts/watch';

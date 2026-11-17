@@ -13,6 +13,7 @@ function start(): void {
 	const f = document.createElement('iframe');
 	f.src = src;
 	f.allow = 'autoplay; fullscreen';
+	f.setAttribute('scrolling', 'no');
 	f.setAttribute('allowfullscreen', '');
 	f.referrerPolicy = 'no-referrer-when-downgrade';
 	f.className = 'absolute inset-0 h-full w-full';

@@ -107,8 +107,8 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
 17. **XLoveCam posílá číselné kódy**, mapa je v `scripts/xlove-filter-map.ts`
     (vytažená ze starého pluginu). Bez ní byla síť na 325 stránkách nula.
     **BongaCams má zemi v `homecountry`, ne v `country`.** Viz D18.
-18. **Přehrávač naskočí sám u sítí v `AUTOPLAY_SAFE`**, u LiveJasminu
-    a XLoveCamu zůstává klik (jsou na blokovacím seznamu). Viz D20.
+18. **Přehrávač naskočí sám u všech sítí s rámcem** (D84); LiveJasmin a ImLive
+    jsou od D86 z webu pryč (stream u nás nefungoval). Viz D20, D84, D86.
 19. **`AMATEUR_API_KEY` je zároveň affiliate ID i credential k feedu.** Nedá se
     to rozdělit, je to jejich design. Proto MUSÍ zůstat mimo statické HTML.
 
@@ -157,7 +157,7 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     Adresář je textový (250 odkazů/stránka, žádné náhledy), řadí se podle slugu
     `page` (stabilita) a je v patičce. Sirotky hlídá guard v `check-links.ts` —
     když spadne, chybí odkaz, ne test. Viz D33.
-27. **Chaturbate embed jede `embed_video_only=1` a nad streamem je `.player-hit`.**
+27. **[OTOČENO D86: embed je zase S CHATEM, `.player-hit` u Chaturbate vypnutá — Kennyho rozhodnutí.]** Původně: Chaturbate embed jel `embed_video_only=1` a nad streamem byla `.player-hit`.
     `/embed/` **nenastaví affiliate cookie NIKDY** (ověřeno se `campaign`,
     s `campaign` + `tour` i s `embed_video_only`) — cookie dává jedině `/in/`,
     které Chrome zabíjí jako reklamu (bod 13). Klik na chat/tip uvnitř rámce byl
