@@ -4213,3 +4213,21 @@ Kenny: „udělej content gap s dalšími cam weby a optimalizuj web, abychom by
 - **Měřit:**
   - GSC 1. 12. a 15. 12.: imprese na `/site/*/*/`.
   - Po 22. 11. (reset Ahrefs) doplnit konkurenty camhub.cc, camsfinder.com, topsitecam.com, cam69.com a bestcam.tv a rozšířit `DEMAND`.
+
+## D90 (17. 11. 2026): content gap 2 přes Enterprise Ahrefs (MCP)
+
+- Zdroj: Ahrefs `competitive-analysis-content-gap` (konektor claude.ai, jiný účet než REST v `credentials/`).
+  - Porovnání: ecamx proti lemoncams, chococams, camhub.cc, camsfinder, topsitecam, cam69, bestcam.tv a camconsole.
+  - Filtr: US, KD ≤ 30, objem ≥ 100, konkurent v top 20.
+  - Výsledek: 2 736 slov, ~61 tis. jednotek.
+  - Report ve workspace: `reports/ecamx/content-gap-2026-11b.md`.
+- **Mezera jsou hlavně modelky:** 1 737 slov, 711 tis. hledání/měs.
+  - Nový příkaz `demand.py import-gap` zapsal nicky do KV `demand`.
+  - V registry se našlo 813 slov, z toho 397 nových stránek s poptávkou (5 290 → 5 687) a 55 zvýšených.
+  - Slovní nicky se počítají jen s kontextem (`<nick> cam` / `<nick> chaturbate`), leak/onlyfans se přeskakuje.
+  - Noční sync je podle D88 upřednostní ve stropu 5 000 a otevře indexaci.
+- **Síť × kategorie:** `DEMAND` v `network-facets.ts` doplněn o 9 dvojic a přepočítán.
+- **Nezměněno:**
+  - „cam girl finder“ (2,7 tis.): D48, face-search záměr.
+  - `/cams/vr/` (8,9 tis.): kategorie VR ve feedech nemáme.
+  - Titulky kategorií: už odpovídají hlavním dotazům.

@@ -34,30 +34,42 @@ export const NETWORKS_WITH_CURATED_MATRIX = ['chaturbate', 'stripchat', 'camsoda
 export const MIN_MODELS_DEMAND = 6;
 export const MIN_MODELS_SPECULATIVE = 15;
 
-/** Measured demand, Ahrefs US, 2026-11-17 (lemoncams.com + chococams.com, KD ≤ 25). */
+/**
+ * Measured demand, Ahrefs US: D89 (lemoncams.com + chococams.com, KD ≤ 25) and
+ * D90 content gap vs. 8 aggregators (KD ≤ 30, competitor in top 20), 2026-11-17.
+ */
 export const DEMAND: Array<{ net: string; slug: string; volume: number }> = [
-	{ net: 'chaturbate', slug: 'men', volume: 25100 },
-	{ net: 'chaturbate', slug: 'ebony', volume: 18800 },
+	{ net: 'chaturbate', slug: 'men', volume: 29300 },
+	{ net: 'chaturbate', slug: 'ebony', volume: 19150 },
+	{ net: 'stripchat', slug: 'vr', volume: 8950 },
 	{ net: 'chaturbate', slug: 'milf', volume: 8800 },
-	{ net: 'stripchat', slug: 'vr', volume: 8700 },
 	{ net: 'chaturbate', slug: 'latin', volume: 8000 },
-	{ net: 'chaturbate', slug: 'couples', volume: 6600 },
-	{ net: 'chaturbate', slug: 'mature', volume: 4400 },
+	{ net: 'chaturbate', slug: 'couples', volume: 7600 },
+	{ net: 'chaturbate', slug: 'mature', volume: 4700 },
+	{ net: 'stripchat', slug: 'men', volume: 3000 },
 	{ net: 'chaturbate', slug: 'pregnant', volume: 2700 },
-	{ net: 'stripchat', slug: 'men', volume: 2700 },
 	{ net: 'stripchat', slug: 'indian', volume: 2300 },
 	{ net: 'chaturbate', slug: 'hairy', volume: 2000 },
-	{ net: 'stripchat', slug: 'ebony', volume: 1550 },
+	{ net: 'stripchat', slug: 'ebony', volume: 1600 },
+	{ net: 'chaturbate', slug: 'indian', volume: 1050 },
 	{ net: 'camsoda', slug: 'ebony', volume: 1000 },
+	{ net: 'chaturbate', slug: 'new', volume: 1000 },
+	{ net: 'stripchat', slug: 'latin', volume: 950 },
 	{ net: 'chaturbate', slug: 'lesbian', volume: 900 },
-	{ net: 'chaturbate', slug: 'new', volume: 900 },
-	{ net: 'chaturbate', slug: 'indian', volume: 850 },
 	{ net: 'stripchat', slug: 'chinese', volume: 800 },
-	{ net: 'stripchat', slug: 'gay', volume: 700 },
-	{ net: 'stripchat', slug: 'latin', volume: 700 },
-	{ net: 'cam4', slug: 'latin', volume: 700 },
+	{ net: 'stripchat', slug: 'gay', volume: 800 },
+	{ net: 'cam4', slug: 'latin', volume: 800 },
 	{ net: 'chaturbate', slug: 'teen', volume: 700 },
 	{ net: 'chaturbate', slug: 'redhead', volume: 450 },
 	{ net: 'chaturbate', slug: 'asian', volume: 450 },
+	{ net: 'chaturbate', slug: 'bdsm', volume: 400 },
+	{ net: 'chaturbate', slug: 'braces', volume: 300 },
+	{ net: 'chaturbate', slug: 'small-tits', volume: 250 },
+	{ net: 'stripchat', slug: 'mature', volume: 250 },
+	{ net: 'chaturbate', slug: 'trans', volume: 200 },
+	{ net: 'stripchat', slug: 'milf', volume: 200 },
+	{ net: 'chaturbate', slug: 'blonde', volume: 150 },
 	{ net: 'camsoda', slug: 'couples', volume: 150 },
+	{ net: 'chaturbate', slug: 'selfsuck', volume: 100 },
+	{ net: 'cam4', slug: 'asian', volume: 100 },
 ];
