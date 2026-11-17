@@ -1,0 +1,56 @@
+---
+/**
+ * Živá mřížka (D82). Jedna komponenta pro všechny stránky — dřív byl markup
+ * mřížky zkopírovaný v osmi šablonách, každá s vlastní rezervou karet.
+ *
+ * Ve statickém HTML je N karet z buildu (crawler je vidí, prolinkování
+ * funguje). Prohlížeč si po načtení řekne o modelky, které vysílají PRÁVĚ
+ * TEĎ (`/api/live/grid/?q={q}~{n}`), a sloty jimi naplní — stejnou šablonou
+ * (`cardHtml`). Do té doby je mřížka skrytá za skeletonem, takže se nic
+ * nepřeskládává před očima (D57) a výška se nemění (CLS 0).
+ *
+ * Když slotů zbude (úzká kategorie), doplní je klient z celé nabídky
+ * živých — `fill={false}` to vypne (podobné modelky na profilu).
+ */
+import { cardHtml, type CardData } from '../lib/card';
+
+interface Props {
+	/**
+	 * Statické karty z buildu (stačí víc, použije se prvních `n`). Převod
+	 * z katalogu dělá volající přes `toCards()` (`src/lib/card-model.ts`) —
+	 * komponenta sama na `data.ts` sahat NESMÍ, používá ji i dynamická
+	 * stránka ve Workeru (13 MB katalogu by skončilo v bundlu).
+	 */
+	cards: CardData[];
+	/** Klíč fasety: `all`, `g:female`, `t:latina`, `m:bbw`, `c:co`, `n:chaturbate` … */
+	q: string;
+	/** Počet slotů. */
+	n?: number;
+	/** Kolik prvních karet načíst hned (nad ohybem). */
+	eager?: number;
+	/** Vynechat modelku (`síť:slug`). */
+	exclude?: string;
+	fill?: boolean;
+	class?: string;
+	label?: string;
+}
+const { cards, q, n = 24, eager = 0, exclude, fill = true, class: cls = '', label } = Astro.props;
+const shown = cards.slice(0, n);
+const pad = Math.max(0, n - shown.length);
+---
+<div
+	class:list={['card-grid', cls]}
+	data-live-grid
+	data-q={q}
+	data-n={n}
+	data-eager={eager}
+	data-x={exclude}
+	data-fill={fill ? undefined : 'no'}
+	aria-label={label}
+	aria-live="off"
+>
+	{shown.map((c, i) => <Fragment set:html={cardHtml(c, { eager: i < eager, priority: i === 0 && eager > 0 })} />)}
+	{Array.from({ length: pad }, () => (
+		<article class="card is-stale" aria-hidden="true"><div class="thumb-wrap"></div><div class="card-meta"></div></article>
+	))}
+</div>

@@ -42,14 +42,12 @@ for (const m of models) counts.set(m.network, (counts.get(m.network) ?? 0) + 1);
 const liveByNetwork = new Map(FACETS.networks.map((n) => [n.slug, n.count]));
 // Řadit podle zastoupení na stránce: nejvíc zastoupená síť první, ať se
 // nemusí hledat. (Pořadí ANO podle stránky, číslo NE — to je celé sítě.)
-const sites = [...counts.entries()]
-	.sort((a, b) => b[1] - a[1])
-	.map(([id, onPage]) => ({
-		id,
-		count: liveByNetwork.get(id) ?? onPage,
-		label: NETWORK_LABELS[id] ?? id,
-		page: linkableNetwork(id),
-	}));
+// Všechny sítě, ne jen ty ze statických karet: mřížka se od D82 plní živě
+// a může ukázat i síť, která v buildu na téhle stránce nebyla.
+const sites = [...FACETS.networks]
+	.sort((a, b) => b.count - a.count)
+	.map((n) => ({ id: n.slug, count: n.count, label: NETWORK_LABELS[n.slug] ?? n.slug, page: linkableNetwork(n.slug) }));
+void counts;
 ---
 {sites.length > 1 && (
 	<div class="grid-filters" data-grid-filters>

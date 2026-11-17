@@ -10,19 +10,8 @@
 import { countryAdjective, countryPhrase } from './taxonomy.ts';
 import { META, PER_MINUTE_NETWORKS } from './data.ts';
 
-export const SITE_NAME = 'eCamx';
-export const SITE_URL = 'https://ecamx.com';
-export const SITE_TAGLINE = 'Watch Free Live Sex Cams & Chat with Real Girls Online';
-
-/**
- * Kanonická URL: bez query stringu, vždy s koncovým lomítkem.
- * Kombinace filtrů nikdy nejsou kanonické — jinak si stránky kanibalizují.
- */
-export function canonicalUrl(pathname: string): string {
-	const clean = pathname.split('?')[0].split('#')[0];
-	const withSlash = clean.endsWith('/') ? clean : clean + '/';
-	return new URL(withSlash, SITE_URL).toString();
-}
+import { SITE_NAME, SITE_URL, SITE_TAGLINE, canonicalUrl } from './site.ts';
+export { SITE_NAME, SITE_URL, SITE_TAGLINE, canonicalUrl };
 
 /** Číslo s mezerou jako oddělovačem tisíců (anglická konvence: čárka). */
 export function fmt(n: number): string {

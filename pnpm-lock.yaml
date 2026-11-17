@@ -30,6 +30,9 @@ importers:
       dotenv:
         specifier: ^17.2.1
         version: 17.4.2
+      sharp:
+        specifier: 0.35.3
+        version: 0.35.3(@types/node@26.4.1)
       tailwindcss:
         specifier: ^4.3.3
         version: 4.3.3
@@ -4268,7 +4271,6 @@ snapshots:
       '@img/sharp-win32-ia32': 0.35.3
       '@img/sharp-win32-x64': 0.35.3
       '@types/node': 26.4.1
-    optional: true
 
   shiki@4.4.3:
     dependencies:

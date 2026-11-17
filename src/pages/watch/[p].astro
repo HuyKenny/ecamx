@@ -1,0 +1,110 @@
+---
+/**
+ * Dynamická stránka živé modelky, která NEMÁ statickou stránku (D82).
+ *
+ * Proč existuje: do 17. 11. 2026 dostala statickou stránku každá živá
+ * modelka, takže každý build ~9 000 URL přeskakovalo mezi stránkou a 302
+ * (kolotoč, past 119). Teď má statickou stránku jen stabilní množina
+ * (indexovatelné profily), a kdo právě vysílá bez ní, dostane tuhle stránku
+ * ze živého snímku — klik z mřížky tak vždycky skončí u nás (D8, D71).
+ *
+ * Sem se přichází přes catch-all `src/pages/[...path].ts`, který na
+ * `/live/{p}/` bez statického souboru udělá `rewrite`. Stránka je
+ * **`noindex, follow`**: obsahu má jen tolik, kolik je ve snímku, a do
+ * indexu patří až stránka, která přežije (statická, s historií).
+ *
+ * Pravidla: žádný `data.ts` (13 MB do Workeru), žádné inline skripty (CSP
+ * má jen hashe ze statických stránek) — přehrávač řídí `src/scripts/watch.ts`.
+ */
+import { env } from 'cloudflare:workers';
+import Layout from '../../layouts/Layout.astro';
+import LiveGrid from '../../components/LiveGrid.astro';
+import { readSnapshot } from '../../lib/live-snapshot';
+import { embedUrl, goLink } from '../../lib/affiliate';
+import { NETWORK_LABELS, countryName, facetLabel } from '../../lib/labels';
+import { pick, toCardData } from '../../lib/live-grid';
+import { SITE_NAME } from '../../lib/site';
+import { viewersText } from '../../lib/card';
+
+export const prerender = false;
+
+const CSP = '__ECAMX_CSP__';
+/** Sítě s ověřeným autoplayem rámce (D59/D68) — stejný seznam jako statický profil. */
+const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'stripchat', 'imlive']);
+const p = decodeURIComponent(Astro.params.p ?? '');
+const snap = await readSnapshot();
+const rec = snap?.m.find((r) => r.p === p);
+if (!rec) {
+	// Mezi kliknutím a načtením modelka dovysílala → rozcestník s živými.
+	return Astro.redirect('/', 302);
+}
+const label = NETWORK_LABELS[rec.n] ?? rec.n;
+const get = (k: string) => String((env as unknown as Record<string, string>)[k] ?? '');
+let embed = '';
+try { embed = embedUrl(rec.n as never, rec.u, get, rec.e ?? null); } catch { embed = ''; }
+const iframe = /^https:\/\//.test(embed) ? embed : '';
+const card = toCardData(rec);
+const tags = (card.tg ?? []);
+const topKey = rec.f.find((k) => k.startsWith('m:') || k.startsWith('t:')) ?? (rec.g ? `g:${rec.g}` : 'all');
+const similar = snap ? pick(snap.m, topKey, 12, { exclude: `${rec.n}:${rec.s}` }).cards : [];
+const cta = goLink(rec.n as never, rec.u, 'profile');
+const title = `${rec.u} Live Cam on ${label} — Watch Free | ${SITE_NAME}`;
+const description = `${rec.u} is live on ${label} right now${rec.c ? ` from ${countryName(rec.c)}` : ''}. Watch the stream free on eCamx, no signup — plus who else is live like her.`;
+
+Astro.response.headers.set('content-security-policy', CSP);
+Astro.response.headers.set('cache-control', 'public, max-age=60');
+Astro.response.headers.set('x-robots-tag', 'noindex, follow');
+Astro.response.headers.set('x-frame-options', 'DENY');
+Astro.response.headers.set('x-content-type-options', 'nosniff');
+Astro.response.headers.set('referrer-policy', 'strict-origin-when-cross-origin');
+---
+<Layout title={title} description={description} noindex ogType="profile" built={new Date(snap!.ts).toISOString()}>
+	<div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+		<div>
+			<div class="player-frame" data-watch-player data-embed={iframe || undefined} data-autoplay={iframe && AUTOPLAY_SAFE.has(rec.n) && !rec.pr ? '1' : undefined}>
+				<img src={rec.t} alt={`${rec.u} live on ${label}`} class="absolute inset-0 h-full w-full object-cover" referrerpolicy="no-referrer" fetchpriority="high" />
+				{iframe ? (
+					<button type="button" class="play-overlay" data-watch-play aria-label={`Play ${rec.u}'s stream`}>
+						<span class="play-icon" aria-hidden="true">▶</span>
+						<span>Watch {rec.u} live</span>
+					</button>
+				) : (
+					<a href={cta} class="play-overlay" rel="nofollow sponsored" target="_blank">
+						<span class="play-icon" aria-hidden="true">▶</span>
+						<span>Open {rec.u}'s stream on {label}</span>
+					</a>
+				)}
+			</div>
+
+			<div class="mt-4 flex flex-wrap items-start gap-3" data-live-scope>
+				<span class={`net-dot net-${rec.n}`} aria-hidden="true">{label.charAt(0)}</span>
+				<div class="min-w-0 flex-1">
+					<h1 class="text-2xl font-extrabold sm:text-3xl">{rec.u}</h1>
+					<p class="mt-1 flex flex-wrap items-center gap-2 text-sm text-ink-400">
+						<span class="badge bg-live" data-live-badge={`${rec.n}:${rec.s}`}>Live now</span>
+						{rec.pr && <span class="badge bg-ink-700">Private show</span>}
+						{rec.v ? <span data-viewers>{viewersText(rec.v)} watching</span> : null}
+						<span>{label}{rec.c ? ` · ${countryName(rec.c)}` : ''}{rec.a ? ` · ${rec.a}` : ''}</span>
+					</p>
+					{rec.j && <p class="mt-2 max-w-2xl text-sm text-ink-200">“{rec.j}”</p>}
+					{tags.length > 0 && (
+						<p class="mt-3 flex flex-wrap gap-2">
+							{tags.map((t) => <a class="pill" href={`/cams/${t}/`}>{facetLabel(t, t.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))}</a>)}
+						</p>
+					)}
+				</div>
+				<a href={cta} class="btn-cta" rel="nofollow sponsored" target="_blank">Chat with {rec.u} →</a>
+			</div>
+			<p class="mt-3 text-xs text-ink-500">Free to watch. eCamx earns a commission if you buy tokens on {label} — it costs you nothing extra.</p>
+		</div>
+
+		<aside>
+			<h2 class="mb-3 text-lg font-bold">Live now, similar to {rec.u}</h2>
+			<LiveGrid cards={similar.slice(0, 6)} q={topKey} n={6} exclude={`${rec.n}:${rec.s}`} />
+		</aside>
+	</div>
+
+	<script>
+		import '../../scripts/watch';
+	</script>
+</Layout>

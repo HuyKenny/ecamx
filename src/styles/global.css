@@ -3,33 +3,65 @@
 /**
  * Tailwind v4 CSS-first (stejně jako vian). Žádný tailwind.config.js.
  *
- * Vizuální směr (Kenny, 16. 8. 2026): tmavá redakční plocha — klid, kontrast,
- * jeden akcent. Ne neon a ne gradienty; tenhle segment je jich plný a stárnou
- * nejrychleji ze všeho. Barva se používá jen tam, kde má něco znamenat:
- * akcent = akce, `live` = vysílá teď, `toy` = reaguje na dýška.
+ * **Vizuální směr od 17. 11. 2026 (Kenny): „Twitch pro cam modelky", hravý,
+ * ale ne AI-slop.** Rozvržení po vzoru streamovacích webů (levý panel živých
+ * kanálů, velká mřížka náhledů, adresář kategorií), barvy vlastní — ne
+ * fialová, ať to nevypadá jako napodobenina:
+ *   - grafitový základ (ne čistá černá — na OLED nevibruje a karty „sedí"),
+ *   - korálová `accent` = akce (tmavý text na korálové: 6:1, bílý by měl 3:1),
+ *   - limetková `live` = vysílá teď, žlutá `sun` = samolepky (HD, New),
+ *   - nálepkový styl značky (tlustá tmavá linka, bílý okraj) z maskota v Canvě.
+ * Pravidla proti „AI vzhledu": žádné fialovomodré přechody, žádné glassmorphism
+ * plochy, žádné emoji v nadpisech, mřížka 4 px, jeden display font.
+ * Názvy tokenů (`ink-*`, `accent`) zůstaly, aby se přebarvily i stránky,
+ * které používají utility přímo.
  */
 @theme {
-	--color-ink-950: #0a0a0c;
-	--color-ink-900: #101014;
-	--color-ink-850: #16161b;
-	--color-ink-800: #1c1c22;
-	--color-ink-700: #26262e;
-	--color-ink-600: #35353f;
-	--color-ink-500: #565663;
-	--color-ink-400: #8a8a99;
-	--color-ink-200: #c9c9d4;
-	--color-ink-50: #f4f4f7;
+	--color-ink-950: #0f0f13;
+	--color-ink-900: #16161c;
+	--color-ink-850: #1b1b22;
+	--color-ink-800: #22222b;
+	--color-ink-700: #2d2d38;
+	--color-ink-600: #3c3c49;
+	--color-ink-500: #5d5d6c;
+	--color-ink-400: #a0a0b0;
+	--color-ink-200: #d7d6df;
+	--color-ink-50: #f7f5f0;
 
-	--color-accent: #ff2d6f;
-	--color-accent-hover: #e01a58;
-	--color-live: #ff3b30;
-	--color-toy: #a855f7;
+	--color-accent: #ff4f6d;
+	--color-accent-hover: #ff6f88;
+	--color-on-accent: #16161c;
+	--color-live: #b8f23a;
+	--color-on-live: #16161c;
+	--color-sun: #ffd23f;
+	--color-sky: #7cc8ff;
+	--color-toy: #7cc8ff;
 
-	/* Bez webfontu: jedno HTTP spojení navíc a FOUT za nic. Systémové písmo
-	   navíc nezastará. Dřív tu byl deklarovaný Inter, který se nikdy nenačetl. */
+	/* Display = Bricolage Grotesque (OFL, self-hosted, jen latin, 77 kB,
+	   jen nadpisy a logo). Text zůstává systémovým písmem — nic nenačítá. */
+	--font-display: "Bricolage Grotesque", "Bricolage Fallback", ui-sans-serif, system-ui, sans-serif;
 	--font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
 	             "Helvetica Neue", Arial, sans-serif;
-	--radius-card: 0.625rem;
+	--radius-card: 0.75rem;
+}
+
+@font-face {
+	font-family: "Bricolage Grotesque";
+	font-style: normal;
+	font-weight: 500 800;
+	font-display: swap;
+	src: url(/fonts/bricolage-latin.woff2) format("woff2");
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2212;
+}
+/* Záložní metrika, ať výměna písma neposune nadpisy (CLS 0). Hodnoty
+   odpovídají šířce Bricolage proti Arialu. */
+@font-face {
+	font-family: "Bricolage Fallback";
+	src: local("Arial");
+	size-adjust: 104%;
+	ascent-override: 92%;
+	descent-override: 24%;
+	line-gap-override: 0%;
 }
 
 html {
@@ -52,112 +84,226 @@ body {
 }
 
 @layer components {
+	/* Hlavní akce. Tmavý text na korálové (kontrast 6:1) a „nálepkový" spodní
+	   stín: tlačítko vypadá jako něco, co jde zmáčknout, a při stisku klesne. */
 	.btn-cta {
-		@apply inline-flex items-center justify-center gap-2 rounded-lg bg-accent px-5 py-3
-		       font-semibold text-white transition hover:bg-accent-hover active:translate-y-px;
+		@apply inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-5 py-3
+		       font-bold text-on-accent transition hover:bg-accent-hover;
+		box-shadow: 0 3px 0 #9e2338;
 	}
+	.btn-cta:active { transform: translateY(2px); box-shadow: 0 1px 0 #9e2338; }
 	.btn-ghost {
-		@apply inline-flex items-center justify-center gap-2 rounded-lg border border-ink-700
-		       bg-ink-900 px-4 py-2.5 font-medium text-ink-200 transition
+		@apply inline-flex items-center justify-center gap-2 rounded-xl border border-ink-700
+		       bg-ink-900 px-4 py-2.5 font-semibold text-ink-200 transition
 		       hover:border-ink-600 hover:bg-ink-800 hover:text-white;
 	}
 	.pill {
-		@apply inline-block rounded-full bg-ink-800 px-3 py-1 text-sm text-ink-200
+		@apply inline-flex items-center gap-1.5 rounded-full bg-ink-800 px-3 py-1 text-sm font-medium text-ink-200
 		       transition hover:bg-ink-700 hover:text-white;
 	}
 	.card-grid {
-		@apply grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5;
+		display: grid;
+		gap: 1.25rem .875rem;
+		grid-template-columns: repeat(auto-fill, minmax(min(100%, 15.5rem), 1fr));
 	}
-	/* Malý odznak v rohu náhledu. Barvu si přidá volající. */
+	@media (max-width: 479px) {
+		/* Telefon: dvě karty vedle sebe, ne jedna obří. */
+		.card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem .625rem; }
+	}
 	.badge {
 		@apply rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide;
 	}
+	.h-display { font-family: var(--font-display); letter-spacing: -0.02em; }
 }
 
-/* ── karta modelky ────────────────────────────────────────────────────────── */
+h1, h2, .font-display { font-family: var(--font-display); letter-spacing: -0.015em; }
 
-.card {
-	position: relative;
-	/* Odznaky a počet diváků se pozicují ze šířky karty (`cqw`). */
-	container-type: inline-size;
-	overflow: hidden;
-	border-radius: var(--radius-card);
+/* ── shell: horní lišta + levý panel (Twitch rozvržení) ──────────────────── */
+/* Šířky jsou pevné a známé předem → panel nic neposouvá (CLS 0). */
+:root { --topbar-h: 3.5rem; --rail-w: 15rem; }
+.topbar {
+	position: sticky; top: 0; z-index: 50;
+	height: var(--topbar-h);
+	display: flex; align-items: center; gap: .75rem;
+	padding: 0 .75rem;
 	background: var(--color-ink-900);
-	border: 1px solid var(--color-ink-800);
-	transition: border-color .15s, transform .15s;
+	border-bottom: 1px solid var(--color-ink-800);
 }
-.card:hover {
-	border-color: var(--color-ink-600);
+.brand { display: inline-flex; align-items: center; gap: .5rem; flex: 0 0 auto; }
+.brand img { width: 2.1rem; height: 2.1rem; transition: transform .25s cubic-bezier(.3,1.6,.5,1); }
+.brand:hover img { transform: rotate(-12deg) scale(1.08); }
+.brand-word { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -0.03em; line-height: 1; }
+.brand-word b { color: var(--color-accent); font-weight: 800; }
+.topnav { display: none; gap: .25rem; }
+.topnav a {
+	padding: .4rem .7rem; border-radius: .6rem; font-weight: 600; font-size: .9375rem; color: var(--color-ink-200);
 }
-@media (hover: hover) and (prefers-reduced-motion: no-preference) {
-	.card:hover { transform: translateY(-2px); }
+.topnav a:hover, .topnav a[aria-current="page"] { color: #fff; background: var(--color-ink-800); }
+.topnav a[aria-current="page"] { box-shadow: inset 0 -2px 0 var(--color-accent); }
+@media (min-width: 768px) { .topnav { display: flex; } }
+.search {
+	flex: 1 1 auto; max-width: 26rem; margin-inline: auto;
+	display: flex; align-items: center; gap: .5rem;
+	height: 2.25rem; padding: 0 .75rem; border-radius: .7rem;
+	background: var(--color-ink-950); border: 1px solid var(--color-ink-700);
+	color: var(--color-ink-400); font-size: .9rem;
 }
-/* Modelka, kterou živý stav označil za offline. */
-.card.is-offline { opacity: .55; }
-.card.is-offline .badge-live { background: var(--color-ink-600); }
+.search:hover { border-color: var(--color-ink-500); color: var(--color-ink-200); }
+.search svg { width: 1rem; height: 1rem; flex: 0 0 auto; }
+@media (max-width: 639px) { .search span { display: none; } .search { flex: 0 0 auto; margin-left: auto; margin-right: 0; } }
+.rail-toggle {
+	display: inline-grid; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: .6rem;
+	color: var(--color-ink-200); flex: 0 0 auto;
+}
+.rail-toggle:hover { background: var(--color-ink-800); color: #fff; }
+.rail-toggle svg { width: 1.25rem; height: 1.25rem; }
+@media (min-width: 1024px) { .rail-toggle { display: none; } }
 
-/* Náhled má pevný poměr stran → žádný layout shift, až se obrázek načte. */
+.shell { display: flex; align-items: flex-start; }
+.rail {
+	position: fixed; z-index: 45; top: var(--topbar-h); bottom: 0; left: 0;
+	width: var(--rail-w);
+	overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+	background: var(--color-ink-900);
+	border-right: 1px solid var(--color-ink-800);
+	padding: .75rem .5rem 2rem;
+	transform: translateX(-100%);
+	transition: transform .2s ease;
+}
+html.rail-open .rail { transform: none; box-shadow: 0 0 0 100vmax rgb(0 0 0 / .55); }
+@media (min-width: 1024px) {
+	.rail { position: sticky; transform: none; height: calc(100vh - var(--topbar-h)); flex: 0 0 var(--rail-w); }
+	html.rail-open .rail { box-shadow: none; }
+}
+.rail-h {
+	display: flex; align-items: baseline; justify-content: space-between;
+	padding: .5rem .5rem .375rem; font-size: .75rem; font-weight: 700; letter-spacing: .06em;
+	text-transform: uppercase; color: var(--color-ink-400);
+}
+.rail-h a { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--color-accent); }
+.rail-list { display: flex; flex-direction: column; }
+/* Pevná výška řádku = rezervace místa, i když se seznam doplní až skriptem. */
+.rail-item {
+	display: flex; align-items: center; gap: .6rem; height: 2.75rem; padding: 0 .5rem; border-radius: .6rem;
+	color: var(--color-ink-50); font-size: .875rem;
+}
+.rail-item:hover { background: var(--color-ink-800); }
+.rail-item img, .rail-item .rail-ph {
+	width: 2rem; height: 2rem; border-radius: 999px; object-fit: cover; flex: 0 0 auto;
+	background: var(--color-ink-700); outline: 2px solid var(--color-ink-900);
+}
+.rail-item .rail-name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.rail-item .rail-sub { display: block; font-size: .72rem; font-weight: 400; color: var(--color-ink-400); overflow: hidden; text-overflow: ellipsis; }
+.rail-item .rail-v { font-size: .75rem; color: var(--color-ink-200); display: inline-flex; align-items: center; gap: .3rem; }
+.rail-item .rail-v::before { content: ""; width: .5rem; height: .5rem; border-radius: 99px; background: var(--color-accent); }
+.rail-cat { display: flex; align-items: center; gap: .6rem; height: 2.25rem; padding: 0 .5rem; border-radius: .6rem; font-size: .875rem; color: var(--color-ink-200); }
+.rail-cat:hover { background: var(--color-ink-800); color: #fff; }
+.rail-cat i { width: 1.5rem; height: 1.5rem; border-radius: .45rem; display: inline-grid; place-items: center; font-style: normal; font-size: .7rem; font-weight: 800; color: var(--color-on-accent); }
+.rail-sep { height: 1px; background: var(--color-ink-800); margin: .75rem .5rem; }
+.rail-mascot { display: block; margin: 1rem auto 0; width: 4.5rem; opacity: .9; }
+
+.page { flex: 1 1 auto; min-width: 0; }
+.page-main { max-width: 110rem; margin-inline: auto; padding: 1.25rem 1rem 2rem; }
+@media (min-width: 768px) { .page-main { padding: 1.5rem 1.75rem 2.5rem; } }
+
+/* ── karta modelky (16:9 jako u streamovacích webů) ─────────────────────── */
+.card { position: relative; container-type: inline-size; }
 .thumb-wrap {
 	position: relative;
-	aspect-ratio: 4 / 3;
-	background: var(--color-ink-800);
+	aspect-ratio: 16 / 9;
 	overflow: hidden;
+	border-radius: var(--radius-card);
+	background: var(--color-ink-800);
+	transition: transform .18s cubic-bezier(.3,1.4,.5,1), box-shadow .18s;
 }
-.thumb-wrap img,
-.thumb-wrap video {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-	display: block;
-}
-/* Náhled, který se nenačetl (Cam4 a Amateur.tv mají v URL podpis s expirací).
-   Dřív se tahle třída nastavovala, ale nikde nestylovala. */
-.thumb-wrap.is-placeholder img {
-	object-fit: contain;
-	padding: 18%;
-	opacity: .35;
-}
-/* Video preview leží nad obrázkem a naskočí, až se rozjede. */
-.thumb-wrap video {
-	position: absolute;
-	inset: 0;
-	opacity: 0;
-	transition: opacity .25s;
-}
+.thumb-wrap img, .thumb-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-wrap video { position: absolute; inset: 0; opacity: 0; transition: opacity .25s; }
 .thumb-wrap video.is-playing { opacity: 1; }
-
-/* Odznaky a počet diváků. Byly to dlouhé Tailwind utility stringy přímo
-   v atributu — 154 B na kartu, tj. ~22 kB na mřížkovou stránku. */
-.badge-row {
-	position: absolute;
-	left: .5rem;
-	top: .5rem;
-	z-index: 20;
-	display: flex;
-	flex-wrap: wrap;
-	gap: .25rem;
+.thumb-wrap.is-placeholder img { object-fit: contain; padding: 14%; opacity: .5; }
+.thumb-empty { position: absolute; inset: 0; background: var(--color-ink-800) url(/mascot-sleep.webp) center / 40% no-repeat; opacity: .5; }
+/* Hravý pohyb: náhled se nakloní a „odlepí" jako samolepka (jen myš, jen bez
+   omezení pohybu). Barevný stín = korálová, ne neonová záře. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.card:hover .thumb-wrap { transform: translate(-3px, -3px) rotate(-.6deg); box-shadow: 6px 6px 0 var(--color-accent); }
+	.card:nth-child(3n+2):hover .thumb-wrap { box-shadow: 6px 6px 0 var(--color-live); }
+	.card:nth-child(3n):hover .thumb-wrap { box-shadow: 6px 6px 0 var(--color-sun); transform: translate(-3px, -3px) rotate(.6deg); }
+}
+.thumb-top { position: absolute; top: .5rem; left: .5rem; right: .5rem; z-index: 20; display: flex; gap: .3rem; flex-wrap: wrap; pointer-events: none; }
+.live-pill {
+	display: inline-flex; align-items: center; gap: .3rem;
+	padding: .15rem .45rem; border-radius: .35rem;
+	background: var(--color-live); color: var(--color-on-live);
+	font-size: .7rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+}
+.live-pill::before { content: ""; width: .4rem; height: .4rem; border-radius: 99px; background: currentColor; animation: live-blink 1.6s ease-in-out infinite; }
+.live-pill-private { background: var(--color-ink-50); }
+.live-pill-private::before { animation: none; }
+@keyframes live-blink { 50% { opacity: .25 } }
+@media (prefers-reduced-motion: reduce) { .live-pill::before { animation: none; } }
+.sticker {
+	padding: .1rem .4rem; border-radius: .35rem; font-size: .66rem; font-weight: 800; text-transform: uppercase;
+	background: var(--color-sun); color: var(--color-on-accent); transform: rotate(-3deg);
+	box-shadow: 0 0 0 1.5px var(--color-ink-950);
+}
+.sticker-new { background: var(--color-accent); transform: rotate(2deg); }
+.sticker-toy { background: var(--color-sky); transform: rotate(-1deg); }
+.viewer-pill {
+	position: absolute; left: .5rem; bottom: .5rem; z-index: 20;
+	padding: .1rem .45rem; border-radius: .35rem;
+	background: rgb(15 15 19 / .82); color: #fff; font-size: .75rem; font-weight: 600;
 	pointer-events: none;
 }
-.viewer-count {
-	position: absolute;
-	left: .5rem;
-	bottom: .5rem;
-	z-index: 20;
-	font-size: 11px;
-	font-weight: 500;
-	color: rgb(255 255 255 / .9);
-	pointer-events: none;
+.card-meta { display: flex; gap: .6rem; padding-top: .6rem; }
+.net-dot {
+	flex: 0 0 auto; width: 2.1rem; height: 2.1rem; border-radius: 999px;
+	display: inline-grid; place-items: center;
+	font-family: var(--font-display); font-weight: 800; font-size: .95rem;
+	color: var(--color-on-accent); background: var(--color-ink-400);
 }
+.net-chaturbate { background: #f9a03f; } .net-camsoda { background: #4fd1c5; } .net-cam4 { background: #ff7f50; }
+.net-amateur { background: #e7c6ff; } .net-bongacams { background: #ff5c8a; } .net-xlovecam { background: #ffd23f; }
+.net-livejasmin { background: #ff8a5c; } .net-stripchat { background: #ff4f6d; } .net-streamate { background: #7cc8ff; }
+.net-imlive { background: #b8f23a; }
+.card-text { min-width: 0; flex: 1 1 auto; }
+.card-name { font-size: .9375rem; font-weight: 700; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-name a:hover { color: var(--color-accent); }
+.card-sub { margin-top: .1rem; font-size: .8rem; color: var(--color-ink-400); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-tags { display: flex; gap: .3rem; margin-top: .35rem; overflow: hidden; height: 1.35rem; }
+.card-tag { flex: 0 0 auto; padding: .05rem .5rem; border-radius: 99px; background: var(--color-ink-800); color: var(--color-ink-200); font-size: .72rem; font-weight: 600; }
+.card.is-stale .viewer-pill { display: none; }
 
-/* Spodní čitelnostní přechod pod počtem diváků. */
-.thumb-shade {
-	position: absolute;
-	inset: auto 0 0 0;
-	height: 45%;
-	background: linear-gradient(to top, rgb(0 0 0 / .75), transparent);
-	pointer-events: none;
-}
+/* Živá mřížka: dokud nedorazí čerstvá data, statické karty z buildu jsou
+   skryté (ale v layoutu — CLS 0) a místo nich běží „skeleton". Bez JS
+   (a pro crawler) zůstávají vidět. Pojistka 1,6 s je v `src/scripts/live.ts`. */
+html.js [data-live-grid]:not(.is-ready) .card { visibility: hidden; }
+html.js [data-live-grid]:not(.is-ready) .card .thumb-wrap { visibility: visible; background: linear-gradient(100deg, var(--color-ink-800) 40%, var(--color-ink-700) 50%, var(--color-ink-800) 60%) 0 0 / 200% 100%; animation: skel 1.2s linear infinite; }
+html.js [data-live-grid]:not(.is-ready) .card .thumb-wrap > * { visibility: hidden; }
+@keyframes skel { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { html.js [data-live-grid]:not(.is-ready) .card .thumb-wrap { animation: none; } }
+[data-live-grid].is-ready .card { animation: card-in .22s ease-out both; }
+@keyframes card-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { [data-live-grid].is-ready .card { animation: none; } }
 
+/* Řada na homepage („Live v kategorii X") — jako police na streamovacím webu. */
+.shelf-h { display: flex; align-items: baseline; gap: .75rem; margin: 2rem 0 .75rem; }
+.shelf-h h2 { font-size: 1.25rem; font-weight: 800; }
+.shelf-h a { font-size: .875rem; font-weight: 600; color: var(--color-accent); }
+.shelf-h a:hover { text-decoration: underline; }
+.shelf-h .count { font-size: .8rem; color: var(--color-ink-400); }
+
+/* Prázdný stav s maskotem — nikdo v kategorii zrovna nevysílá. */
+.empty-state { display: flex; align-items: center; gap: 1rem; padding: 1.25rem; border-radius: var(--radius-card); background: var(--color-ink-900); border: 2px dashed var(--color-ink-700); }
+.empty-state img { width: 5rem; height: 5rem; flex: 0 0 auto; }
+
+/* Zpětná vazba na klepnutí. */
+.card .stretch { -webkit-tap-highlight-color: rgb(255 79 109 / .25); }
+.stretch::after { content: ""; position: absolute; inset: 0; z-index: 10; }
+
+/* Výměna karty na místě (stránka modelky, podobné). */
+@keyframes card-swap-in { from { opacity: 0 } to { opacity: 1 } }
+.card.is-swapped { animation: card-swap-in .18s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .card.is-swapped { animation: none; } }
+.card.is-offline { opacity: .55; }
 
 /* Proužek nad náhradním streamem: „X právě dovysílala — teď hraje Y".
    Absolutní, takže odkrytí nic neposune (CLS 0), a nad přehrávačem, aby
@@ -189,31 +335,9 @@ body {
 	justify-content: center;
 	padding: 1.5rem;
 	text-align: center;
-	background: var(--color-ink-900, #18181b);
+	background: var(--color-ink-900);
 }
 .player-offline[hidden] { display: none; }
-
-/* Karta, kterou živý průchod vyměnil za zhaslou. Modelka dovysílala, takže se
-   vyměnit MUSÍ — ale nemusí to blesknout před očima. Prolne se; mění se jen
-   krytí, nikdy rozměr, takže CLS zůstává nula (D57 hlídá i pořadí karet). */
-@keyframes card-swap-in { from { opacity: 0 } to { opacity: 1 } }
-.card.is-swapped { animation: card-swap-in .18s ease-out both; }
-@media (prefers-reduced-motion: reduce) {
-	.card.is-swapped { animation: none; }
-}
-
-/* Zpětná vazba na klepnutí. Bez ní na pomalé stránce vypadá klik do karty jako
-   „nic se nestalo" a lidé klepou znovu. */
-.card .stretch { -webkit-tap-highlight-color: rgb(244 63 94 / .25); }
-
-/* Odkaz, který zvětší svůj klikací cíl na celou kartu. Díky tomu je klikatelná
-   celá plocha, ale CTA nad ní zůstane samostatný odkaz — vnořené <a> nejde. */
-.stretch::after {
-	content: "";
-	position: absolute;
-	inset: 0;
-	z-index: 10;
-}
 
 /* ── stránka modelky ──────────────────────────────────────────────────────── */
 
@@ -287,6 +411,7 @@ body {
 	padding-left: .2rem;
 	border-radius: 999px;
 	background: var(--color-accent);
+	color: var(--color-on-accent);
 	font-size: 1.5rem;
 	line-height: 1;
 	box-shadow: 0 6px 24px rgb(0 0 0 / .45);
@@ -360,25 +485,25 @@ html.needs-consent .no-consent-only { display: none; }
 .finder-input {
 	width: 100%;
 	border-radius: 0.5rem;
-	border: 1px solid var(--color-ink-700, #3f3f46);
-	background: var(--color-ink-900, #18181b);
+	border: 1px solid var(--color-ink-700);
+	background: var(--color-ink-900);
 	padding: 0.75rem 1rem;
 	font-size: 1rem;
 	color: #fff;
 }
-.finder-input:focus { outline: 2px solid var(--color-accent, #f43f5e); outline-offset: 1px; }
+.finder-input:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .finder-filters { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.75rem; }
 .chip {
 	border-radius: 9999px;
-	border: 1px solid var(--color-ink-700, #3f3f46);
-	background: var(--color-ink-900, #18181b);
+	border: 1px solid var(--color-ink-700);
+	background: var(--color-ink-900);
 	padding: 0.25rem 0.75rem;
 	font-size: 0.875rem;
-	color: #d4d4d8;
+	color: var(--color-ink-200);
 	cursor: pointer;
 }
 .chip:hover { color: #fff; }
-.chip.is-on { background: var(--color-accent, #f43f5e); border-color: transparent; color: #fff; }
+.chip.is-on { background: var(--color-accent); border-color: transparent; color: var(--color-on-accent); font-weight: 600; }
 
 /* ── filtr mřížky podle sítě (D58) ───────────────────────────────────────────
    Řádek je v HTML od začátku a nic se v něm neodkrývá skriptem; volba se
@@ -404,19 +529,19 @@ html.needs-consent .no-consent-only { display: none; }
 @media (min-width: 768px) {
 	.grid-filters { flex-wrap: wrap; overflow-x: visible; }
 }
-.grid-filters-label { font-size: 0.8125rem; color: #71717a; }
+.grid-filters-label { font-size: 0.8125rem; color: var(--color-ink-400); }
 .grid-filters-more {
 	/* V posouvaném řádku `margin-left: auto` netlačí odkaz doprava (obsah je
 	   širší než kontejner), takže na mobilu jde prostě za poslední chip. */
 	margin-left: auto;
 	font-size: 0.8125rem;
-	color: var(--color-accent, #f43f5e);
+	color: var(--color-accent);
 	text-decoration: underline;
 }
 .grid-filters-more:hover { color: #fff; }
 /* Východ z prázdného filtru: doplňuje ho skript, místo si nedrží — je pod
    mřížkou, takže posunout nemá co. */
-.grid-filter-note { margin-top: 1rem; font-size: 0.875rem; color: #a1a1aa; }
+.grid-filter-note { margin-top: 1rem; font-size: 0.875rem; color: var(--color-ink-400); }
 /* Čtyři živé karty nad ohybem u offline modelky — užší mřížka, ať se vejdou
    do jednoho řádku i na mobilu bez scrollování textu. */
 .card-grid-quick { grid-template-columns: repeat(auto-fill, minmax(9rem, 1fr)); }
@@ -436,8 +561,8 @@ html.needs-consent .no-consent-only { display: none; }
 	justify-content: center;
 	min-height: 3.25rem;
 	padding: 0.75rem 1rem;
-	background: var(--color-accent, #f43f5e);
-	color: #fff;
+	background: var(--color-accent);
+	color: var(--color-on-accent);
 	font-weight: 600;
 	text-align: center;
 	box-shadow: 0 -6px 20px rgb(0 0 0 / 0.35);
@@ -452,8 +577,8 @@ html.needs-consent .no-consent-only { display: none; }
 @media (min-width: 768px) {
 	.sticky-cta { display: none !important; }
 }
-.finder-status { margin-top: 0.75rem; font-size: 0.8125rem; color: #a1a1aa; min-height: 2.5rem; }
-.finder-placeholder { padding: 1rem 0; font-size: 0.875rem; color: #71717a; }
+.finder-status { margin-top: 0.75rem; font-size: 0.8125rem; color: var(--color-ink-400); min-height: 2.5rem; }
+.finder-placeholder { padding: 1rem 0; font-size: 0.875rem; color: var(--color-ink-400); }
 /* Rezervované místo pro „Show more" — jeho zobrazení nesmí nic posunout.
    Místo se NEHÁDÁ číslem: `min-height: 2.75rem` byla o 14 px menší než tlačítko
    samo (44 vs 58 px) a odkrytí posouvalo obsah pod finderem — změřeno
@@ -481,15 +606,15 @@ html.needs-consent .no-consent-only { display: none; }
 	flex-wrap: wrap;
 	align-items: baseline;
 	gap: 0.5rem;
-	border-bottom: 1px solid rgb(39 39 42 / 0.6);
+	border-bottom: 1px solid var(--color-ink-800);
 	padding: 0.5rem 0;
 	font-size: 0.875rem;
 }
 .finder-nick { font-weight: 500; color: #fff; }
 .finder-nick:hover { text-decoration: underline; }
-.finder-meta { color: #71717a; }
-.finder-elsewhere { color: var(--color-accent, #f43f5e); text-decoration: underline; }
-.finder-cta { margin-left: auto; color: var(--color-accent, #f43f5e); text-decoration: underline; }
+.finder-meta { color: var(--color-ink-400); }
+.finder-elsewhere { color: var(--color-accent); text-decoration: underline; }
+.finder-cta { margin-left: auto; color: var(--color-accent); text-decoration: underline; }
 .sr-only {
 	position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
 	overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
@@ -506,23 +631,23 @@ html.has-follows .watch-link {
 	align-items: center;
 	gap: 0.375rem;
 	border-radius: 9999px;
-	border: 1px solid var(--color-ink-700, #3f3f46);
+	border: 1px solid var(--color-ink-700);
 	padding: 0.25rem 0.75rem;
 	font-size: 0.875rem;
-	color: #d4d4d8;
+	color: var(--color-ink-200);
 	white-space: nowrap;
 }
 html.has-follows .watch-link:hover { color: #fff; }
-html.has-follows .watch-link.is-live { border-color: var(--color-accent, #f43f5e); color: #fff; }
+html.has-follows .watch-link.is-live { border-color: var(--color-accent); color: #fff; }
 .watch-count {
 	min-width: 1.25rem;
 	border-radius: 9999px;
-	background: var(--color-accent, #f43f5e);
+	background: var(--color-accent);
 	padding: 0 0.375rem;
 	text-align: center;
 	font-size: 0.75rem;
 	font-weight: 600;
-	color: #fff;
+	color: var(--color-on-accent);
 }
 
 /* Prázdný stav `/my/` vidí jen ten, kdo nikoho nesleduje — a naopak. */
@@ -532,17 +657,17 @@ html.has-follows .watch-list { display: block; }
 
 .watch-btn {
 	border-radius: 9999px;
-	border: 1px solid var(--color-ink-700, #3f3f46);
-	background: var(--color-ink-900, #18181b);
+	border: 1px solid var(--color-ink-700);
+	background: var(--color-ink-900);
 	padding: 0.375rem 0.875rem;
 	font-size: 0.875rem;
 	font-weight: 500;
-	color: #d4d4d8;
+	color: var(--color-ink-200);
 	cursor: pointer;
 	white-space: nowrap;
 }
 .watch-btn:hover { color: #fff; }
-.watch-btn.is-on { border-color: var(--color-accent, #f43f5e); color: #fff; }
+.watch-btn.is-on { border-color: var(--color-accent); color: #fff; }
 
 /* Místo pro řádky je rezervované PŘED dosypáním seznamu, protože řádky plní
    klient — bez toho tlačí patičku dolů (změřeno CLS 0,1208). Je to PEVNÁ výška
@@ -564,14 +689,63 @@ html.has-follows .watch-list { display: block; }
 	flex-wrap: wrap;
 	align-items: baseline;
 	gap: 0.5rem;
-	border-bottom: 1px solid rgb(39 39 42 / 0.6);
+	border-bottom: 1px solid var(--color-ink-800);
 	padding: 0.5rem 0;
 	font-size: 0.875rem;
 }
 .watch-nick { font-weight: 500; color: #fff; }
 .watch-nick:hover { text-decoration: underline; }
-.watch-meta { color: #71717a; }
-.watch-elsewhere { color: var(--color-accent, #f43f5e); text-decoration: underline; }
-.watch-cta { margin-left: auto; color: var(--color-accent, #f43f5e); text-decoration: underline; }
-.watch-drop { background: none; border: 0; color: #71717a; cursor: pointer; font-size: 0.8125rem; }
-.watch-drop:hover { color: #d4d4d8; text-decoration: underline; }
+.watch-meta { color: var(--color-ink-400); }
+.watch-elsewhere { color: var(--color-accent); text-decoration: underline; }
+.watch-cta { margin-left: auto; color: var(--color-accent); text-decoration: underline; }
+.watch-drop { background: none; border: 0; color: var(--color-ink-400); cursor: pointer; font-size: 0.8125rem; }
+.watch-drop:hover { color: var(--color-ink-200); text-decoration: underline; }
+
+/* Karta má pevnou výšku popisku → skeleton i živá karta stejně vysoké (CLS 0). */
+.card-meta { min-height: 4.6rem; }
+
+/* ── adresář kategorií („box art") ──────────────────────────────────────────
+   Bez fotek lidí: barevná dlaždice s velkým názvem a nálepkou s počtem
+   živých. Barva se střídá po pěti, náklon je drobný — hravé, ne kýčovité. */
+.cat-grid { display: grid; gap: .875rem; grid-template-columns: repeat(auto-fill, minmax(min(100%, 9.5rem), 1fr)); }
+.cat-tile {
+	position: relative; display: flex; flex-direction: column; justify-content: flex-end;
+	aspect-ratio: 3 / 4; padding: .75rem; border-radius: var(--radius-card); overflow: hidden;
+	color: var(--color-on-accent); background: var(--tile, var(--color-accent));
+	transition: transform .18s cubic-bezier(.3,1.4,.5,1), box-shadow .18s;
+}
+.cat-tile::before {
+	content: ""; position: absolute; inset: auto -20% -25% auto; width: 85%; aspect-ratio: 1;
+	border-radius: 999px; background: rgb(255 255 255 / .22);
+}
+.cat-tile::after {
+	content: ""; position: absolute; top: .7rem; right: .7rem; width: 2.4rem; height: 2.4rem;
+	background: url(/logo-mark.svg) center / contain no-repeat; transform: rotate(12deg); opacity: .9;
+}
+.cat-tile b { position: relative; font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; line-height: 1.05; letter-spacing: -.02em; }
+.cat-tile span { position: relative; margin-top: .35rem; align-self: flex-start; padding: .1rem .45rem; border-radius: .35rem; background: var(--color-ink-950); color: var(--color-live); font-size: .72rem; font-weight: 700; }
+.cat-tile:nth-child(5n+1) { --tile: #ff4f6d; } .cat-tile:nth-child(5n+2) { --tile: #b8f23a; }
+.cat-tile:nth-child(5n+3) { --tile: #ffd23f; } .cat-tile:nth-child(5n+4) { --tile: #7cc8ff; }
+.cat-tile:nth-child(5n) { --tile: #f9a03f; }
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+	.cat-tile:hover { transform: translate(-3px, -3px) rotate(-1deg); box-shadow: 6px 6px 0 var(--color-ink-50); }
+}
+
+/* Úvodní pruh stránky: nadpis + počet živých jako nálepka. */
+.page-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem 1rem; }
+.page-head h1 { font-size: clamp(1.4rem, 3vw, 2.1rem); font-weight: 800; line-height: 1.1; }
+.live-count { display: inline-flex; align-items: center; gap: .4rem; padding: .25rem .6rem; border-radius: .5rem; background: var(--color-live); color: var(--color-on-live); font-weight: 800; font-size: .8rem; transform: rotate(-2deg); }
+.live-count::before { content: ""; width: .45rem; height: .45rem; border-radius: 99px; background: currentColor; }
+
+/* Věková lišta v novém shellu. */
+.age-notice { background: var(--color-ink-950); }
+.age-notice button { border-radius: .6rem; }
+
+/* Odznaky na profilu: tmavý text na limetkové/nebeské (kontrast), světlý na tmavé. */
+.badge.bg-live, .badge.bg-toy, .badge.bg-sun { color: var(--color-on-live); }
+.badge.bg-ink-700 { color: var(--color-ink-50); }
+@media (max-width: 479px) {
+	/* Dvě karty vedle sebe: kolečko sítě by ubralo místo jménu. */
+	.card .net-dot { display: none; }
+	.card-meta { min-height: 4.1rem; }
+}

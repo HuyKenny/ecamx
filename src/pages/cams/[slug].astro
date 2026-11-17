@@ -1,14 +1,15 @@
 ---
 import GridFilters from '../../components/GridFilters.astro';
 import Layout from '../../layouts/Layout.astro';
-import ModelCard from '../../components/ModelCard.astro';
+import LiveGrid from '../../components/LiveGrid.astro';
+import { toCards } from '../../lib/card-model';
+import { facetKey, liveQueryFor } from '../../lib/live-grid';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import {
 	FACETS, allCategoryFacets, allInCategory, recentlyLiveInCategory, gridWindow,
 	relatedCategories, facetLabel, CURATED_BY_SLUG, topCountries, countryName,
 	NETWORK_LABELS,
 } from '../../lib/data';
-import Pagination from '../../components/Pagination.astro';
 import { GRID } from '../../lib/paging';
 import { safeJsonLd } from '../../lib/jsonld';
 import { categorySeo, SITE_URL, approx } from '../../lib/seo';
@@ -65,7 +66,7 @@ const jsonLd = {
 	},
 };
 ---
-<Layout title={seo.title} description={seo.description}>
+<Layout liveQuery={liveQueryFor([[facetKey(facet.kind, facet.slug), 48]])} title={seo.title} description={seo.description}>
 	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
 
 	<Breadcrumbs items={[{ label: 'Categories', href: '/cams/' }, { label }]} />
@@ -78,22 +79,7 @@ const jsonLd = {
 		live stream and her details — no account, no signup.</p>
 
 	<GridFilters models={models} />
-	<div class="card-grid mt-6" data-grid data-visible={VISIBLE}>
-		{models.map((m, i) => (
-			<ModelCard
-				model={m}
-				eager={i < 10}
-				reserve={i >= VISIBLE}
-			/>
-		))}
-	</div>
-
-	<Pagination
-		base={`/cams/${facet.slug}/`}
-		page={win.page} pages={win.pages}
-		from={win.from} to={win.to} total={win.total}
-		label={`${label.toLowerCase()} cams`}
-	/>
+	<LiveGrid cards={toCards(models)} q={facetKey(facet.kind, facet.slug)} n={48} eager={8} class="mt-6" />
 
 	{copy && (
 		<section class="prose-ecamx mt-10 max-w-3xl space-y-4 text-ink-200" set:html={copy} />
