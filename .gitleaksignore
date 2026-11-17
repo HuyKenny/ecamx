@@ -1,0 +1,5 @@
+# Falešné poplachy (ověřeno 18. 11. 2026):
+# - demand.ts: komentář/kód, který z PEM odstraňuje hlavičku `BEGIN PRIVATE KEY` — žádný klíč
+# - indexnow.ts: klíč IndexNow je veřejný z principu (leží i v public/{key}.txt)
+70b0d4fa47c78bdf1076c582e8f14c5798e53741:workers/cron/demand.ts:private-key:62
+70b0d4fa47c78bdf1076c582e8f14c5798e53741:workers/cron/indexnow.ts:generic-api-key:23
