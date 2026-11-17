@@ -89,12 +89,24 @@ function swapHead(doc: Document): void {
 	for (const s of doc.head.querySelectorAll('script[type="application/ld+json"]')) document.head.appendChild(s.cloneNode(true));
 }
 
+/**
+ * Moduly, které už v téhle stránce běžely. Vlastní evidence, ne dotaz do DOM:
+ * `<script>` vložený přes `innerHTML` s novým `<main>` je mrtvý (nespustí se),
+ * a přesto by ho dotaz našel a skript by se nedoplnil.
+ */
+const loaded = new Set<string>();
+for (const s of document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')) {
+	loaded.add(new URL(s.getAttribute('src')!, location.href).pathname);
+}
+
 /** Skripty, které nová stránka potřebuje a tahle je ještě nenačetla. */
 function loadMissingScripts(doc: Document): void {
-	const have = new Set([...document.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')].map((s) => s.getAttribute('src')));
 	for (const s of doc.querySelectorAll<HTMLScriptElement>('script[type="module"][src]')) {
 		const src = s.getAttribute('src');
-		if (!src || have.has(src)) continue;
+		if (!src) continue;
+		const path = new URL(src, location.href).pathname;
+		if (loaded.has(path)) continue;
+		loaded.add(path);
 		const n = document.createElement('script');
 		n.type = 'module';
 		n.src = src;
