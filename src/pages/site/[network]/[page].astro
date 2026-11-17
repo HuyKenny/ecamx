@@ -1,0 +1,29 @@
+---
+/** Síť, stránka 2+. Mřížka je tu užší než u kategorií (VISIBLE = 40). */
+import GridPage from '../../../components/GridPage.astro';
+import { FACETS, allOnNetwork, NETWORK_LABELS, gridWindow } from '../../../lib/data';
+import { NETWORK_GRID, gridPageCount } from '../../../lib/paging';
+
+export function getStaticPaths() {
+	const out = [];
+	for (const n of FACETS.networks) {
+		const pages = gridPageCount(allOnNetwork(n.slug).length, NETWORK_GRID);
+		for (let p = 2; p <= pages; p++) {
+			out.push({ params: { network: n.slug, page: String(p) }, props: { facet: n } });
+		}
+	}
+	return out;
+}
+
+const { facet } = Astro.props;
+const label = NETWORK_LABELS[facet.slug];
+const win = gridWindow(allOnNetwork(facet.slug), Number(Astro.params.page), NETWORK_GRID);
+---
+<GridPage
+	heading={`${label} Live Cams`}
+	base={`/site/${facet.slug}/`}
+	win={win}
+	visible={NETWORK_GRID.visible}
+	crumbs={[{ label, href: `/site/${facet.slug}/` }]}
+	countLabel={`models on ${label}`}
+/>

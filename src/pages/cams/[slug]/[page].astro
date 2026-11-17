@@ -1,0 +1,34 @@
+---
+/**
+ * Kategorie, stránka 2+. Stránka 1 zůstává v `src/pages/cams/[slug].astro` —
+ * soubor se neposouval, aby se nesáhlo na 332 živých URL.
+ */
+import GridPage from '../../../components/GridPage.astro';
+import { allCategoryFacets, allInCategory, facetLabel, gridWindow } from '../../../lib/data';
+import { GRID, gridPageCount } from '../../../lib/paging';
+
+export function getStaticPaths() {
+	const out = [];
+	for (const c of allCategoryFacets()) {
+		// Počet stránek ze SKUTEČNÉHO výsledku, ne z `c.count` — na tom rozdílu
+		// stála chyba `canonicalTerm` a byly by z něj prázdné stránky.
+		const pages = gridPageCount(allInCategory(c.slug, c.kind).length, GRID);
+		for (let n = 2; n <= pages; n++) {
+			out.push({ params: { slug: c.slug, page: String(n) }, props: { facet: c } });
+		}
+	}
+	return out;
+}
+
+const { facet } = Astro.props;
+const label = facetLabel(facet.slug, facet.label);
+const win = gridWindow(allInCategory(facet.slug, facet.kind), Number(Astro.params.page), GRID);
+---
+<GridPage
+	heading={`Live ${label} Cams`}
+	base={`/cams/${facet.slug}/`}
+	win={win}
+	visible={GRID.visible}
+	crumbs={[{ label: 'Categories', href: '/cams/' }, { label, href: `/cams/${facet.slug}/` }]}
+	countLabel={`${label.toLowerCase()} cams`}
+/>
