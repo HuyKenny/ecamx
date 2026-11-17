@@ -781,8 +781,8 @@ html.has-follows .watch-list { display: block; }
 	.theater.is-chat { grid-template-columns: minmax(0, 1fr); }
 	.theater.is-chat .player-frame { height: max(var(--theater-h), 480px); }
 }
-@media (max-width: 1199px) {
-	/* Chat v rámci Chaturbate potřebuje výšku — na mobilu pod videem. */
+@media (min-width: 900px) and (max-width: 1199px) {
+	/* Chat v rámci Chaturbate potřebuje výšku; pod 900 px jede jen video (fit-embed.ts). */
 	.theater.is-chat .player-frame { aspect-ratio: auto; height: min(90vh, 640px); }
 }
 .theater-side {

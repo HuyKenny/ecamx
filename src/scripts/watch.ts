@@ -4,6 +4,8 @@
  * Když modelka mezitím dovysílá (`ecamx:model-offline` z `live.ts`),
  * přehrávač zmizí a zůstane poster + podobné živé.
  */
+import { fitEmbed } from '../lib/fit-embed';
+
 const box = document.querySelector<HTMLElement>('[data-watch-player]');
 const play = document.querySelector<HTMLButtonElement>('[data-watch-play]');
 
@@ -11,7 +13,7 @@ function start(): void {
 	const src = box?.dataset.embed;
 	if (!box || !src) return;
 	const f = document.createElement('iframe');
-	f.src = src;
+	f.src = fitEmbed(src);
 	f.allow = 'autoplay; fullscreen';
 	f.setAttribute('scrolling', 'no');
 	f.setAttribute('allowfullscreen', '');

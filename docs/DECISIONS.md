@@ -4143,3 +4143,5 @@ kterému stream na našem webu nefunguje, klidně odstraň".
   LiveJasmin (jen malý náhled v rohu) a ImLive (bílá plocha). Nestahuje je
   sync ani cron, archivní stránky zanikají přesměrováním (D35), `/site/x/`
   → 301 `/site/`, `/go/` zůstává. Texty kategorií je přestaly zmiňovat.
+
+**D86 dodatek (17. 11. 2026):** Chaturbate embed s chatem má pevné desktopové rozvržení — na 390 px useknuté video nad bílou plochou. Pod 900 px proto `src/lib/fit-embed.ts` přidá `embed_video_only=1` a rámec drží 16:9; chat je přes CTA. Od 900 px výš embed s chatem.
