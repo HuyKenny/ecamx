@@ -211,7 +211,35 @@ export async function run(env: Env, dry = false): Promise<unknown> {
 	// Všechno spadlé = nepřepisovat dobrý snímek prázdným.
 	if (!dry && m.length && failed.length < NETWORKS.length) {
 		await env.KV.put(SNAPSHOT_KEY, body);
+		await recordPresence(env, m, nets).catch((e) =>
+			console.error(JSON.stringify({ task: "live-presence", error: String((e as Error)?.message ?? e) })));
 	}
 	console.log(JSON.stringify({ task: "live-snapshot", dry, ...summary }));
 	return summary;
+}
+
+/**
+ * Hodinový záznam přítomnosti (D82): KV `presence:YYYY-MM-DD` (UTC) =
+ * `{ "síť:slug": maska 24 bitů po hodinách }`. Zapisuje se jen v prvním běhu
+ * každé hodiny (24 zápisů/den). Noční sync z toho dopočítá `seen`, `last`
+ * a rozvrh `hours` — dřív je odhadoval ze dvou buildů denně, které GitHub
+ * navíc zpožďoval o hodiny, takže rozvrh i práh indexace stály na vzorku
+ * dvou časů dne (plán D82, bod 3).
+ *
+ * Bity se nastavují jen u sítí, které se v tomhle běhu opravdu stáhly
+ * (`ok`) — podržená data spadlé sítě by jinak tvrdila přítomnost.
+ */
+export async function recordPresence(env: Env, m: LiveRec[], nets: Record<string, NetState>, now = new Date()): Promise<void> {
+	if (now.getUTCMinutes() >= 5) return;
+	const day = now.toISOString().slice(0, 10);
+	const bit = 1 << now.getUTCHours();
+	const key = `presence:${day}`;
+	const cur = (await env.KV.get<Record<string, number>>(key, { type: "json" })) ?? {};
+	for (const r of m) {
+		if (!nets[r.n]?.ok) continue;
+		const k = `${r.n}:${r.s}`;
+		cur[k] = (cur[k] ?? 0) | bit;
+	}
+	// 9 dní stačí na dohnání i týdenního výpadku buildu; pak KV sám uklidí.
+	await env.KV.put(key, JSON.stringify(cur), { expirationTtl: 9 * 86_400 });
 }
