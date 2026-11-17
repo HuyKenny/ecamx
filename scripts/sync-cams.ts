@@ -180,7 +180,17 @@ const REDIRECT_DAYS = 180;
  * `python3 ~/ai/bin/ecamx-actions-check.py --dry-run` a podívá se na projekci.
  * Přeteklo to už dvakrát (srpen: ~2 032 min → GitHub vypnul joby na dva dny).
  */
-const MAX_MODEL_PAGES = parseInt(process.env.MAX_MODEL_PAGES || '25000', 10);
+const MAX_MODEL_PAGES = parseInt(process.env.MAX_MODEL_PAGES || '5000', 10);
+/**
+ * D88 (18. 11. 2026, Kenny: „aby web nebyl velký"): strop 25 000 → 5 000.
+ * Za 28 dní mělo imprese v GSC jen 55 stránek; tisíce tenkých stránek
+ * modelek jen prodlužovaly build a ředily index. Statickou stránku dostane
+ * modelka s poptávkou nebo pravidelná (`REGULAR_DAYS`); ostatní živé mají
+ * dynamickou `/watch/` (noindex) pod stejnou URL `/live/{p}/`.
+ */
+const REGULAR_DAYS = parseInt(process.env.REGULAR_DAYS || '10', 10);
+/** Offline déle než tohle → stránka pryč, 302 do kategorie — i s poptávkou (D88). */
+const PAGE_OFFLINE_DAYS = parseInt(process.env.PAGE_OFFLINE_DAYS || '30', 10);
 /**
  * Do indexu jde modelka až po tolika různých dnech, kdy jsme ji viděli.
  * Zbytek dostane stránku, ale `noindex, follow` — klik zůstane u nás a Google
@@ -676,7 +686,10 @@ const ARCHIVE_RESERVE = parseInt(process.env.ARCHIVE_RESERVE || '2400', 10);
  */
 const gridPages = (count: number, size: number, cap = MAX_GRID_PAGES) =>
 	Math.min(Math.max(1, Math.ceil(count / size)), cap);
-const liveBudget = Math.max(1000, MAX_MODEL_PAGES - ARCHIVE_RESERVE);
+// D88: odpojeno od `MAX_MODEL_PAGES`. Tenhle ořez rozhoduje, kdo se vůbec
+// zapíše do registry (a sbírá `seen`) — se stropem 5 000 by nové modelky
+// nikdy nedošly k `REGULAR_DAYS`. Strop statických stránek drží `staticLive`.
+const liveBudget = parseInt(process.env.LIVE_REGISTRY_MAX || String(Math.max(1000, 25000 - ARCHIVE_RESERVE)), 10);
 
 const registry = await loadRegistry();
 migrateRegistry(registry);
@@ -890,6 +903,7 @@ const prevHolders = new Set(Object.entries(registry).filter(([, e]) => wasPublis
 const yesterday = isoDay(started.getTime() - 86_400_000);
 const cutoffPage = isoDay(started.getTime() - GRACE_DAYS * 86_400_000);
 const cutoffNoDemand = isoDay(started.getTime() - GRACE_DAYS_NO_DEMAND * 86_400_000);
+const cutoffOffline = isoDay(started.getTime() - PAGE_OFFLINE_DAYS * 86_400_000);
 const cutoffRedirect = isoDay(started.getTime() - REDIRECT_DAYS * 86_400_000);
 
 /**
@@ -1048,11 +1062,29 @@ for (const [k, e] of Object.entries(registry)) {
  * dynamickou stránku ze snímku a do katalogu (mřížky z buildu, adresář,
  * sitemapa) nejdou.
  */
+/**
+ * D88: místo pro offline stránky S POPTÁVKOU se vyhradí dřív, než si rozpočet
+ * rozeberou živé — jinak by je strop vytlačil (bez souboru → 302, ztracená
+ * pozice). Nejvýš 60 % stropu, ať živé pravidelné modelky nezmizí úplně.
+ */
+const wantedOffline = Object.entries(registry).filter(([k, e]) =>
+	!DISABLED_NETWORKS.has(e.network) && !liveKeys.has(k) && !!e.page
+	&& demandFor(e.page) >= DEMAND_KEEP && e.last >= cutoffOffline).length;
+const staticLiveCap = MAX_MODEL_PAGES - Math.min(wantedOffline, Math.floor(MAX_MODEL_PAGES * 0.6));
 const staticLive = models.filter((m) => {
 	const k = `${m.network}:${m.slug}`;
 	const e = registry[k]!;
-	return prevHolders.has(k) || e.seen >= INDEX_MIN_DAYS || demandFor(e.page) >= DEMAND_KEEP;
-});
+	// D88: `prevHolders` už není automatická propustka (zamrazila by 25 000
+	// stránek z doby před D88); drží jen u hranice prahu, ať URL neblikají.
+	return demandFor(e.page) >= DEMAND_KEEP || e.seen >= REGULAR_DAYS
+		|| (prevHolders.has(k) && e.seen >= REGULAR_DAYS - 3);
+}).sort((a, b) => {
+	const ea = registry[`${a.network}:${a.slug}`]!, eb = registry[`${b.network}:${b.slug}`]!;
+	const d = demandFor(eb.page) - demandFor(ea.page);
+	if (d !== 0) return d;
+	if (eb.seen !== ea.seen) return eb.seen - ea.seen;
+	return (b.viewers ?? 0) - (a.viewers ?? 0);
+}).slice(0, staticLiveCap);
 const staticKeys = new Set(staticLive.map((m) => `${m.network}:${m.slug}`));
 log(`živé: ${models.length}, z toho se statickou stránkou ${staticLive.length} (zbytek /watch/ ze snímku)`);
 const archiveBudget = Math.max(0, MAX_MODEL_PAGES - staticLive.length);
@@ -1075,8 +1107,9 @@ const archiveCandidates = Object.entries(registry)
 		// Vypnuté sítě (D86) stránku nedostanou — ani archivní.
 		!DISABLED_NETWORKS.has(e.network) &&
 		!liveKeys.has(k) && !!e.page
-		&& (wanted(e) || (!!e.snap && !e.gone
-			&& e.seen >= INDEX_MIN_DAYS && e.last >= cutoffNoDemand)));
+		// D88: i stránka s poptávkou drží offline jen `PAGE_OFFLINE_DAYS`.
+		&& ((wanted(e) && e.last >= cutoffOffline) || (!!e.snap && !e.gone
+			&& e.seen >= REGULAR_DAYS && e.last >= cutoffNoDemand)));
 /**
  * **Po poptávce rozhoduje TRVALOST, ne čerstvost.**
  *
@@ -1189,7 +1222,12 @@ for (const [k, e] of Object.entries(registry)) {
 	if (!wasPublished(e)) continue;
 	// Stránka s měřenou poptávkou se nepřesměrovává. Když se nevešla do
 	// rozpočtu, je to chyba rozpočtu — ne důvod zahodit pozici v Googlu.
-	if (demandFor(e.page) >= DEMAND_KEEP) { keptByDemand++; continue; }
+	// D88: jen dokud modelka nevysílá kratší dobu než `PAGE_OFFLINE_DAYS` —
+	// jinak by stránka bez souboru i bez přesměrování skončila na 404.
+	// D88: bez výjimky. Stránka bez souboru i bez přesměrování by byla 404 —
+	// 302 do kategorie je pro návštěvníka i pro Google lepší. Poptávka má
+	// v rozpočtu vyhrazené místo (`wantedOffline`), sem padá jen přebytek.
+	if (demandFor(e.page) >= DEMAND_KEEP) keptByDemand++;
 	// **Přesměrování dostane KAŽDÁ zmizelá stránka**, ne jen ta nad prahem
 	// `INDEX_MIN_DAYS`. Ta podmínka tu byla proto, že se přesměrování musela
 	// vejít do 2 000 pravidel `_redirects` — a důsledek byl, že 5 878 živých
@@ -1321,7 +1359,7 @@ log(`stránky modelek: ${onlineCatalog.length} živých + ${archiveCatalog.lengt
 log(`z toho indexovaných: ${indexable} (práh seen>=${INDEX_MIN_DAYS} nebo poptávka), přesměrování: ${Object.keys(goneMap).length}`);
 log(`v sitemapě: ${stableCount} stabilních (práh seen>=${seenCut} nebo poptávka) — `
 	+ `zbytek katalogu drží adresář /models/, ale Googlu ho neslibujeme`);
-log(`poptávka: ${keptByDemand} stránek ochráněno, ${retired} nově přesměrováno`);
+log(`poptávka: ${keptByDemand} stránek s poptávkou mimo rozpočet (302), ${retired} nově přesměrováno`);
 log(`kolotoč: ${revived} modelek se vrátilo z přesměrování na vlastní stránku`
 	+ `${returned ? ` (+${returned} přes poptávku)` : ''} — strop je ${MAX_MODEL_PAGES}, `
 	+ `takže stejný počet stránek musí odejít (D75)`);
@@ -1430,6 +1468,12 @@ if (pageCount > CI_FILE_BUDGET - 2_000) {
 
 if (DRY) {
 	log('dry-run: nic se nezapisuje');
+	// Kontrola proti GSC (D88): seznam slugů stránek, které by se postavily.
+	if (process.env.SYNC_DUMP) writeFileSync(process.env.SYNC_DUMP, JSON.stringify([...pageKeys].map((k) => registry[k]!.page)));
+	if (process.env.SYNC_CHECK) for (const slug of process.env.SYNC_CHECK.split(',')) {
+		const hit = Object.entries(registry).find(([, e]) => e.page === slug);
+		log(`kontrola ${slug}: ${hit ? `last=${hit[1].last} seen=${hit[1].seen} demand=${demandFor(slug)} gone=${hit[1].gone ?? '-'} live=${liveKeys.has(hit[0])}` : 'není v registry'}`);
+	}
 	log(`ukázka kategorií: ${categories.slice(0, 15).map((c) => `${c.slug}(${c.count})`).join(', ')}`);
 	log(`ukázka zemí: ${countries.slice(0, 12).map((c) => `${c.slug}(${c.count})`).join(', ')}`);
 	log(`jazyky: ${languages.map((c) => `${c.slug}(${c.count})`).join(', ')}`);

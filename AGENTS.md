@@ -945,6 +945,17 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     `liveQueryFor()` (`src/lib/live-grid.ts`) a `buildQuery()`
     (`src/scripts/live.ts`) skládají dotaz stejně a bez `URLSearchParams`
     (ten zakóduje `:` a `,` a prohlížeč přednačtenou odpověď zahodí).
+137. **Stránka modelky se vyměňuje bez načtení (D88, `src/scripts/zap.ts`).**
+    Skripty stránky NESMÍ sahat na DOM jen jednou při načtení: logika je v
+    `init()`, která čte aktuální DOM a spouští se znovu na `ecamx:zapped`;
+    listenery na `document` jen jednou (guard na `window`), HLS se ruší na
+    `ecamx:zap-before`. Žádné inline `<script>` s logikou v `live/[slug].astro`
+    ani `watch/[p].astro` (po výměně by se nespustily) — jen import modulu.
+138. **Strop 5 000 stránek modelek (D88) drží `staticLive` + vyhrazené místo
+    pro offline stránky s poptávkou, NE `liveBudget`.** `liveBudget` řídí,
+    kdo se zapíše do registry (sbírá `seen`); svázat ho se stropem stránek
+    = nové modelky nikdy nedojdou k `REGULAR_DAYS`. Zveřejněná stránka mimo
+    rozpočet dostane vždy 302 (i s poptávkou), nikdy 404.
 
 ## Rozhodnutí
 

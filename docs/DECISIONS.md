@@ -4157,3 +4157,27 @@ kterému stream na našem webu nefunguje, klidně odstraň".
 - **Příčina 2:** zóna měla Browser Cache TTL 1 rok, který přepsal `max-age=30` odpovědí API z edge cache.
   - Přepnuto na „Respect existing headers“ (0).
   - URL API dostala `v=2`, aby prohlížeče s roční kopií načetly novou.
+
+## D88 (18. 11. 2026): menší web a „Next ▶“
+
+Kenny: „na webu nejsou všechny streamy živé“, chtěl přepínání na další stream a přesměrování po měsíci bez vysílání, „aby web nebyl velký“.
+
+- **Strop stránek modelek 25 000 → 5 000.** Za 28 dní mělo imprese v GSC jen 55 stránek.
+  - Statickou stránku dostane modelka s poptávkou nebo pravidelná (`seen >= REGULAR_DAYS`, 10).
+  - Hystereze: kdo stránku měl, drží ji od `seen >= 7`.
+  - Offline stránky s poptávkou mají v rozpočtu vyhrazené místo (max. 60 %).
+- **Offline déle než 30 dní (`PAGE_OFFLINE_DAYS`) → 302 do kategorie**, i s poptávkou (Kennyho zadání).
+  - Zveřejněná stránka mimo rozpočet dostane vždy 302, nikdy 404.
+  - Ostatní živé dál mají dynamickou `/watch/` (noindex) pod stejnou URL.
+- **Odpojený příjem do registry (`LIVE_REGISTRY_MAX`).** Jinak by nové modelky nikdy nenasbíraly `seen`.
+- **Suchý běh 18. 11.:**
+  - 2 807 živých + 2 193 archivních = 5 000 stránek, ~6 300 souborů celkem (bylo ~26 400).
+  - ~20 tis. nových 302.
+  - Z 26 stránek modelek s impresemi za 90 dní nevypadne žádná, která dnes žije; 11 je přesměrovaných už teď.
+- **Next ▶ (`src/scripts/zap.ts`):**
+  - Ovládání: tlačítko, klávesa N, klik na řádek „Live now like…“.
+  - Výměna `<main>` a hlavy, `pushState`, re-init skriptů přes `ecamx:zapped`.
+  - Konec streamu: dotaz `/api/live/is/` á 2 min, pak odpočet 5 s na další (Zrušit = náhrada D67).
+  - Přehrávač statické stránky přesunut z inline skriptu do `src/scripts/model-page.ts`.
+  - Měřit GA `zap` (mode click/key/auto/list) a `zap_cancel`.
+- **Riziko:** Chaturbate omezuje IP po ~10 načteních embedu za minutu (viděno při testu) — rychlé přepínání může krátce ukázat prázdný rámec.
