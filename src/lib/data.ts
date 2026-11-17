@@ -15,6 +15,10 @@ export { canonicalTerm, canonicalCountry, modelLetter, countryPhrase, countryAdj
 import { MONEY_BY_SLUG, matchesMoney } from './money-categories.ts';
 import { DEFAULT_WEIGHT, payingScore, weightOf } from './network-weight.ts';
 import { legacyPages } from './legacy-pages.ts';
+import {
+	DEMAND as NET_DEMAND, NETWORK_GENDERS, NETWORKS_WITH_CURATED_MATRIX, RESERVED_NETWORK_SUBPAGES,
+	MIN_MODELS_DEMAND, MIN_MODELS_SPECULATIVE,
+} from '../content/network-facets.ts';
 
 export interface Model {
 	slug: string;
@@ -480,6 +484,61 @@ export function allCategoryFacets(): Array<Facet & { kind: FacetKind }> {
 	push(FACETS.ethnicities, 'ethnicity');
 	push(FACETS.hairColors, 'hairColor');
 	push(FACETS.bodyTypes, 'bodyType');
+	return out;
+}
+
+/**
+ * Network × category / gender pages, `/site/{network}/{facet}/` (D89).
+ *
+ * Candidates: measured demand (`content/network-facets.ts`) plus every curated
+ * category on the big networks. A page exists only when the build catalogue
+ * has enough models of that network in it — fewer for demand-backed pairs.
+ * `kind: 'gender'` uses `Model.gender` instead of a category matcher.
+ */
+export interface NetworkFacet {
+	net: string;
+	slug: string;
+	kind: FacetKind | 'gender';
+	label: string;
+	count: number;
+	demand: number;
+}
+
+export function allInNetworkFacet(net: string, slug: string, kind: FacetKind | 'gender'): Model[] {
+	return memo(`nf:${net}:${kind}:${slug}`, () => {
+		const match = kind === 'gender'
+			? (m: Model) => m.gender === NETWORK_GENDERS[slug]?.gender
+			: categoryMatcher(slug, kind);
+		return MODELS.filter((m) => m.network === net && match(m)).sort(byViewers);
+	});
+}
+
+let netFacetCache: NetworkFacet[] | null = null;
+export function networkFacetPages(): NetworkFacet[] {
+	if (netFacetCache) return netFacetCache;
+	const cats = new Map(allCategoryFacets().map((c) => [c.slug, c]));
+	const demand = new Map(NET_DEMAND.map((d) => [`${d.net}:${d.slug}`, d.volume]));
+	const cand = new Set<string>(NET_DEMAND.map((d) => `${d.net}:${d.slug}`));
+	for (const net of NETWORKS_WITH_CURATED_MATRIX) {
+		for (const c of CURATED) cand.add(`${net}:${c.slug}`);
+		for (const g of Object.keys(NETWORK_GENDERS)) cand.add(`${net}:${g}`);
+	}
+	const out: NetworkFacet[] = [];
+	for (const key of cand) {
+		const [net, slug] = key.split(':') as [string, string];
+		if (!NETWORK_SLUGS.has(net) || RESERVED_NETWORK_SUBPAGES.has(slug)) continue;
+		const g = NETWORK_GENDERS[slug];
+		const cat = cats.get(slug);
+		if (!g && !cat) continue; // no /cams/ page for it → nothing to stand on
+		const kind = g ? 'gender' as const : cat!.kind;
+		const count = allInNetworkFacet(net, slug, kind).length;
+		const d = demand.get(key) ?? 0;
+		if (count < (d ? MIN_MODELS_DEMAND : MIN_MODELS_SPECULATIVE)) continue;
+		out.push({ net, slug, kind, label: g ? g.label : cat!.label, count, demand: d });
+	}
+	// Demand first, then size — the order link blocks use.
+	out.sort((a, b) => (b.demand - a.demand) || (b.count - a.count) || a.slug.localeCompare(b.slug));
+	netFacetCache = out;
 	return out;
 }
 

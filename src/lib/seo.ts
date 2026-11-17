@@ -179,9 +179,58 @@ export function alternativesSeo(label: string, others: number, models: number): 
 	};
 }
 
+/**
+ * Network × category / gender (D89). Searchers write both orders ("ebony
+ * chaturbate" 11k, "chaturbate ebony" 7.2k); the title carries the more
+ * frequent one and the H1/intro the other. Gender pages lead with the network
+ * ("chaturbate men" 14k, "chaturbate male" 9.7k).
+ */
+export function networkFacetSeo(o: {
+	net: string; netId: string; label: string; count: number; gender?: string;
+}): PageSeo {
+	const low = o.label.toLowerCase();
+	// Per-minute networks are not free to watch beyond a preview (D23 truth rule).
+	const free = PER_MINUTE_NETWORKS.has(o.netId) ? 'Free previews' : 'Free to watch';
+	if (o.gender) {
+		const G = o.gender.replace(/\b\w/g, (c) => c.toUpperCase());
+		return {
+			title: fitTitle(
+				`${o.net} ${o.label} – ${approx(o.count)} Live ${G} Now | ${SITE_NAME}`,
+				`${o.net} ${o.label} – ${approx(o.count)} Live Now | ${SITE_NAME}`,
+			),
+			description: fitTo(DESC_BUDGET, [
+				`${approx(o.count)} ${o.net} ${o.gender} streaming right now. ${free}, no signup — `
+					+ `filtered from ${META.networks.length} cam sites and refreshed every few minutes.`,
+				`${approx(o.count)} ${o.net} ${o.gender} streaming right now. ${free}, no signup.`,
+			]),
+		};
+	}
+	return {
+		title: fitTitle(
+			`${o.label} ${o.net} Cams – ${approx(o.count)} Live Now | ${SITE_NAME}`,
+			`${o.label} ${o.net} – ${approx(o.count)} Live Now | ${SITE_NAME}`,
+		),
+		description: fitTo(DESC_BUDGET, [
+			`${approx(o.count)} ${low} models live on ${o.net} right now. ${free}, no signup — `
+				+ `plus who is live in ${low} on the other cam sites.`,
+			`${approx(o.count)} ${low} models live on ${o.net} right now. ${free}, no signup.`,
+		]),
+	};
+}
+
+/**
+ * Network review. D89: the brand query is far bigger than "{network} review"
+ * ("streamate" 78k at KD 6, "cam soda" 32k at KD 12, "chaturbate mobile" 2.8k
+ * — Ahrefs US, 17. 11. 2026) and lemoncams.com ranks #2–#9 for them with a
+ * "{Network} Live Cams" page. So the title leads with brand + live cams and
+ * keeps "Review" for the review intent.
+ */
 export function networkSeo(label: string, count: number): PageSeo {
 	return {
-		title: `${label} Review – ${approx(count)} Live Cams & How It Works | ${SITE_NAME}`,
+		title: fitTitle(
+			`${label} Live Cams – ${approx(count)} Online Now, Free Review | ${SITE_NAME}`,
+			`${label} Live Cams – ${approx(count)} Online & Review | ${SITE_NAME}`,
+		),
 		description: `Is ${label} worth it? ${approx(count)} models live right now. ` +
 			`What ${label} costs, how tokens work, and what you get for free.`,
 	};

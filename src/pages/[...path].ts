@@ -20,6 +20,7 @@
  *
  * Viz docs/DECISIONS.md D35.
  */
+import { ALLOWED_FACETS, NETWORK_IDS } from '../lib/live-grid';
 import type { APIRoute } from 'astro';
 import { env as workerEnv } from 'cloudflare:workers';
 import { redirectFor, type ShardLoader } from '../lib/gone';
@@ -122,6 +123,16 @@ export const GET: APIRoute = async ({ url, rewrite }) => {
 	if (paged) {
 		const to = paged[1] === 'page' ? '/' : `/${paged[1]}/`;
 		return new Response(null, { status: 301, headers: { location: to, 'cache-control': 'public, max-age=86400' } });
+	}
+	// Network × facet page that dropped below its threshold (D89) — it may come
+	// back next build, so 302 to the closest page that always exists.
+	const pair = /^\/site\/([a-z0-9]+)\/([a-z0-9-]+)\/?$/.exec(url.pathname);
+	if (pair && NETWORK_IDS.has(pair[1]!)) {
+		const slug = pair[2]!;
+		const gender = ({ men: '/guys/', couples: '/couples/', trans: '/trans/' } as Record<string, string>)[slug];
+		const isCat = ['t', 'm', 'e', 'h', 'b'].some((p) => ALLOWED_FACETS.has(`${p}:${slug}`));
+		const to = gender ?? (isCat ? `/cams/${slug}/` : `/site/${pair[1]}/`);
+		return new Response(null, { status: 302, headers: { location: to, 'cache-control': 'public, max-age=300' } });
 	}
 	const assets = (workerEnv as unknown as { ASSETS?: { fetch(req: Request): Promise<Response> } }).ASSETS;
 	const target = await redirectFor(url.pathname, shardLoader(assets, url));

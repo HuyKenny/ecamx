@@ -13,7 +13,7 @@ import { ALTERNATIVES_FOR } from '../content/network-compare';
 import { TOKEN_RATES } from '../content/token-rates';
 import { urlNode, urlset, isoDate, XML_HEADERS } from '../lib/sitemap';
 import { DIRECTORY_SIZE, pageCount } from '../lib/paging';
-import { FACETS, allCategoryFacets, META, MODEL_LETTERS, MODELS_BY_LETTER } from '../lib/data';
+import { FACETS, allCategoryFacets, META, MODEL_LETTERS, MODELS_BY_LETTER, networkFacetPages } from '../lib/data';
 import { SITE_URL } from '../lib/seo';
 
 export const GET: APIRoute = () => {
@@ -39,6 +39,8 @@ export const GET: APIRoute = () => {
 		// URL, která se nevygenerovala.
 		...ALTERNATIVES_FOR.map((id) => urlNode(abs(`/site/${id}/alternatives/`), lastmod)),
 		...Object.keys(TOKEN_RATES).map((id) => urlNode(abs(`/site/${id}/tokens/`), lastmod)),
+		// Síť × kategorie/pohlaví (D89) — stejný seznam jako getStaticPaths.
+		...networkFacetPages().map((x) => urlNode(abs(`/site/${x.net}/${x.slug}/`), lastmod)),
 		urlNode(abs('/finder/'), lastmod),
 		// `/for-models/` do sitemapy patří, `/my/` NE — ta je osobní, `noindex`
 		// a pro crawlera prázdná.

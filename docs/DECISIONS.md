@@ -4181,3 +4181,35 @@ Kenny: „na webu nejsou všechny streamy živé“, chtěl přepínání na dal
   - Přehrávač statické stránky přesunut z inline skriptu do `src/scripts/model-page.ts`.
   - Měřit GA `zap` (mode click/key/auto/list) a `zap_cancel`.
 - **Riziko:** Chaturbate omezuje IP po ~10 načteních embedu za minutu (viděno při testu) — rychlé přepínání může krátce ukázat prázdný rámec.
+
+## D89 (17. 11. 2026): content gap vs. agregátory, stránky síť × kategorie
+
+Kenny: „udělej content gap s dalšími cam weby a optimalizuj web, abychom byli víc vidět v SEO“.
+
+- **Výchozí stav:** Ahrefs DR 11, 0 organických slov (US). GSC za 90 dní: homepage 417 impresí na pozici 38, jinak jednotky.
+- **Konkurence** (Ahrefs US, jen legální agregátory, bez webů s nahrávkami):
+  - lemoncams.com má ~4 mil. návštěv/měs. Vyhrává na stránkách `/{síť}-cams/{kategorie}`, na stránkách sítí (brand a překlepy) a na modelkách.
+  - chococams.com a camconsole.com mají sílu ve facetách a modelkách.
+- **Report:** `reports/ecamx/content-gap-2026-11.md` ve workspace. Vytváří ho skript `scripts/ecamx/content-gap.py` ze 492 slov s KD ≤ 25.
+- **Hlavní mezera — síť × kategorie / pohlaví** (KD 0–12):
+  - „chaturbate men/male“ 25 tis.
+  - „ebony chaturbate“ 18,8 tis.
+  - „chaturbate milf“ 8,8 tis.
+  - „stripchat vr“ 8,7 tis.
+  - „chaturbate latina“ 8 tis.
+  - „chaturbate couples“ 6,6 tis.
+- **Řešení:** nová stránka `/site/{síť}/{faseta}/` ([facet].astro).
+  - Výběr dělá `networkFacetPages()`: poptávka ≥ 6 modelek, kurátorské kategorie na Chaturbate/Stripchat/CamSoda/BongaCams ≥ 15 modelek.
+  - Text je jen z měřených čísel (D26).
+  - Živá mřížka přes klíč `m:ebony@chaturbate`.
+  - Odkazy: blok „Popular on {síť}“ na stránce sítě, „{X} cams by site“ v kategorii, sitemapa.
+- **Stránky sítí:**
+  - Titulek „{Síť} Live Cams – N Online Now, Free Review“. Důvod: brand dotazy jsou řádově větší než „review“ („streamate“ 78 tis. při KD 6, „cam soda“ 32 tis. při KD 12).
+  - H1 se upravil stejně.
+- **Zamítnuto / odloženo:**
+  - **Jazykové stránky** zamítnuté: „russian cam girls“ 200, ostatní jazyky ≤ 50 hledání.
+  - **Alternativy pro Stripchat a CamSodu** odložené: „sites like stripchat“ 300 při KD 2, „stripchat alternatives“ 150, „sites like camsoda“ 150. Potřebují ručně psané srovnání. `COMPARE_WITH_CHATURBATE` je navíc psaný jen vůči Chaturbate a zmiňuje LiveJasmin (pryč od D86).
+  - **Tokeny Stripchat (200) a CamSoda (150)** odložené: potřebují dva zdroje cen (D50).
+- **Měřit:**
+  - GSC 1. 12. a 15. 12.: imprese na `/site/*/*/`.
+  - Po 22. 11. (reset Ahrefs) doplnit konkurenty camhub.cc, camsfinder.com, topsitecam.com, cam69.com a bestcam.tv a rozšířit `DEMAND`.

@@ -11,7 +11,7 @@
  */
 import type { APIRoute } from 'astro';
 import { readSnapshot, isFresh, snapIndex } from '../../../lib/live-snapshot';
-import { ALLOWED_FACETS, NETWORK_IDS, roundN, pick } from '../../../lib/live-grid';
+import { allowedFacet, NETWORK_IDS, roundN, pick } from '../../../lib/live-grid';
 
 export const prerender = false;
 
@@ -31,7 +31,7 @@ export const GET: APIRoute = async ({ request }) => {
 	const wants: Array<[string, number]> = [];
 	for (const part of (url.searchParams.get('q') ?? 'all~60').split(',').slice(0, 6)) {
 		const [key, n] = part.split('~');
-		if (!key || !ALLOWED_FACETS.has(key)) continue;
+		if (!key || !allowedFacet(key)) continue;
 		wants.push([key, roundN(Math.min(120, Math.max(1, parseInt(n ?? '60', 10) || 60)))]);
 	}
 	if (!wants.length) return new Response('{"error":"bad q"}', { status: 400, headers: HEADERS });

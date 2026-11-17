@@ -957,6 +957,14 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     = nové modelky nikdy nedojdou k `REGULAR_DAYS`. Zveřejněná stránka mimo
     rozpočet dostane vždy 302 (i s poptávkou), nikdy 404.
 
+139. **Stránky síť × kategorie `/site/{síť}/{faseta}/` (D89) vybírá jen
+    `networkFacetPages()` (`data.ts`)** — poptávka z `content/network-facets.ts`
+    (≥ 6 modelek) nebo kurátorská kategorie na velké síti (≥ 15). Nikdy celou
+    matici (tenké stránky, D23). Getstaticpaths, sitemapa i bloky odkazů čtou
+    tutéž funkci. Živá mřížka používá klíč `{faseta}@{síť}` (`allowedFacet()`
+    v `live-grid.ts`) a `fill={false}` — doplnit ji jinými sítěmi by lhalo.
+    Vypadlá dvojice → 302 v `[...path].ts`, ne 404.
+
 ## Rozhodnutí
 
 Viz `docs/DECISIONS.md`. Migrační plán: `~/.claude/plans/lovely-waddling-curry.md`.

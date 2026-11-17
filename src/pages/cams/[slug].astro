@@ -9,7 +9,7 @@ import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import {
 	FACETS, allCategoryFacets, allInCategory, recentlyLiveInCategory, gridWindow,
 	relatedCategories, facetLabel, CURATED_BY_SLUG, topCountries, countryName,
-	NETWORK_LABELS,
+	NETWORK_LABELS, networkFacetPages,
 } from '../../lib/data';
 import { GRID } from '../../lib/paging';
 import { safeJsonLd } from '../../lib/jsonld';
@@ -43,6 +43,8 @@ const label = facetLabel(facet.slug, facet.label);
 const girls = CURATED_BY_SLUG.get(facet.slug)?.girls ?? false;
 const seo = categorySeo(label, facet.count, girls);
 const countries = topCountries(10);
+// Same category on a single network (D89) — only pairs that have a page.
+const bySite = networkFacetPages().filter((x) => x.slug === facet.slug && x.kind !== 'gender');
 // Text ze starého webu, jinak ručně psaný pro kurátorské kategorie.
 // Ručně psaný text má přednost (D85): staré texty z WP mají šablonovitou
 // strukturu („Securing the…", „Conclusion: Command…") = vzorec scaled content.
@@ -85,6 +87,17 @@ const jsonLd = {
 
 	<GridFilters models={models} />
 	<LiveGrid cards={toCards(models)} q={facetKey(facet.kind, facet.slug)} n={48} eager={8} class="mt-6" />
+
+	{bySite.length > 0 && (
+		<section class="mt-8" aria-labelledby="bysite">
+			<h2 id="bysite" class="mb-3 text-lg font-bold">{label} cams by site</h2>
+			<div class="flex flex-wrap gap-2">
+				{bySite.map((x) => (
+					<a href={`/site/${x.net}/${x.slug}/`} class="pill">{label} {NETWORK_LABELS[x.net] ?? x.net} <span class="text-ink-400">{x.count}</span></a>
+				))}
+			</div>
+		</section>
+	)}
 
 	{copy && (
 		<section class="prose-ecamx mt-10 max-w-3xl space-y-4 text-ink-200" set:html={copy} />

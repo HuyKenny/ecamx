@@ -12,8 +12,10 @@ import { toCards } from '../../lib/card-model';
 import { facetKey, liveQueryFor } from '../../lib/live-grid';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import {
-	FACETS, allOnNetwork, gridWindow, NETWORK_LABELS, MODEL_PAGES, outTargetFor, type NetworkId,
+	FACETS, allOnNetwork, gridWindow, NETWORK_LABELS, MODEL_PAGES, outTargetFor, networkFacetPages,
+	facetLabel, type NetworkId,
 } from '../../lib/data';
+import { NETWORK_GENDERS } from '../../content/network-facets';
 import { NETWORK_GRID } from '../../lib/paging';
 import { goLink } from '../../lib/affiliate';
 import { safeJsonLd } from '../../lib/jsonld';
@@ -37,6 +39,8 @@ const VISIBLE = NETWORK_GRID.visible;
 const win = gridWindow(allOnNetwork(facet.slug), 1, NETWORK_GRID);
 const models = win.items;
 const seo = networkSeo(label, facet.count);
+// Network × category / gender pages (D89), demand first.
+const pairs = networkFacetPages().filter((x) => x.net === facet.slug);
 
 // Nejsledovanější modelka sítě jako cíl CTA — deeplink potřebuje konkrétní nick.
 // Nejsledovanější modelka z buildu jako výchozí cíl. Za dvě hodiny už nemusí
@@ -96,7 +100,7 @@ const jsonLd = {
 	    zkrácení URL dalo 404. Platí to i pro BreadcrumbList v JSON-LD. */}
 	<Breadcrumbs items={[{ label: 'Cam sites', href: '/site/' }, { label }]} />
 
-	<h1 class="text-2xl font-extrabold sm:text-3xl">{label} Review — {fmt(facet.count)} Cams Live Now</h1>
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{label} Live Cams — {fmt(facet.count)} Online Now &amp; Our Review</h1>
 	<p class="mt-2 max-w-3xl text-lg text-ink-200">{review.tagline}</p>
 
 	{cta && (
@@ -109,6 +113,20 @@ const jsonLd = {
 	)}
 
 	<LiveGrid cards={toCards(models)} q={`n:${facet.slug}`} n={36} eager={8} class="mt-8" />
+
+	{pairs.length > 0 && (
+		<section class="mt-8" aria-labelledby="popular">
+			<h2 id="popular" class="mb-3 text-lg font-bold">Popular on {label}</h2>
+			<div class="flex flex-wrap gap-2">
+				{pairs.map((x) => (
+					<a href={`/site/${x.net}/${x.slug}/`} class="pill">
+						{x.kind === 'gender' ? `${label} ${NETWORK_GENDERS[x.slug]!.label}` : `${facetLabel(x.slug, x.label)} ${label}`}
+						<span class="text-ink-400">{x.count}</span>
+					</a>
+				))}
+			</div>
+		</section>
+	)}
 
 	<div class="prose-ecamx mt-12 max-w-3xl space-y-4 text-ink-200">
 		{review.intro.map((p) => <p>{p}</p>)}

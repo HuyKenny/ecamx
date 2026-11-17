@@ -18,7 +18,7 @@ const CATEGORY = new Set<string>([
 	...(f.curated ?? []).map((c) => c.slug),
 ]);
 
-export const FACET_RE = /^(all|rail|[gtmehbcn]:[a-z0-9-]{1,60})$/;
+export const FACET_RE = /^(all|rail|[gtmehbcn]:[a-z0-9-]{1,60}(@[a-z0-9]{1,20})?)$/;
 
 /**
  * Klíče faset, které na webu EXISTUJÍ (D85). API dřív bralo jakýkoli slug,
@@ -32,12 +32,24 @@ export const ALLOWED_FACETS = new Set<string>(['all', 'rail', ...[
 ].flatMap(([pre, list]) => (ff[list!] ?? []).map((x) => `${pre}:${x.slug}`))]);
 /** Všechny sítě (filtr `s=`). */
 export const NETWORK_IDS = new Set((ff.networks ?? []).map((n) => n.slug));
+/**
+ * Klíč smí nést síť: `t:ebony@chaturbate` = ebony jen na Chaturbate (stránky
+ * `/site/{síť}/{faseta}/`, D89). Základ i síť musí existovat.
+ */
+export function allowedFacet(key: string): boolean {
+	const at = key.indexOf('@');
+	if (at < 0) return ALLOWED_FACETS.has(key);
+	const base = key.slice(0, at);
+	return base !== 'all' && base !== 'rail' && ALLOWED_FACETS.has(base) && NETWORK_IDS.has(key.slice(at + 1));
+}
 /** Povolené velikosti dotazu — klient si pak ořízne sám (méně klíčů v cache). */
 const N_STEPS = [6, 12, 24, 48, 60, 120];
 export const roundN = (n: number) => N_STEPS.find((x) => x >= n) ?? 120;
 
 export function matches(r: LiveRec, key: string): boolean {
 	if (key === 'all' || key === 'rail') return true;
+	const at = key.indexOf('@');
+	if (at >= 0) return r.n === key.slice(at + 1) && matches(r, key.slice(0, at));
 	if (key.startsWith('n:')) return r.n === key.slice(2);
 	return r.f.includes(key);
 }

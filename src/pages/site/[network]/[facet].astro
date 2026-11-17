@@ -1,0 +1,153 @@
+---
+/**
+ * Network × category / gender, e.g. `/site/chaturbate/ebony/`, `/site/chaturbate/men/` (D89).
+ *
+ * Content-gap result: the biggest legal aggregator ranks on exactly these pairs
+ * ("ebony chaturbate" 11k/mo at KD 0, "chaturbate men" 14k at KD 3) and ecamx
+ * had nothing between `/cams/{x}/` (all sites) and `/site/{network}/` (all
+ * categories). Which pairs get a page is decided by `networkFacetPages()` —
+ * measured demand or enough models, never the full matrix (thin pages, D23).
+ *
+ * The text is built only from measured numbers (count, share of the network,
+ * viewers, co-occurring categories) — nothing invented (D26).
+ */
+import Layout from '../../../layouts/Layout.astro';
+import LiveGrid from '../../../components/LiveGrid.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import { toCards } from '../../../lib/card-model';
+import { facetKey, liveQueryFor } from '../../../lib/live-grid';
+import {
+	allInNetworkFacet, allOnNetwork, networkFacetPages, gridWindow, facetLabel, canonicalTerm,
+	NETWORK_LABELS, PER_MINUTE_NETWORKS, type NetworkId,
+} from '../../../lib/data';
+import { GRID } from '../../../lib/paging';
+import { safeJsonLd } from '../../../lib/jsonld';
+import { networkFacetSeo, SITE_URL, approx, fmt } from '../../../lib/seo';
+import { NETWORK_GENDERS } from '../../../content/network-facets';
+import { TOKEN_RATES } from '../../../content/token-rates';
+import { ALTERNATIVES_FOR } from '../../../content/network-compare';
+
+export function getStaticPaths() {
+	return networkFacetPages().map((f) => ({ params: { network: f.net, facet: f.slug }, props: { f } }));
+}
+
+const { f } = Astro.props;
+const all = networkFacetPages();
+const net = NETWORK_LABELS[f.net] ?? f.net;
+const gender = f.kind === 'gender' ? NETWORK_GENDERS[f.slug] : null;
+const label = gender ? gender.label : facetLabel(f.slug, f.label);
+const low = label.toLowerCase();
+const list = allInNetworkFacet(f.net, f.slug, f.kind);
+const models = gridWindow(list, 1, GRID).items;
+const seo = networkFacetSeo({ net, netId: f.net, label, count: f.count, gender: gender?.noun });
+const heading = gender ? `${net} ${label}` : `${label} ${net} Cams`;
+const liveKey = `${gender ? `g:${gender.gender}` : facetKey(f.kind, f.slug)}@${f.net}`;
+
+// Measured facts for the intro.
+const netTotal = allOnNetwork(f.net).length;
+const share = netTotal ? Math.round((f.count / netTotal) * 100) : 0;
+const viewers = list.map((m) => m.viewers ?? 0).filter((v) => v > 0).sort((a, b) => a - b);
+const median = viewers.length ? viewers[Math.floor(viewers.length / 2)] : 0;
+// Categories that show up most often next to this one on this network — only
+// those that have their own pair page here, so every mention is a link.
+const pairSlugs = new Set(all.filter((x) => x.net === f.net && x.kind !== 'gender').map((x) => x.slug));
+const tally = new Map<string, number>();
+for (const m of list) {
+	for (const t of new Set(m.tags.map(canonicalTerm).filter(Boolean) as string[])) {
+		if (t !== f.slug && pairSlugs.has(t)) tally.set(t, (tally.get(t) ?? 0) + 1);
+	}
+}
+const alongside = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
+	.map(([s]) => all.find((x) => x.net === f.net && x.slug === s)!);
+const perMinute = PER_MINUTE_NETWORKS.has(f.net);
+
+// Same facet on other networks, other facets on this network.
+const sameFacet = all.filter((x) => x.slug === f.slug && x.net !== f.net);
+const sameNet = all.filter((x) => x.net === f.net && x.slug !== f.slug);
+
+const url = `${SITE_URL}/site/${f.net}/${f.slug}/`;
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: heading,
+	description: seo.description,
+	url,
+	mainEntity: {
+		'@type': 'ItemList',
+		numberOfItems: Math.min(models.length, 20),
+		itemListElement: models.slice(0, 20).map((m, i) => ({
+			'@type': 'ListItem', position: i + 1, name: m.displayName, url: `${SITE_URL}/live/${m.page}/`,
+		})),
+	},
+};
+---
+<Layout liveQuery={liveQueryFor([[liveKey, 48]])} title={seo.title} description={seo.description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<Breadcrumbs items={[
+		{ label: 'Cam sites', href: '/site/' },
+		{ label: net, href: `/site/${f.net}/` },
+		{ label },
+	]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{heading}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		{gender
+			? <>Every {net} {gender.noun.replace(' cams', '')} room that is live right now — {approx(f.count)} at the last count. </>
+			: <>Live {net} {low} rooms only — {approx(f.count)} {low} models on {net} at the last count. </>}
+		{perMinute ? `${net} charges per minute for private shows; the previews here are free.` : 'Free to watch, no account, no signup.'}
+	</p>
+
+	<LiveGrid cards={toCards(models)} q={liveKey} n={48} eager={8} fill={false} class="mt-6" />
+
+	<section class="prose-ecamx mt-10 max-w-3xl space-y-4 text-ink-200" aria-labelledby="about">
+		<h2 id="about">{gender ? `${label} on ${net} in numbers` : `${net} ${low} cams in numbers`}</h2>
+		<p>
+			{fmt(f.count)} of the {fmt(netTotal)} {net} models in our latest catalogue
+			{gender ? ` are listed as ${low}` : ` are tagged ${low}`} — about {share}% of the site.
+			{median > 0 && ` A typical room in this group has around ${fmt(median)} viewers.`}
+			{' '}The grid above is refreshed from {net}'s live feed every few minutes, so every card is a room
+			that is broadcasting now, not an old profile.
+		</p>
+		{alongside.length > 0 && (
+			<p>
+				{gender ? `${net} ${low}` : `${label} rooms on ${net}`} most often also carry these tags: {alongside.map((x, i) => (
+					<>{i > 0 && (i === alongside.length - 1 ? ' and ' : ', ')}<a href={`/site/${x.net}/${x.slug}/`}>{facetLabel(x.slug, x.label).toLowerCase()}</a></>
+				))}.</p>
+		)}
+		{!gender && (
+			<p>
+				Want {low} cams from every site at once? <a href={`/cams/${f.slug}/`}>All live {low} cams</a> mixes
+				{' '}{net} with the other networks we track.
+			</p>
+		)}
+		{(TOKEN_RATES[f.net as NetworkId] || ALTERNATIVES_FOR.includes(f.net as NetworkId)) && (
+			<p>New to {net}?{TOKEN_RATES[f.net as NetworkId] && <> See <a href={`/site/${f.net}/tokens/`}>what {net} tokens cost</a>.</>}{ALTERNATIVES_FOR.includes(f.net as NetworkId) && <> Or compare <a href={`/site/${f.net}/alternatives/`}>sites like {net}</a>.</>}</p>
+		)}
+	</section>
+
+	{sameFacet.length > 0 && (
+		<section class="mt-10" aria-labelledby="other-sites">
+			<h2 id="other-sites" class="mb-3 text-lg font-bold">{label} on other cam sites</h2>
+			<div class="flex flex-wrap gap-2">
+				{sameFacet.map((x) => (
+					<a href={`/site/${x.net}/${x.slug}/`} class="pill">{NETWORK_LABELS[x.net] ?? x.net} <span class="text-ink-400">{x.count}</span></a>
+				))}
+			</div>
+		</section>
+	)}
+
+	{sameNet.length > 0 && (
+		<section class="mt-10" aria-labelledby="more-net">
+			<h2 id="more-net" class="mb-3 text-lg font-bold">More on {net}</h2>
+			<div class="flex flex-wrap gap-2">
+				{sameNet.slice(0, 30).map((x) => (
+					<a href={`/site/${x.net}/${x.slug}/`} class="pill">
+						{x.kind === 'gender' ? NETWORK_GENDERS[x.slug]!.label : facetLabel(x.slug, x.label)}
+						<span class="text-ink-400">{x.count}</span>
+					</a>
+				))}
+				<a href={`/site/${f.net}/`} class="pill">{net} review →</a>
+			</div>
+		</section>
+	)}
+</Layout>
