@@ -23,6 +23,7 @@
 import type { APIRoute } from 'astro';
 import { env as workerEnv } from 'cloudflare:workers';
 import { redirectFor, type ShardLoader } from '../lib/gone';
+import { readSnapshot } from '../lib/live-snapshot';
 
 
 /**
@@ -79,7 +80,31 @@ function shardLoader(assets: { fetch(req: Request): Promise<Response> } | undefi
 	};
 }
 
-export const GET: APIRoute = async ({ url }) => {
+/**
+ * Stránkování mřížek zrušené 17. 11. 2026 (D83): mřížka se plní živě ze
+ * snímku, takže „stránka 2" statického výpisu by ukazovala modelky, které
+ * dávno nevysílají. Staré adresy (`/cams/x/2/`, `/page/3/` …) byly noindex,
+ * ale crawler je zná — trvale na první stránku, ne 404.
+ */
+const PAGED = /^\/(page|girls|guys|couples|trans|(?:cams|country|site)\/[a-z0-9-]+)\/\d{1,3}\/?$/;
+
+export const GET: APIRoute = async ({ url, rewrite }) => {
+	/**
+	 * Živá modelka bez statické stránky (D82) → dynamická stránka ze snímku.
+	 * Musí to být PŘED mapou zaniklých stránek: modelka, která se vrátila,
+	 * má přednost před svým starým přesměrováním.
+	 */
+	const live = /^\/live\/([^/]+)\/?$/.exec(url.pathname);
+	if (live) {
+		const p = decodeURIComponent(live[1]!);
+		const snap = await readSnapshot();
+		if (snap?.m.some((r) => r.p === p)) return rewrite(`/watch/${live[1]}/`);
+	}
+	const paged = PAGED.exec(url.pathname);
+	if (paged) {
+		const to = paged[1] === 'page' ? '/' : `/${paged[1]}/`;
+		return new Response(null, { status: 301, headers: { location: to, 'cache-control': 'public, max-age=86400' } });
+	}
 	const assets = (workerEnv as unknown as { ASSETS?: { fetch(req: Request): Promise<Response> } }).ASSETS;
 	const target = await redirectFor(url.pathname, shardLoader(assets, url));
 	if (target) {

@@ -52,8 +52,21 @@ on:
     # (D65, past 101) už nebrzdí. Zpátky na dva běhy, na které jsou nastavené
     # prahy hlídačů (kick 16 h / poplach 18 h, past 130). Logy jsou veřejné:
     # nic z feedů ani klíčů nevypisovat.
-    - cron: '0 3,15 * * *'
+    #
+    # **17. 11. 2026 (D82): jednou za noc, 01:17 UTC.** Kdo právě vysílá, už
+    # neurčuje build, ale cron Worker á 5 minut (živý snímek v KV) — mřížky
+    # se plní z něj. Build jen obnovuje katalog statických stránek (stabilní
+    # množina s hysterezí), a na to stačí noc. Lichá minuta, protože GitHub
+    # plánované běhy na celou hodinu zdržuje o hodiny (naměřeno 7–8 h).
+    # Hlídače deploye (kick 16 h / poplach 18 h) jsou s tím v souladu jen
+    # napůl → posunuty na 30 h / 36 h (`workers/cron/deploy-watch.ts`).
+    - cron: '17 1 * * *'
   workflow_dispatch:
+    inputs:
+      quick:
+        description: 'Rychlý režim: bez syncu katalogu a pomalých guardů (data z posledního běhu)'
+        type: boolean
+        default: false
   push:
     branches: [main]
     # Ruční kontrolní skripty CI nespouští, takže jejich změna nemá co nasazovat
@@ -78,6 +91,8 @@ concurrency:
 # je zbytečná plocha, kdyby některá akce byla kompromitovaná.
 permissions:
   contents: read
+  # Rychlý režim stahuje katalog (artefakt) z posledního úspěšného běhu.
+  actions: read
 
 jobs:
   deploy:
@@ -115,9 +130,41 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # **Rychlá cesta pro drobné opravy** (~/ai/CLAUDE.md, Kenny 13. 11.):
+      # push, který mění jen vzhled (styly, komponenty, šablony, skripty
+      # prohlížeče, obsah, public/), nepotřebuje nový katalog — vezme si ho
+      # z posledního úspěšného běhu a přeskočí sync i pomalé guardy.
+      # Noční běh je vždycky plný.
+      - name: Decide mode
+        id: mode
+        env:
+          EVENT: ${{ github.event_name }}
+          QUICK_INPUT: ${{ inputs.quick }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          quick=false
+          if [ "$EVENT" = "workflow_dispatch" ] && [ "$QUICK_INPUT" = "true" ]; then quick=true; fi
+          if [ "$EVENT" = "push" ] && git cat-file -e "$BEFORE^{commit}" 2>/dev/null; then
+            other=$(git diff --name-only "$BEFORE" HEAD | grep -Ev '^(src/(styles|components|layouts|scripts|content)/|public/|design/|docs/|[^/]+\.md$)' || true)
+            [ -z "$other" ] && quick=true
+          fi
+          echo "quick=$quick" >> "$GITHUB_OUTPUT"
+          echo "režim: $([ $quick = true ] && echo RYCHLÝ || echo plný)"
+
+      - name: Restore catalogue (quick)
+        if: steps.mode.outputs.quick == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" --workflow deploy.yml --status success -L 20 --json databaseId -q '.[].databaseId' | head -1)
+          [ -n "$run" ] || { echo "::error::žádný úspěšný běh s katalogem"; exit 1; }
+          gh run download "$run" -R "$GITHUB_REPOSITORY" -n catalogue -D .
+          ls -la src/data
+
       # Stáhne 7 cam API a zapíše src/data/*.json. Selže hlasitě, když některá
       # síť vrátí míň modelek než minExpected — radši spadlý build než prázdný web.
       - name: Sync catalogue
+        if: steps.mode.outputs.quick != 'true'
         env:
           CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -162,6 +209,19 @@ jobs:
       # Fail-fast se tím skoro neztrácí: sync trvá ~1 min, kdežto prerender
       # ~9 min. Pozor na jména — `pnpm sync` je sync KATALOGU,
       # `pnpm exec astro sync` generuje typy.
+      # Katalog pro příští rychlý běh (i rychlý ho předá dál, ať řetěz nespadne).
+      - name: Keep catalogue for quick runs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: catalogue
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            src/data/*.json
+            public/gone/
+            public/live-pages.json
+            public/indexable-pages.txt
+
       - name: Typecheck
         run: |
           pnpm exec wrangler types
@@ -229,6 +289,7 @@ jobs:
       # falešná jistota, kvůli které 28. 8. ležel klíč k feedu Amateur.tv ve
       # zdroji 274 stránek. Skript hodnoty nikam nevypisuje, jen porovnává.
       - name: Check links, redirects and sitemap
+        if: steps.mode.outputs.quick != 'true'
         env:
           AMATEUR_API_KEY: ${{ secrets.AMATEUR_API_KEY }}
           AMATEUR_WIDGET_ID: ${{ secrets.AMATEUR_WIDGET_ID }}
@@ -244,6 +305,7 @@ jobs:
       # přenosu sám odstraní (Heavy Ad Intervention). Přesně tak se 16. 8.
       # nasadil rozbitý přehrávač, viz docs/DECISIONS.md D13.
       - name: Check blocklists (players must not be ad-tagged)
+        if: steps.mode.outputs.quick != 'true'
         run: node --experimental-strip-types scripts/check-blocklists.ts
 
       # Web bez affiliate odkazů vypadá funkčně, ale nevydělává — hlídat.
@@ -304,7 +366,7 @@ jobs:
           UA="ecamx-ci/1.0 (+https://github.com/HuyKenny/ecamx)"
           curl() { command curl -H "x-malina-warm: $WARM" "$@"; }
           fail=0
-          for p in / /cams/ /terms/ /sitemap.xml /api/online/chaturbate/; do
+          for p in / /cams/ /terms/ /sitemap.xml /api/online/chaturbate/ /api/live/grid/; do
             code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com$p")
             echo "$p → $code"
             [ "$code" = "200" ] || { echo "::error::$p vrátilo $code"; fail=1; }
@@ -321,6 +383,18 @@ jobs:
           loc=$(curl -sI -A "$UA" "https://ecamx.com/live/$slug/" | grep -i '^location:' | tr -d '\r')
           echo "/live/$slug/ → $code $loc"
           [ "$code" = "302" ] || { echo "::error::catch-all na neznámý nick vrátil $code (čeká se 302 na rozcestník)"; fail=1; }
+
+          # Živý snímek (D82): čerstvý a s kartami, jinak mřížky nemají z čeho žít.
+          snap=$(curl -s -A "$UA" --max-time 30 "https://ecamx.com/api/live/grid/?q=all~5")
+          echo "$snap" | python3 -c "import sys,json; d=json.load(sys.stdin); n=len(d['g'].get('all',[])); print('snímek: stáří', d['age'], 's, karet', n, ', spadlé sítě', d['failed']); sys.exit(0 if d['fresh'] and n>0 else 1)" \
+            || { echo "::error::živý snímek není čerstvý nebo je prázdný (cron ecamx-cron live-snapshot)"; fail=1; }
+          # Živá modelka bez statické stránky musí dostat dynamickou (200), ne 302.
+          dyn=$(echo "$snap" | python3 -c "import sys,json; print(json.load(sys.stdin)['g']['all'][0]['p'])" 2>/dev/null)
+          if [ -n "$dyn" ]; then
+            code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com/live/$dyn/")
+            echo "/live/$dyn/ (živá) → $code"
+            [ "$code" = "200" ] || { echo "::error::živá modelka /live/$dyn/ vrátila $code"; fail=1; }
+          fi
 
           code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com/live/@@@/")
           echo "/live/@@@/ → $code"

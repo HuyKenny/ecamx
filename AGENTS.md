@@ -48,8 +48,11 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
 - **Registry v Cloudflare KV** (přes REST API, jen při buildu — ne binding).
   Drží streak/first/last u každé modelky, aby profilové URL nemizely mezi buildy.
   Lokálně padá na `seed/registry.json`.
-- **Jediná dynamická route** je `/api/online/[network]` (`prerender = false`).
-  Všechno ostatní je statika → requesty zdarma a neomezeně.
+- **Živý stav = snímek v KV** (`live-snapshot`, cron `ecamx-cron` á 5 min, D82).
+  Dynamické routy: `/api/online/[network]`, `/api/live/grid`, `/watch/[p]`
+  (SSR stránka živé modelky bez statické), `/go/`, `/api/stream/`, catch-all.
+  Ostatní je statika. Design a značka viz D83 (`src/lib/card.ts`,
+  `src/components/LiveGrid.astro`, `src/scripts/live.ts`, `design/src/`).
 
 ## Pasti, na které se tu už narazilo
 
@@ -924,6 +927,24 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     ten artefakt je vůbec ten nasazovaný**. Je to stejná rodina chyb jako
     past 118 (Latin-1) a 124 (vypůjčené typy): měření na nesprávném stavu
     vypadá jako měření. Viz D76 (oprava) a D77.
+
+133. **`import.meta.env` existuje jen ve Vite.** Sync (Node) i cron Worker
+    (esbuild) importují `affiliate.ts` přes `cam-networks.ts`; přístup
+    k `import.meta.env.X` při načtení modulu je tam `TypeError` a shodí
+    import celého registru sítí (17. 11. 2026 spadl sync v CI). Whitelist
+    `PUBLIC_*` se proto čte líně v `try`. Viz D82.
+134. **Kdo vysílá, ví jen snímek (D82) — a jen když je čerstvý.** Klient smí
+    kartu nebo přehrávač zhasnout jen při `fresh` a síti `ok`; jinak nechává
+    stav z buildu. Nový kód nad živým stavem čte `src/lib/live-snapshot.ts`,
+    ne feedy sítí.
+135. **Layout, `LiveGrid`, `card.ts` a vše pod `/watch/` NESMÍ importovat
+    `data.ts`.** Dynamická stránka modelky běží ve Workeru a katalog (13 MB)
+    by skončil v bundlu. Převod modelky na kartu dělá stránka (`toCards()`
+    v `card-model.ts`), popisky jsou v `labels.ts`, konstanty v `site.ts`.
+136. **Přednačtení v `<head>` musí mít PŘESNĚ stejnou URL jako `fetch`.**
+    `liveQueryFor()` (`src/lib/live-grid.ts`) a `buildQuery()`
+    (`src/scripts/live.ts`) skládají dotaz stejně a bez `URLSearchParams`
+    (ten zakóduje `:` a `,` a prohlížeč přednačtenou odpověď zahodí).
 
 ## Rozhodnutí
 

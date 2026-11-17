@@ -13,10 +13,12 @@
  * má `noindex, follow`, aby se neopakoval index bloat starého webu (D8).
  */
 import Layout from '../../layouts/Layout.astro';
-import ModelCard from '../../components/ModelCard.astro';
+import LiveGrid from '../../components/LiveGrid.astro';
+import { toCards } from '../../lib/card-model';
+import { facetKey } from '../../lib/live-grid';
 import Breadcrumbs from '../../components/Breadcrumbs.astro';
 import {
-	MODEL_PAGES, linkableCategories, similarLive, topDemand, demandRotation, titleVariant,
+	MODEL_PAGES, linkableCategories, allCategoryFacets, similarLive, topDemand, demandRotation, titleVariant,
 	NETWORK_LABELS, countryName, canonicalCountry, linkableCountry, linkableNetwork,
 	facetLabel, usualHours, PER_MINUTE_NETWORKS, outTargetFor, type Model,
 } from '../../lib/data';
@@ -84,6 +86,14 @@ const QUICK_LIVE = 4;
 const similar = similarLive(model, Math.round(SIMILAR_VISIBLE * 1.5));
 const quickLive = model.online ? [] : similar.slice(0, QUICK_LIVE);
 /**
+ * Klíč fasety pro živé „podobné" (D82): nejsilnější kategorie modelky, jinak
+ * stejné pohlaví. Klient doplní zbytek slotů z celé živé nabídky.
+ */
+const topCat = linkableCategories(model, 1)[0];
+const simKey = topCat
+	? facetKey(allCategoryFacets().find((c) => c.slug === topCat.slug)?.kind ?? 'tag', topCat.slug)
+	: model.gender ? `g:${model.gender}` : 'all';
+/**
  * Nejhledanější modelky podle měřené poptávky (D35). Textové odkazy, ne karty:
  * 24 karet by stránku nafouklo o ~30 kB × 17 000 stránek, kdežto 24 odkazů
  * stojí 1,5 kB. Smysl je prolinkování — vnitřní odkazy mají mířit tam, kde je
@@ -124,7 +134,16 @@ const popular = demandRotation(model.page, 16, new Set(searched.map((m) => m.pag
  *     klik. XLoveCam a LiveJasmin jsou na EasyListu → klik navždy.
  * Viz D59.
  */
-const AUTOPLAY_SAFE = new Set(['chaturbate', 'camsoda', 'cam4', 'stripchat', 'imlive', 'bongacams']);
+const AUTOPLAY_SAFE = new Set([
+	'chaturbate', 'camsoda', 'cam4', 'stripchat', 'imlive', 'bongacams',
+	// 17. 11. 2026 (D84) Kenny: „když kliknu na modelku, ať hned běží živý
+	// stream a nemusím klikat na play". Rámec se proto vkládá hned i u tří
+	// sítí, které dřív čekaly na klik. Streamate má v embedu `volumelevel=0`
+	// (ztlumeno), takže autoplay projde; LiveJasmin a XLoveCam jsou na
+	// EasyListu (Heavy Ad Intervention, D13) — pojistka ve skriptu níž pozná,
+	// že Chrome rámec odstranil, a vrátí tlačítko „pokračovat".
+	'streamate', 'livejasmin', 'xlovecam',
+]);
 
 /**
  * Sítě, u kterých se nad stream vkládá klikací vrstva (`.player-hit`).
@@ -345,7 +364,7 @@ const jsonLd = {
 	],
 };
 ---
-<Layout title={seo.title} description={seo.description} noindex={!model.indexable}>
+<Layout title={seo.title} description={seo.description} noindex={!model.indexable} ogType="profile">
 	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
 
 	<Breadcrumbs items={[
@@ -732,11 +751,7 @@ const jsonLd = {
 					<h2 class="mb-2 text-sm font-semibold text-ink-200">
 						Live right now, similar to {model.displayName}
 					</h2>
-					<div class="card-grid card-grid-quick">
-						{quickLive.map((m) => (
-							<ModelCard model={m} />
-						))}
-					</div>
+					<LiveGrid cards={toCards(quickLive)} q={simKey} n={QUICK_LIVE} eager={4} exclude={`${model.network}:${model.slug}`} class="card-grid-quick" />
 					{similar.length > quickLive.length && (
 						<a href="#similar" class="mt-2 inline-block text-sm text-accent underline hover:text-white">
 							See {similar.length - quickLive.length} more live cams ↓
@@ -918,14 +933,7 @@ const jsonLd = {
 			<h2 id="similar-h" class="mb-3 text-lg font-bold">
 				{model.online ? 'More live cams like this' : `Live now instead of ${model.displayName}`}
 			</h2>
-			<div class="card-grid" data-grid data-visible={SIMILAR_VISIBLE}>
-				{similar.map((m, i) => (
-					<ModelCard
-						model={m}
-						reserve={i >= SIMILAR_VISIBLE}
-					/>
-				))}
-			</div>
+			<LiveGrid cards={toCards(similar)} q={simKey} n={SIMILAR_VISIBLE} exclude={`${model.network}:${model.slug}`} />
 		</section>
 	)}
 
@@ -1031,6 +1039,31 @@ const jsonLd = {
 				// fokus bere ten, kdo o něj požádal, ne stránka sama od sebe.
 				el.setAttribute('tabindex', '-1');
 				el.focus({ preventScroll: true });
+			}
+			/**
+			 * Pojistka pro sítě na EasyListu (D84): Heavy Ad Intervention rámec
+			 * bez interakce po ~4 MB nahradí chybovou stránkou — a to vyvolá
+			 * DRUHÝ `load` rámce. Když přijde později než za 8 s, vrátí se nad
+			 * stream tlačítko; klik do něj vloží rámec znovu, tentokrát s
+			 * interakcí uživatele (ta ho z intervence vyjímá, past 14).
+			 */
+			if (mode === 'auto' && (frame.dataset.network === 'livejasmin' || frame.dataset.network === 'xlovecam')) {
+				let loads = 0;
+				const t0 = performance.now();
+				el.addEventListener('load', () => {
+					loads++;
+					if (loads < 2 || performance.now() - t0 < 8000 || !frame) return;
+					const again = document.createElement('button');
+					again.type = 'button';
+					again.className = 'play-overlay';
+					again.innerHTML = '<span class="play-icon" aria-hidden="true">▶</span><span>Tap to keep watching</span>';
+					again.addEventListener('click', () => {
+						const fresh = el.cloneNode() as HTMLIFrameElement;
+						frame!.replaceChildren(fresh);
+					}, { once: true });
+					frame.appendChild(again);
+					ga('player_intervention', { network: frame.dataset.network });
+				});
 			}
 			// `started` hlídá, že se to nedá nasčítat opakovaným spuštěním.
 			ga('player_start', {
@@ -1281,6 +1314,30 @@ const jsonLd = {
 					mode: 'auto',
 				});
 			}, { once: true });
+			// Pojistka pro LiveJasmin/XLoveCam (EasyList, D84): druhý `load`
+			// rámce po víc než 8 s = Chrome ho nahradil chybovou stránkou
+			// (Heavy Ad Intervention). Vrátí se tlačítko; klik rámec vloží
+			// znovu s interakcí uživatele, která ho z intervence vyjímá.
+			const net = host?.dataset.network ?? '';
+			if (host && (net === 'livejasmin' || net === 'xlovecam')) {
+				let loads = 0;
+				const t0 = performance.now();
+				autoFrame.addEventListener('load', () => {
+					loads++;
+					if (loads < 2 || performance.now() - t0 < 8000 || host.querySelector('.play-overlay')) return;
+					const again = document.createElement('button');
+					again.type = 'button';
+					again.className = 'play-overlay';
+					again.innerHTML = '<span class="play-icon" aria-hidden="true">▶</span><span>Tap to keep watching</span>';
+					again.addEventListener('click', () => {
+						const fresh = autoFrame.cloneNode() as HTMLIFrameElement;
+						autoFrame.replaceWith(fresh);
+						again.remove();
+					}, { once: true });
+					host.appendChild(again);
+					ga('player_intervention', { network: net });
+				});
+			}
 		}
 	</script>
 	{/* Lepivý pásek. Místo pro něj je rezervované v CSS (`.sticky-cta`), takže
