@@ -145,8 +145,7 @@ function toRec(m: Omit<Model, "network">, net: NetworkId, pages: PageIndex | nul
 export async function run(env: Env, dry = false): Promise<unknown> {
 	const t0 = Date.now();
 	const secrets = env as unknown as Record<string, string>;
-	const prev = (await env.LIVE.get<Snapshot>(SNAPSHOT_KEY, { type: "json" }).catch(() => null))
-		?? (await env.KV.get<Snapshot>(SNAPSHOT_KEY, { type: "json" }).catch(() => null));
+	const prev = await env.LIVE.get<Snapshot>(SNAPSHOT_KEY, { type: "json" }).catch(() => null);
 	const pages = await loadPageIndex();
 
 	const fetched = new Map<NetworkId, Omit<Model, "network">[]>();
@@ -215,9 +214,6 @@ export async function run(env: Env, dry = false): Promise<unknown> {
 		await env.LIVE.put(SNAPSHOT_KEY, body);
 		await env.LIVE.put(`${SNAPSHOT_KEY}:ts`, String(snap.ts));
 		await env.LIVE.put('live-paths', JSON.stringify(m.filter((r) => !r.st).map((r) => r.p)));
-		// PŘECHOD (17. 11. 2026): dokud běží web se starým bindingem, zapisovat
-		// i do `ecamx-registry`. Smazat po nasazení webu s `ecamx-live` (D85).
-		await env.KV.put(SNAPSHOT_KEY, body);
 		await recordPresence(env, m, nets).catch((e) =>
 			console.error(JSON.stringify({ task: "live-presence", error: String((e as Error)?.message ?? e) })));
 	}
