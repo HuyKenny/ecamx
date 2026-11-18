@@ -2,8 +2,9 @@
  * Chaturbate embed (D86) — dvě vlastnosti, se kterými musíme počítat:
  * 1. Embed s chatem má pevné desktopové rozvržení. Jede jen v divadle
  *    s chatem (`.theater.is-chat`) a od 900 px. Jinak jen video
- *    (`embed_video_only=1`) a chat obstará CTA pod přehrávačem. Platí i pro
- *    stránku stavěnou offline, kde modelka mezitím začala vysílat.
+ *    (`embed_video_only=1`) a chat obstará CTA pod přehrávačem. Stránka
+ *    stavěná offline, kde modelka mezitím začala vysílat, si `.is-chat`
+ *    přepne sama (`useChatTheater` v `model-page.ts`, 18. 11.).
  * 2. Jejich stránka v rámci má min. ~500 px výšky a vlastní `overflow: scroll`
  *    (cizí doména, `scrolling="no"` ji nezastaví). V nižším rámci se pak dá
  *    scrollovat. Rámec proto vykreslíme v logické výšce ≥ 500 px

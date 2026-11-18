@@ -12,7 +12,7 @@
  * D63/D67 (náhrada za dovysílanou modelku), D84 (EasyList pojistka),
  * D86 (Chaturbate `mountEmbed`).
  */
-import { mountEmbed } from '../lib/fit-embed';
+import { mountEmbed, NARROW_MQ } from '../lib/fit-embed';
 
 // `gtag` je globál z `is:inline` stubu v <head> (AGENTS.md bod 31); měření
 // nesmí nikdy rozbít přehrávač, proto try/catch.
@@ -28,6 +28,20 @@ let play: HTMLButtonElement | null = null;
 let started = false;
 let stickyObserver: IntersectionObserver | null = null;
 const hlsInstances: HlsLike[] = [];
+
+/**
+ * Stránka stavěná offline, Chaturbate mezitím vysílá → stejné divadlo jako
+ * u stránky stavěné online (D86): jejich rámec s chatem přes celou šířku,
+ * bez našeho postranního sloupce. Bez toho povýšená stránka dostala jen
+ * video (`fitEmbed` bez `.is-chat`) — Kenny 18. 11.: „nezobrazuje se
+ * s chatem". Pod 900 px jede dál jen video, sloupec tam zůstává.
+ */
+function useChatTheater(box: HTMLElement): void {
+	const theater = box.closest<HTMLElement>('.theater');
+	if (!theater || matchMedia(NARROW_MQ).matches) return;
+	theater.classList.add('is-chat');
+	theater.querySelector('.theater-side')?.remove();
+}
 
 /**
  * Pustí rámec s přehrávačem do plochy. `click` = tlačítko, `auto` = stránka
@@ -50,6 +64,7 @@ function startEmbed(mode: 'click' | 'auto'): void {
 	// a odkryje, jinak by klik do videa na povýšené stránce nevydělal nic.
 	const hit = box.querySelector<HTMLElement>('.player-hit');
 	box.replaceChildren(el);
+	if (box.dataset.network === 'chaturbate') useChatTheater(box);
 	mountEmbed(el, box, src);
 	if (hit) { hit.hidden = false; box.appendChild(hit); }
 	if (mode === 'click') {
