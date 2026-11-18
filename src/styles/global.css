@@ -449,6 +449,14 @@ html.js [data-live-grid]:not(.is-ready) .card .thumb-wrap > * { visibility: hidd
 .prose-ecamx a { color: var(--color-accent); text-decoration: underline; }
 .prose-ecamx a:hover { color: var(--color-accent-hover); }
 .prose-ecamx strong { color: var(--color-ink-50); }
+/* Průvodci (D91): tabulky z měření, číslované kroky, citace. */
+.prose-ecamx ol { list-style: decimal; }
+.prose-ecamx table { width: 100%; border-collapse: collapse; font-size: .9rem; margin: 1rem 0; }
+.prose-ecamx th, .prose-ecamx td { border-bottom: 1px solid var(--color-ink-800); padding: .45rem .6rem .45rem 0; text-align: left; }
+.prose-ecamx th { color: var(--color-ink-50); font-weight: 600; }
+.prose-ecamx td { font-variant-numeric: tabular-nums; }
+.prose-ecamx blockquote { border-left: 3px solid var(--color-accent); padding-left: 1rem; color: var(--color-ink-300); }
+.prose-ecamx h2 { scroll-margin-top: 5rem; }
 
 
 /* ── mobilní detaily, které stály konverze ────────────────────────────────── */

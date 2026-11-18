@@ -965,6 +965,16 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     v `live-grid.ts`) a `fill={false}` — doplnit ji jinými sítěmi by lhalo.
     Vypadlá dvojice → 302 v `[...path].ts`, ne 404.
 
+140. **SSR stránka (`prerender = false`) nesmí importovat `Breadcrumbs.astro`
+    ani `src/lib/jsonld.ts`.** Bundler je sdílí v jednom chunku s `data.ts`
+    (katalog), takže `/status/` je přitáhl do Workeru: bundle 0,7 → 3,6 MB
+    (D91). Ve SSR breadcrumb inline a JSON-LD escapovat přímo. Po změně SSR
+    rout vždy zkontroluj „bundle Workeru“ v `check-links.ts`.
+141. **Průvodci (`src/content/guides/`, D91): číslo jen přes `{{live:…}}`
+    (`guide-stats.ts`) nebo datované měření / citovaný zdroj.** Fotka z Pexels
+    bez poznatelných lidí. Žádné tvrzení o síti bez zdroje (aplikace, majitel,
+    výplaty) — co nejde ověřit, do textu nepatří.
+
 ## Rozhodnutí
 
 Viz `docs/DECISIONS.md`. Migrační plán: `~/.claude/plans/lovely-waddling-curry.md`.

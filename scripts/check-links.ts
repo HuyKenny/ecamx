@@ -42,7 +42,9 @@ console.log(`[links] ${html.length} HTML souborů, ${files.size} souborů celkem
  * Dynamické routy obsluhuje Worker, ne assets layer — v `dist/client` pro ně
  * žádný soubor není a kontrolor je jinak hlásí jako rozbité odkazy.
  */
-const WORKER_ROUTES = ['/go/', '/api/'];
+// `/status/` = SSR stránky živého stavu sítí (D91): soubor v `dist/client`
+// nemají, obsluhuje je Worker ze snímku. Do sitemapy patří (indexovatelné).
+const WORKER_ROUTES = ['/go/', '/api/', '/status/'];
 
 /** `/cams/asian/` → `/cams/asian/index.html`; `/robots.txt` → sám sebou. */
 function resolves(href: string): boolean {
@@ -121,6 +123,7 @@ if (isIndex) {
 const noindexed: string[] = [];
 for (const loc of locs) {
 	const path = new URL(loc).pathname;
+	if (WORKER_ROUTES.some((r) => path.startsWith(r))) continue;
 	const file = join(DIST, path.slice(1), 'index.html');
 	if (!existsSync(file)) { noindexed.push(`${path} (chybí soubor)`); continue; }
 	if (readFileSync(file, 'utf8').includes('name="robots" content="noindex')) {

@@ -1,0 +1,48 @@
+---
+/** Status of every cam site we check (D91). Same rules as `[network].astro`. */
+// Breadcrumbs.astro se sem NEimportuje: bundler ho sdílí v chunku s data.ts
+// a SSR stránka by do Workeru přitáhla celý katalog (AGENTS 135, D91).
+import Layout from '../../layouts/Layout.astro';
+import { readSnapshot, isFresh } from '../../lib/live-snapshot';
+import { NETWORK_IDS } from '../../lib/live-grid';
+import { NETWORK_LABELS } from '../../lib/labels';
+import { SITE_NAME } from '../../lib/site';
+import { withSecurityHeaders } from '../../lib/security-headers';
+
+export const prerender = false;
+const CSP = '__ECAMX_CSP__';
+
+const snap = await readSnapshot();
+const now = Date.now();
+const rows = snap ? Object.entries(snap.nets).filter(([id]) => NETWORK_IDS.has(id))
+	.sort((a, b) => b[1].count - a[1].count) : [];
+const fmt = (n: number) => n.toLocaleString('en-US');
+withSecurityHeaders(Astro.response.headers, CSP);
+Astro.response.headers.set('cache-control', 'public, max-age=60');
+---
+<Layout title={`Cam Site Status – Is Chaturbate or Stripchat Down? | ${SITE_NAME}`}
+	description="Live status of the big cam sites from our own check every five minutes: which sites answer, how many rooms are live, and when we last checked."
+	built={snap ? new Date(snap.ts).toISOString() : undefined}>
+	<div class="mx-auto max-w-3xl">
+		<nav aria-label="Breadcrumb" class="mb-4 text-sm text-ink-400"><a href="/" class="hover:text-white">Home</a> › <span>Site status</span></nav>
+		<h1 class="text-2xl font-extrabold sm:text-3xl">Cam site status</h1>
+		<p class="mt-2 text-ink-400">
+			eCamx checks the public live feed of every site below every five minutes. This is that
+			check — not user reports.
+		</p>
+		{rows.length ? (
+			<ul class="mt-6 divide-y divide-ink-800">
+				{rows.map(([id, s]) => (
+					<li class="flex items-center justify-between py-3">
+						<a href={`/status/${id}/`} class="font-semibold text-ink-50 hover:underline">Is {NETWORK_LABELS[id] ?? id} down?</a>
+						<span class={isFresh(snap!, id, now) ? 'text-emerald-400' : 'text-amber-400'}>
+							{isFresh(snap!, id, now) ? `up · ${fmt(s.count)} live` : 'feed not reached'}
+						</span>
+					</li>
+				))}
+			</ul>
+		) : (
+			<p class="mt-6 text-ink-300">Our live check has no recent data right now — that says nothing about the sites themselves.</p>
+		)}
+	</div>
+</Layout>

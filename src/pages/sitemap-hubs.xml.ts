@@ -15,8 +15,10 @@ import { urlNode, urlset, isoDate, XML_HEADERS } from '../lib/sitemap';
 import { DIRECTORY_SIZE, pageCount } from '../lib/paging';
 import { FACETS, allCategoryFacets, META, MODEL_LETTERS, MODELS_BY_LETTER, networkFacetPages } from '../lib/data';
 import { SITE_URL } from '../lib/seo';
+import { getCollection } from 'astro:content';
 
-export const GET: APIRoute = () => {
+export const GET: APIRoute = async () => {
+	const guides = await getCollection('guides');
 	const lastmod = isoDate(new Date(META.generatedAt));
 	const abs = (p: string) => `${SITE_URL}${p}`;
 	const nodes: string[] = [
@@ -41,6 +43,11 @@ export const GET: APIRoute = () => {
 		...Object.keys(TOKEN_RATES).map((id) => urlNode(abs(`/site/${id}/tokens/`), lastmod)),
 		// Síť × kategorie/pohlaví (D89) — stejný seznam jako getStaticPaths.
 		...networkFacetPages().map((x) => urlNode(abs(`/site/${x.net}/${x.slug}/`), lastmod)),
+		// Průvodci a živý stav sítí (D91).
+		urlNode(abs('/guides/'), lastmod),
+		...guides.map((g) => urlNode(abs(`/guides/${g.id}/`), isoDate(g.data.updated))),
+		urlNode(abs('/status/'), lastmod),
+		...FACETS.networks.map((n) => urlNode(abs(`/status/${n.slug}/`), lastmod)),
 		urlNode(abs('/finder/'), lastmod),
 		// `/for-models/` do sitemapy patří, `/my/` NE — ta je osobní, `noindex`
 		// a pro crawlera prázdná.

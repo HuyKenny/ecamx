@@ -1,0 +1,122 @@
+---
+/**
+ * Guide page (D91). Clean reading column: photo, short intro, contents,
+ * text, FAQ, sources, and links into the live parts of the site.
+ * Text comes from `src/content/guides/*.md`; live numbers are filled by
+ * `fillStats()` at build, so nothing on the page is typed in by hand.
+ */
+import { getCollection, type CollectionEntry } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { fillStats, safeHref, safeNetworkLinks } from '../../lib/guide-stats';
+import { safeJsonLd } from '../../lib/jsonld';
+import { SITE_URL, SITE_NAME } from '../../lib/site';
+
+export async function getStaticPaths() {
+	const all = await getCollection('guides');
+	return all.map((entry) => ({ params: { slug: entry.id }, props: { entry, all } }));
+}
+
+interface Props { entry: CollectionEntry<'guides'>; all: CollectionEntry<'guides'>[] }
+const { entry, all } = Astro.props;
+const g = entry.data;
+const html = safeNetworkLinks(fillStats(entry.rendered?.html ?? ''));
+const headings = (entry.rendered?.metadata?.headings as Array<{ depth: number; slug: string; text: string }> | undefined ?? [])
+	.filter((h) => h.depth === 2);
+const faq = g.faq.map((f) => ({ q: fillStats(f.q), a: fillStats(f.a) }));
+const description = fillStats(g.description);
+// Brand only when it still fits the SERP budget (D74).
+const pageTitle = `${fillStats(g.title)} | ${SITE_NAME}`.length <= 65 ? `${fillStats(g.title)} | ${SITE_NAME}` : fillStats(g.title);
+const url = `${SITE_URL}/guides/${entry.id}/`;
+const updated = g.updated.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+const more = all.filter((x) => x.id !== entry.id).sort((a, b) => a.data.order - b.data.order).slice(0, 3);
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@graph': [
+		{
+			'@type': 'Article',
+			headline: g.h1,
+			description,
+			url,
+			mainEntityOfPage: url,
+			image: { '@type': 'ImageObject', url: `${SITE_URL}${g.photo.src}`, width: g.photo.width, height: g.photo.height },
+			dateModified: g.updated.toISOString(),
+			author: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
+			publisher: { '@id': `${SITE_URL}/#organization` },
+		},
+		...(faq.length ? [{
+			'@type': 'FAQPage',
+			mainEntity: faq.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+		}] : []),
+	],
+};
+---
+<Layout title={pageTitle} description={description} image={`${SITE_URL}${g.photo.src}`}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<article class="mx-auto max-w-3xl">
+		<Breadcrumbs items={[{ label: 'Guides', href: '/guides/' }, { label: g.h1 }]} />
+		<h1 class="text-2xl font-extrabold sm:text-3xl">{g.h1}</h1>
+		<p class="mt-2 text-sm text-ink-400">Updated {updated} · eCamx guides</p>
+
+		<figure class="mt-5">
+			<img src={g.photo.src} alt={g.photo.alt} width={g.photo.width} height={g.photo.height}
+				class="h-auto w-full rounded-lg" fetchpriority="high" decoding="async" />
+			<figcaption class="mt-1.5 text-xs text-ink-500">
+				Photo: <a href={g.photo.url} rel="nofollow noopener" target="_blank" class="hover:text-ink-300">{g.photo.by} / Pexels</a>
+			</figcaption>
+		</figure>
+
+		{headings.length > 2 && (
+			<nav aria-label="Contents" class="mt-6 rounded-lg border border-ink-800 p-4 text-sm">
+				<p class="mb-2 font-semibold text-ink-50">In this guide</p>
+				<ol class="list-decimal space-y-1 pl-5 text-ink-300">
+					{headings.map((h) => <li><a href={`#${h.slug}`} class="hover:text-white">{h.text}</a></li>)}
+				</ol>
+			</nav>
+		)}
+
+		<div class="prose-ecamx mt-6 space-y-4 text-ink-200" set:html={html} />
+
+		{faq.length > 0 && (
+			<section class="mt-10" aria-labelledby="faq-h">
+				<h2 id="faq-h" class="mb-3 text-xl font-bold">Quick answers</h2>
+				<dl class="space-y-4">
+					{faq.map((f) => (
+						<div>
+							<dt class="font-semibold text-ink-50">{f.q}</dt>
+							<dd class="mt-1 text-ink-200">{f.a}</dd>
+						</div>
+					))}
+				</dl>
+			</section>
+		)}
+
+		{g.related.length > 0 && (
+			<section class="mt-10" aria-labelledby="rel-h">
+				<h2 id="rel-h" class="mb-3 text-lg font-bold">Live on eCamx</h2>
+				<div class="flex flex-wrap gap-2">
+					{g.related.map((r) => <a href={safeHref(r.href)} class="pill">{r.label}</a>)}
+				</div>
+			</section>
+		)}
+
+		{g.sources.length > 0 && (
+			<section class="mt-8 text-sm text-ink-400" aria-labelledby="src-h">
+				<h2 id="src-h" class="mb-2 font-semibold text-ink-300">Sources</h2>
+				<ul class="space-y-1">
+					{g.sources.map((s) => <li><a href={s.url} rel="nofollow noopener" target="_blank" class="underline hover:text-ink-200">{s.label}</a></li>)}
+				</ul>
+			</section>
+		)}
+
+		{more.length > 0 && (
+			<section class="mt-10 border-t border-ink-800 pt-6" aria-labelledby="more-h">
+				<h2 id="more-h" class="mb-3 text-lg font-bold">More guides</h2>
+				<ul class="space-y-2">
+					{more.map((x) => <li><a href={`/guides/${x.id}/`} class="text-ink-200 underline decoration-ink-700 hover:text-white">{x.data.h1}</a></li>)}
+				</ul>
+			</section>
+		)}
+	</article>
+</Layout>

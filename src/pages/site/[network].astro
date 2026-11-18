@@ -16,6 +16,7 @@ import {
 	facetLabel, type NetworkId,
 } from '../../lib/data';
 import { NETWORK_GENDERS } from '../../content/network-facets';
+import { getCollection } from 'astro:content';
 import { NETWORK_GRID } from '../../lib/paging';
 import { goLink } from '../../lib/affiliate';
 import { safeJsonLd } from '../../lib/jsonld';
@@ -41,6 +42,8 @@ const models = win.items;
 const seo = networkSeo(label, facet.count);
 // Network × category / gender pages (D89), demand first.
 const pairs = networkFacetPages().filter((x) => x.net === facet.slug);
+// Průvodce „What is {síť}?" (D91), jen když existuje.
+const guide = (await getCollection('guides')).find((g) => g.id === `what-is-${facet.slug}`);
 
 // Nejsledovanější modelka sítě jako cíl CTA — deeplink potřebuje konkrétní nick.
 // Nejsledovanější modelka z buildu jako výchozí cíl. Za dvě hodiny už nemusí
@@ -164,6 +167,11 @@ const jsonLd = {
 			</div>
 		</section>
 	)}
+
+	<p class="mt-8 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+		{guide && <a href={`/guides/${guide.id}/`} class="text-accent underline">{guide.data.h1} →</a>}
+		<a href={`/status/${facet.slug}/`} class="text-accent underline">Is {label} down right now? →</a>
+	</p>
 
 	<section class="mt-10" aria-labelledby="others">
 		<h2 id="others" class="mb-3 text-lg font-bold">Compare with other cam sites</h2>

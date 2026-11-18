@@ -4231,3 +4231,20 @@ Kenny: „udělej content gap s dalšími cam weby a optimalizuj web, abychom by
   - „cam girl finder“ (2,7 tis.): D48, face-search záměr.
   - `/cams/vr/` (8,9 tis.): kategorie VR ve feedech nemáme.
   - Titulky kategorií: už odpovídají hlavním dotazům.
+
+## D91 (18. 11. 2026): průvodci `/guides/`, živý stav sítí `/status/`, opravy robustnosti
+
+- **Klíčová slova:** report `reports/ecamx/keywords-guides-2026-11.md` ve workspace (Ahrefs Enterprise, ~5 tis. jednotek). Informační poptávka s KD 0–15:
+  - „what is chaturbate“ ~5 tis.,
+  - „chaturbate app/mobile“ ~3,9 tis.,
+  - „stripchat app“ 1,7 tis.,
+  - „what is a cam girl“ ~2,2 tis.,
+  - „chaturbate down“ ~2,5 tis.,
+  - podvodné „token hack“ ~1,5 tis.
+- **Průvodci:** 7 článků, content collection `src/content/guides/*.md`, šablona `src/pages/guides/[slug].astro`.
+  - Čísla v textu jsou jen dvojího druhu: zástupné značky `{{live:…}}` (vyplní `src/lib/guide-stats.ts` při buildu, neznámá značka build zastaví), nebo datované vlastní měření (snímek 18. 11. 02:00 UTC) či citovaný zdroj.
+  - Fotky z Pexels, bez poznatelných lidí (osoba na adult webu = nepravdivé vyznění + licence), stahuje `scripts/ecamx/guide-photos.py` ve workspace.
+  - Odkazy na síť, která v buildu chybí, přepne `safeHref()` na hub.
+- **Stav sítí:** `/status/{síť}/` je SSR ze snímku. Formulace jsou poctivé: „we couldn't reach the feed“, ne „is down“. Bez sparkline: `presence:*` má megabajty, parsovat ho na request je drahé.
+- **Ceny tokenů znovu ověřené 17. 11.:** balíček 1 000 = $79,99 (DatingScout + NavThemes), 200 vypadl (jen jeden zdroj). Guard by zastavil build od 19. 11.
+- **Oprava regrese D88:** `meta.modelCount` a kurátorské kategorie (MIN_LIVE, počet) se počítaly z `onlineCatalog` = jen živé se statickou stránkou (~2,8 tis. z ~13,5 tis.). Teď se počítají ze všech živých.

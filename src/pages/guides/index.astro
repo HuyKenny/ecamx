@@ -1,0 +1,51 @@
+---
+/** Guides hub (D91). Plain list — photo, headline, one line. */
+import { getCollection } from 'astro:content';
+import Layout from '../../layouts/Layout.astro';
+import Breadcrumbs from '../../components/Breadcrumbs.astro';
+import { fillStats } from '../../lib/guide-stats';
+import { safeJsonLd } from '../../lib/jsonld';
+import { SITE_URL, SITE_NAME } from '../../lib/site';
+
+const guides = (await getCollection('guides')).sort((a, b) => a.data.order - b.data.order);
+const title = `Cam Site Guides – How Chaturbate & Camming Work | ${SITE_NAME}`;
+const description = 'Plain answers about cam sites: what they are, what is free, what tokens cost, '
+	+ 'how models get paid and how to stay safe — with numbers from our own live checks.';
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'CollectionPage',
+	name: 'eCamx guides',
+	url: `${SITE_URL}/guides/`,
+	mainEntity: {
+		'@type': 'ItemList',
+		itemListElement: guides.map((g, i) => ({
+			'@type': 'ListItem', position: i + 1, name: g.data.h1, url: `${SITE_URL}/guides/${g.id}/`,
+		})),
+	},
+};
+---
+<Layout title={title} description={description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<div class="mx-auto max-w-3xl">
+		<Breadcrumbs items={[{ label: 'Guides' }]} />
+		<h1 class="text-2xl font-extrabold sm:text-3xl">Cam site guides</h1>
+		<p class="mt-2 text-ink-400">
+			Short, plain answers about how cam sites work. Where we give a number, it comes from our
+			own checks of {fillStats('{{networks}}')} cam sites or from a source we link to.
+		</p>
+		<ul class="mt-8 space-y-6">
+			{guides.map((g) => (
+				<li>
+					<a href={`/guides/${g.id}/`} class="group flex gap-4">
+						<img src={g.data.photo.src} alt="" width="160" height="107" loading="lazy" decoding="async"
+							class="h-[107px] w-[160px] shrink-0 rounded-md object-cover" />
+						<span>
+							<span class="block font-semibold text-ink-50 group-hover:underline">{g.data.h1}</span>
+							<span class="mt-1 block text-sm text-ink-400">{fillStats(g.data.description)}</span>
+						</span>
+					</a>
+				</li>
+			))}
+		</ul>
+	</div>
+</Layout>
