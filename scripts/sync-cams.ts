@@ -1401,7 +1401,10 @@ const autoCategorySlugs = new Set<string>([
 
 const curated = MONEY_CATEGORIES.flatMap((c) => {
 	if (c.intentOk === false) return [];
-	const liveHits = onlineCatalog.filter((m) => matchesMoney(m, c.rule));
+	// Všechny živé (`models`), ne jen ty se statickou stránkou (D88): práh
+	// MIN_LIVE a počet v titulku jsou o tom, kolik jich teď vysílá — mřížka se
+	// plní ze snímku, ne ze statických stránek. Opraveno 18. 11. 2026 (D91).
+	const liveHits = models.filter((m) => matchesMoney(m, c.rule));
 	const allHits = liveHits.length + archiveCatalog.filter((m) => matchesMoney(m, c.rule)).length;
 	if (allHits < MIN_MEMBERS || liveHits.length < MIN_LIVE) {
 		log(
@@ -1601,7 +1604,9 @@ if (DRY) {
 	}
 	write('meta.json', {
 		generatedAt: started.toISOString(),
-		modelCount: onlineCatalog.length,
+		// Všechny živé, ne jen se statickou stránkou (D88 → D91): homepage by
+		// jinak tvrdila „2,800+ live" při 13 500 vysílajících.
+		modelCount: models.length,
 		archiveCount: archiveCatalog.length,
 		indexableCount: indexable,
 		sitemapCount: stableCount,
