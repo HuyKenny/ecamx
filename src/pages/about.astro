@@ -11,16 +11,17 @@ import { fmt } from '../lib/seo';
 	<p>
 		eCamx is a live cam directory. It pulls the models who are broadcasting right
 		now from {FACETS.networks.length} major webcam platforms and puts them in a
-		single grid, so you can browse across all of them instead of keeping seven
-		tabs open.
+		single grid, so you can browse across all of them instead of keeping a
+		tab open for each one.
 	</p>
 
 	<h2>How it works</h2>
 	<p>
-		Once a day we fetch the public feeds from each platform, clean up the
-		messy category labels they use, and rebuild the whole site as static pages.
-		That is why it loads quickly and why there is nothing to sign up for.
-		Who is online updates in your browser when the page loads.
+		Every five minutes we check the public live feed of each platform, so the
+		grids show who is broadcasting right now. Once a day we clean up the messy
+		category labels the platforms use and rebuild the whole site as static pages.
+		That is why it loads quickly and why there is nothing to sign up for. The
+		details are on <a href="/about/methodology/">how we measure</a>.
 	</p>
 	<p>
 		Right now the directory covers <strong>{fmt(META.modelCount)} models</strong> across

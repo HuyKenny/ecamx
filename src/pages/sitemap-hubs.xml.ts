@@ -39,8 +39,10 @@ export const GET: APIRoute = async () => {
 		// Podstránky sítí existují jen tam, kde je ručně psaný obsah (a u tokenů
 		// ověřené ceny) — sitemapa musí jet z týchž seznamů, jinak by ohlásila
 		// URL, která se nevygenerovala.
-		...ALTERNATIVES_FOR.map((id) => urlNode(abs(`/site/${id}/alternatives/`), lastmod)),
-		...Object.keys(TOKEN_RATES).map((id) => urlNode(abs(`/site/${id}/tokens/`), lastmod)),
+		// Bez lastmod: obsah se s buildem nemění, datum buildu by byla nepravda
+		// (audit 22. 11. 2026). Ceny tokenů mají vlastní datum ověření.
+		...ALTERNATIVES_FOR.map((id) => urlNode(abs(`/site/${id}/alternatives/`))),
+		...Object.entries(TOKEN_RATES).map(([id, r]) => urlNode(abs(`/site/${id}/tokens/`), r.checkedOn)),
 		// Síť × kategorie/pohlaví (D89) — stejný seznam jako getStaticPaths.
 		...networkFacetPages().map((x) => urlNode(abs(`/site/${x.net}/${x.slug}/`), lastmod)),
 		// Průvodci a živý stav sítí (D91).
@@ -48,10 +50,11 @@ export const GET: APIRoute = async () => {
 		...guides.map((g) => urlNode(abs(`/guides/${g.id}/`), isoDate(g.data.updated))),
 		urlNode(abs('/status/'), lastmod),
 		...FACETS.networks.map((n) => urlNode(abs(`/status/${n.slug}/`), lastmod)),
-		urlNode(abs('/finder/'), lastmod),
+		urlNode(abs('/finder/')),
 		// `/for-models/` do sitemapy patří, `/my/` NE — ta je osobní, `noindex`
 		// a pro crawlera prázdná.
-		urlNode(abs('/for-models/'), lastmod),
+		urlNode(abs('/for-models/')),
+		urlNode(abs('/about/methodology/')),
 		urlNode(abs('/models/'), lastmod),
 		// Adresář nicků na víc sítích. Stránka 1 je `index, follow` a stabilní
 		// (řadí se podle slugu); stránky 2+ jsou `noindex` a do sitemapy nepatří,

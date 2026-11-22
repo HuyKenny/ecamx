@@ -20,7 +20,7 @@ import { getCollection } from 'astro:content';
 import { NETWORK_GRID } from '../../lib/paging';
 import { goLink } from '../../lib/affiliate';
 import { safeJsonLd } from '../../lib/jsonld';
-import { networkSeo, SITE_URL, fmt } from '../../lib/seo';
+import { networkSeo, SITE_URL, approx } from '../../lib/seo';
 import { NETWORK_REVIEWS } from '../../content/networks';
 import { ALTERNATIVES_FOR } from '../../content/network-compare';
 import { TOKEN_RATES } from '../../content/token-rates';
@@ -103,7 +103,7 @@ const jsonLd = {
 	    zkrácení URL dalo 404. Platí to i pro BreadcrumbList v JSON-LD. */}
 	<Breadcrumbs items={[{ label: 'Cam sites', href: '/site/' }, { label }]} />
 
-	<h1 class="text-2xl font-extrabold sm:text-3xl">{label} Live Cams — {fmt(facet.count)} Online Now &amp; Our Review</h1>
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{label} Live Cams — {approx(facet.count)} Online Now &amp; Our Review</h1>
 	<p class="mt-2 max-w-3xl text-lg text-ink-200">{review.tagline}</p>
 
 	{cta && (

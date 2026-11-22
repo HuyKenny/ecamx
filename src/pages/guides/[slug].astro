@@ -41,9 +41,15 @@ const jsonLd = {
 			url,
 			mainEntityOfPage: url,
 			image: { '@type': 'ImageObject', url: `${SITE_URL}${g.photo.src}`, width: g.photo.width, height: g.photo.height },
+			datePublished: (g.published ?? g.updated).toISOString(),
 			dateModified: g.updated.toISOString(),
-			author: { '@type': 'Organization', name: SITE_NAME, url: SITE_URL },
-			publisher: { '@id': `${SITE_URL}/#organization` },
+			author: { '@type': 'Organization', name: SITE_NAME, url: `${SITE_URL}/about/` },
+			// Inline, ne jen `@id`: Organization je definovaná na homepage a Google
+			// odkaz napříč stránkami nerozbalí (audit 22. 11. 2026).
+			publisher: {
+				'@type': 'Organization', '@id': `${SITE_URL}/#organization`, name: SITE_NAME, url: SITE_URL,
+				logo: { '@type': 'ImageObject', url: `${SITE_URL}/icon-512.png`, width: 512, height: 512 },
+			},
 		},
 		...(faq.length ? [{
 			'@type': 'FAQPage',
@@ -52,7 +58,7 @@ const jsonLd = {
 	],
 };
 ---
-<Layout title={pageTitle} description={description} image={`${SITE_URL}${g.photo.src}`}>
+<Layout title={pageTitle} description={description} image={`${SITE_URL}${g.photo.src}`} imageAlt={g.photo.alt}>
 	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
 	<article class="mx-auto max-w-3xl">
 		<Breadcrumbs items={[{ label: 'Guides', href: '/guides/' }, { label: g.h1 }]} />
@@ -109,6 +115,9 @@ const jsonLd = {
 				</ul>
 			</section>
 		)}
+		<p class="mt-6 text-sm text-ink-400">
+			Where our numbers come from: <a href="/about/methodology/" class="underline hover:text-ink-200">how we measure</a>.
+		</p>
 
 		{more.length > 0 && (
 			<section class="mt-10 border-t border-ink-800 pt-6" aria-labelledby="more-h">

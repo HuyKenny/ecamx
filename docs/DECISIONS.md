@@ -4248,3 +4248,67 @@ Kenny: „udělej content gap s dalšími cam weby a optimalizuj web, abychom by
 - **Stav sítí:** `/status/{síť}/` je SSR ze snímku. Formulace jsou poctivé: „we couldn't reach the feed“, ne „is down“. Bez sparkline: `presence:*` má megabajty, parsovat ho na request je drahé.
 - **Ceny tokenů znovu ověřené 17. 11.:** balíček 1 000 = $79,99 (DatingScout + NavThemes), 200 vypadl (jen jeden zdroj). Guard by zastavil build od 19. 11.
 - **Oprava regrese D88:** `meta.modelCount` a kurátorské kategorie (MIN_LIVE, počet) se počítaly z `onlineCatalog` = jen živé se statickou stránkou (~2,8 tis. z ~13,5 tis.). Teď se počítají ze všech živých.
+
+## D92 (22. 11. 2026): zabezpečení a technické SEO podle best practices
+
+Kenny: „zabezpeč mi web, ať mě nikdo nehackne, a nastav ho a optimalizuj pro
+SEO podle best practices". Dva audity kódu (bezpečnost, SEO) + kontrola zóny
+a GitHubu. Kritické nic: open redirect, XSS, cache poisoning, secrets v gitu
+i v historii a Actions jsou čisté (viz D17, D63, D85).
+
+**Zóna (provedeno hned, záloha `~/ai/backups/cf-ecamx-dns-pred-zabezpecenim-2026-11-22.json`):**
+- `ftp.ecamx.com` (CNAME na starý WEDOS hosting, 526) smazán — mrtvý záznam
+  prozrazoval starý hosting a hrozil převzetím subdomény.
+- Pošta: Kenny „přes Cloudflare přesměruj na napis@sbalit.cz". Pravidlo
+  `info@` → `napis@sbalit.cz` existovalo od srpna, ale MX mířily na WEDOS —
+  teď CF Email Routing (MX `route*.mx.cloudflare.net`, SPF
+  `include:_spf.mx.cloudflare.net ~all`, DKIM od CF), catch-all = drop.
+  Doména nic neposílá → **DMARC `p=reject; adkim=s; aspf=s`**.
+- CAA: letsencrypt, pki.goog, ssl.com, digicert, sectigo + iodef.
+- DNSSEC: v CF podepsáno od 17. 11., **DS u WEDOS chybí** (WAPI pro .com
+  neumí, panel chce přihlášení) — zadává Kenny: key tag 2371, alg 13,
+  digest type 2, digest z `GET /zones/{id}/dnssec`.
+- Rate limit pro `/go/` + `/status/` **NEpřidán**: Free plán má jediné
+  pravidlo a `/go/` nesmí sdílet okno s `/api/` (D17).
+
+**GitHub:** Dependabot alerty + automatické bezpečnostní PR zapnuté (PR
+nespouští deploy — workflow jede jen na push do `main`).
+
+**Kód:**
+- Závislosti: astro 7.2 → 7.4.13 (2× XSS), @astrojs/cloudflare 14.4.9,
+  wrangler 4.166, sharp 0.35.5 → `pnpm audit` 65 nálezů → 0. **Astro 7.4
+  vyžaduje Node ≥ 22.23.4** — CI má 22.x latest, Malina 22.23.1 (záložní
+  `ecamx-pi-deploy.sh` do upgradu Node nepostaví).
+- `/api/live/grid`: `x` jen pro modelku ze snímku (jinak výpočet bez výjimky
+  a bez zápisu do cache), duplicitní klíče v `q` pryč.
+- `/api/stream/*`: upstream jen pro nick, který v posledním snímku byl, i při
+  nečerstvém snímku (vymyšlené nicky tloukly do API sítě na náš účet).
+- `/go/`: `ecamx_cid` jen ve tvaru z `ensureCid()` (jinak falešní uživatelé v GA4).
+- `/status/{Síť}/` → 301 na malá písmena; 404 s hlavičkami.
+- Cron Worker `/run`: porovnání hashů bez kontroly délky (neprozradí délku tokenu).
+- Hlavičky: COOP `same-origin`, `Rating: RTA-…` (statika i Worker),
+  `X-Robots-Tag: noindex` na `/search/*`, `/indexable-pages.txt`,
+  `/live-pages.json`; `/.well-known/security.txt`.
+
+**SEO:**
+- Archivní stránky z registry (`minimalArchive`) dostanou naměřenou historii
+  (`historyParagraphs`, `hasHistory()`); prázdné zůstávají jen legacy stránky
+  (`seen: 0`). Do té doby 27 % indexovatelných stránek modelek bez vlastní věty.
+- Stránky síť × kategorie (D89): místo stejných 4–6 vět profil skupiny z dat
+  (publikum proti mediánu sítě, pořadí mezi sítěmi, mix pohlaví, top země,
+  medián věku, HD) — každá věta jen při dost velkém vzorku a jen u polí, která
+  síť hlásí (D48). Ručně psané úvody vědomě ne: bez zdroje by si vymýšlely (D26).
+- „seven sites" natvrdo pryč (AGENTS 76), „Last live 3 days ago" → absolutní datum (AGENTS 29).
+- Průvodci: `datePublished` (pole `published`, jinak `updated`), publisher
+  inline s logem, `og:image:alt` z fotky, RSS `/guides/rss.xml`.
+- ProfilePage `url`; ItemList jen indexovatelné modelky; H1 sítě přes `approx()`;
+  popisek stránek 2+ adresáře s číslem stránky; lastmod v hub sitemapě jen
+  u stránek, které se mění (tokeny = datum ověření).
+- E-E-A-T: `/about/methodology/` (jak a jak často měříme, ceny, provize),
+  provozovatel jen jurisdikcí — Kenny: „jen stát" → v `TextPage` patička
+  „operated from the Czech Republic (EU)".
+- Preconnect na origin přehrávače na živé stránce modelky (autoplay D84 zůstává).
+
+Vědomě beze změny: 302 pro odstraněné modelky (D35/D88), sitemap jen `stable`
+(D75), blokace Applebot/Amazonbot a `Crawl-delay: 5` pro Bing (náklady),
+HSTS bez `preload`, CSP s hostem GTM (nonce = velký zásah za malý přínos).

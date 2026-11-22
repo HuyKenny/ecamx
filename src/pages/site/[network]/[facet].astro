@@ -18,7 +18,7 @@ import { toCards } from '../../../lib/card-model';
 import { facetKey, liveQueryFor } from '../../../lib/live-grid';
 import {
 	allInNetworkFacet, allOnNetwork, networkFacetPages, gridWindow, facetLabel, canonicalTerm,
-	NETWORK_LABELS, PER_MINUTE_NETWORKS, type NetworkId,
+	canonicalCountry, countryName, NETWORK_LABELS, PER_MINUTE_NETWORKS, type NetworkId,
 } from '../../../lib/data';
 import { GRID } from '../../../lib/paging';
 import { safeJsonLd } from '../../../lib/jsonld';
@@ -57,6 +57,50 @@ for (const m of list) {
 		if (t !== f.slug && pairSlugs.has(t)) tally.set(t, (tally.get(t) ?? 0) + 1);
 	}
 }
+/*
+ * Profil skupiny z katalogu (audit 22. 11. 2026). Do té doby měly všechny
+ * stránky síť × kategorie stejných 4–6 vět („scaled content"). Tyhle věty
+ * se liší, protože se liší data — a každá platí jen tehdy, když je vzorek
+ * dost velký a síť pole opravdu hlásí (nula ve feedu ≠ nula modelek, D48).
+ */
+const pct = (n: number, of: number) => Math.round((n / Math.max(of, 1)) * 100);
+const medianOf = (xs: number[]) => { const v = [...xs].sort((a, b) => a - b); return v.length ? v[Math.floor(v.length / 2)]! : 0; };
+const netModels = allOnNetwork(f.net);
+const netMedian = medianOf(netModels.map((m) => m.viewers ?? 0).filter((v) => v > 0));
+const audience = median > 0 && netMedian > 0 && viewers.length >= 10
+	? median >= netMedian * 1.25 ? `busier than the typical ${net} room (around ${fmt(netMedian)} viewers)`
+		: median <= netMedian * 0.8 ? `quieter than the typical ${net} room (around ${fmt(netMedian)} viewers), so chat moves slower`
+		: `in line with the typical ${net} room`
+	: null;
+const GENDER_WORD: Record<string, string> = { female: 'women', male: 'men', couple: 'couples', trans: 'trans performers' };
+const genders = new Map<string, number>();
+for (const m of list) if (m.gender && GENDER_WORD[m.gender]) genders.set(m.gender, (genders.get(m.gender) ?? 0) + 1);
+const sexed = [...genders.values()].reduce((a, b) => a + b, 0);
+const genderMix = !gender && sexed >= 10
+	? [...genders.entries()].sort((a, b) => b[1] - a[1]).filter(([, n]) => pct(n, sexed) >= 5).slice(0, 3)
+		.map(([g, n]) => `${pct(n, sexed)}% ${GENDER_WORD[g]}`)
+	: [];
+const countries = new Map<string, number>();
+for (const m of list) { const c = canonicalCountry(m.country); if (c) countries.set(c, (countries.get(c) ?? 0) + 1); }
+const located = [...countries.values()].reduce((a, b) => a + b, 0);
+const topCountries = located >= 10
+	? [...countries.entries()].sort((a, b) => b[1] - a[1]).filter(([, n]) => pct(n, located) >= 10).slice(0, 2)
+		.map(([c, n]) => `${countryName(c)} (${pct(n, located)}%)`)
+	: [];
+const ages = list.map((m) => m.age ?? 0).filter((a) => a >= 18 && a <= 80);
+const medianAge = ages.length >= 10 ? medianOf(ages) : 0;
+const hdKnown = netModels.some((m) => m.isHd);
+const hdShare = hdKnown && list.length >= 10 ? pct(list.filter((m) => m.isHd).length, list.length) : null;
+// Kde je té kategorie nejvíc — pořadí mezi sítěmi, které ji mají jako stránku.
+const ranked = [{ net: f.net, count: f.count }, ...all.filter((x) => x.slug === f.slug && x.net !== f.net)]
+	.sort((a, b) => b.count - a.count);
+const rank = ranked.findIndex((x) => x.net === f.net) + 1;
+const ORD = ['', 'the largest', 'the second-largest', 'the third-largest'];
+const rankLine = ranked.length >= 2 && ORD[rank]
+	? `Among the cam sites we track, ${net} has ${ORD[rank]} pool of ${gender ? `${gender.noun.replace(' cams', '')} rooms` : `${low} rooms`}`
+		+ (rank === 1 ? `, ahead of ${NETWORK_LABELS[ranked[1]!.net] ?? ranked[1]!.net}.` : `, after ${NETWORK_LABELS[ranked[0]!.net] ?? ranked[0]!.net}.`)
+	: null;
+
 const alongside = [...tally.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3)
 	.map(([s]) => all.find((x) => x.net === f.net && x.slug === s)!);
 const perMinute = PER_MINUTE_NETWORKS.has(f.net);
@@ -74,8 +118,9 @@ const jsonLd = {
 	url,
 	mainEntity: {
 		'@type': 'ItemList',
-		numberOfItems: Math.min(models.length, 20),
-		itemListElement: models.slice(0, 20).map((m, i) => ({
+		// Jen indexovatelné stránky — noindex URL v ItemListu je protimluv (audit 22. 11.).
+		numberOfItems: Math.min(models.filter((m) => m.indexable).length, 20),
+		itemListElement: models.filter((m) => m.indexable).slice(0, 20).map((m, i) => ({
 			'@type': 'ListItem', position: i + 1, name: m.displayName, url: `${SITE_URL}/live/${m.page}/`,
 		})),
 	},
@@ -104,9 +149,20 @@ const jsonLd = {
 		<p>
 			{fmt(f.count)} of the {fmt(netTotal)} {net} models in our latest catalogue
 			{gender ? ` are listed as ${low}` : ` are tagged ${low}`} — about {share}% of the site.
-			{median > 0 && ` A typical room in this group has around ${fmt(median)} viewers.`}
-			{' '}The grid above is refreshed from {net}'s live feed every few minutes, so every card is a room
-			that is broadcasting now, not an old profile.
+			{median > 0 && ` A typical room in this group has around ${fmt(median)} viewers${audience ? ` — ${audience}` : ''}.`}
+			{rankLine && ` ${rankLine}`}
+		</p>
+		{(genderMix.length > 0 || topCountries.length > 0 || medianAge > 0 || hdShare !== null) && (
+			<p>
+				{genderMix.length > 0 && `By performer, the group is ${genderMix.join(', ')}. `}
+				{topCountries.length > 0 && `The most common home ${topCountries.length > 1 ? 'countries are' : 'country is'} ${topCountries.join(' and ')}. `}
+				{medianAge > 0 && `The median listed age is ${medianAge}. `}
+				{hdShare !== null && `${hdShare}% of these rooms stream in HD.`}
+			</p>
+		)}
+		<p class="text-sm text-ink-400">
+			Figures come from our latest catalogue; the grid above is refreshed from {net}'s live feed every
+			few minutes. <a href="/about/methodology/">How we measure</a>.
 		</p>
 		{alongside.length > 0 && (
 			<p>

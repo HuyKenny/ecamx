@@ -1,0 +1,91 @@
+---
+/**
+ * „How we measure" (audit 22. 11. 2026, E-E-A-T). Odkud jsou čísla na webu,
+ * jak často se obnovují a co znamenají — odkazuje se z patičky, z About
+ * a z každého průvodce. Každé tvrzení tu odpovídá kódu; kdo mění cron, build
+ * nebo pravidla stránek modelek, ať upraví i tenhle text.
+ */
+import TextPage from '../../layouts/TextPage.astro';
+import { FACETS, NETWORK_LABELS } from '../../lib/data';
+import { SITE_NAME } from '../../lib/site';
+---
+<TextPage
+	title={`How We Measure – Data, Sources & Editorial Policy | ${SITE_NAME}`}
+	description="Where the numbers on eCamx come from: a live check of every cam site every five minutes, our own viewing history per model, and prices only with two sources."
+	heading="How we measure"
+	updated="22 November 2026"
+>
+	<p>
+		Every number on eCamx comes from one of three places: the public live feeds of
+		the cam sites, our own log of what those feeds showed over time, or a source we
+		name next to the number. This page explains each one, so you can judge how far
+		to trust it.
+	</p>
+
+	<h2>The live check, every five minutes</h2>
+	<p>
+		A scheduled job fetches the public live feed of every site we cover —
+		{' '}{FACETS.networks.map((n) => NETWORK_LABELS[n.slug]).join(', ')} — every five
+		minutes and stores one snapshot: who is live, in which kind of show, and, where
+		the site publishes it, how many people are watching. The live grids, the
+		“Live now” badges and the <a href="/status/">site status pages</a> all read that
+		snapshot.
+	</p>
+	<p>
+		If a site’s feed does not answer, we say that we could not reach it. We never
+		turn a failed check into “the site is down”, and a grid keeps the last known
+		cards rather than going blank.
+	</p>
+
+	<h2>The pages, rebuilt every day</h2>
+	<p>
+		The rest of the site — categories, countries, site reviews and model pages — is
+		rebuilt from the feeds once a day. Counts in titles are rounded down
+		(“2,500+”) because the exact number changes by the minute.
+	</p>
+
+	<h2>Model pages and their history</h2>
+	<p>
+		A model page describes what we observed, not what the performer told us. “First
+		seen”, the number of days live, the largest audience and the usual streaming
+		hours come from our own log. Usual hours appear only after at least a week of
+		observations; before that we say nothing rather than guess.
+	</p>
+	<p>
+		We keep pages for performers people search for and for regulars. When a
+		performer has not been live for a long time, the page points to similar cams
+		that are live. Performers can remove their page themselves — see
+		{' '}<a href="/for-models/">for cam models</a>.
+	</p>
+	<p>
+		The same nickname on two sites is a match of names and public profile fields
+		only. We never claim it is the same person.
+	</p>
+
+	<h2>Prices and guides</h2>
+	<p>
+		A price gets a number only when two independent sources agree, and it is
+		re-checked at least every 90 days; otherwise we show a range or nothing. The
+		date of the last check is printed next to it.
+	</p>
+	<p>
+		<a href="/guides/">Guides</a> use the live numbers above, dated snapshots of our
+		own data (“on 18 November 2026 at 02:00 UTC…”) or a named source. Anything we
+		could not verify is left out. Photos come from Pexels with the photographer
+		credited; they illustrate the topic and never show a performer.
+	</p>
+
+	<h2>How we make money — and what it does not change</h2>
+	<p>
+		Links out to the cam sites carry an affiliate code, so we earn a commission
+		when someone signs up or buys tokens. Grids give more room to the sites our
+		visitors open most often. Commission never decides what a review says about a
+		site, and the word “free” is used only for sites where watching really is free.
+	</p>
+
+	<h2>Corrections</h2>
+	<p>
+		Found a wrong number or an outdated claim? Write to
+		{' '}<a href="mailto:info@ecamx.com">info@ecamx.com</a> and we will correct it.
+	</p>
+</TextPage>

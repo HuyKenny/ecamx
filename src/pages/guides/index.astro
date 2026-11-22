@@ -26,6 +26,7 @@ const jsonLd = {
 ---
 <Layout title={title} description={description}>
 	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+	<link rel="alternate" type="application/rss+xml" title="eCamx guides" href="/guides/rss.xml" slot="head" />
 	<div class="mx-auto max-w-3xl">
 		<Breadcrumbs items={[{ label: 'Guides' }]} />
 		<h1 class="text-2xl font-extrabold sm:text-3xl">Cam site guides</h1>

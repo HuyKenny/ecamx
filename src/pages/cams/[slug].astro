@@ -62,8 +62,9 @@ const jsonLd = {
 	url: `${SITE_URL}/cams/${facet.slug}/`,
 	mainEntity: {
 		'@type': 'ItemList',
-		numberOfItems: Math.min(models.length, 20),
-		itemListElement: models.slice(0, 20).map((m, i) => ({
+		// Jen indexovatelné stránky — noindex URL v ItemListu je protimluv (audit 22. 11.).
+		numberOfItems: Math.min(models.filter((m) => m.indexable).length, 20),
+		itemListElement: models.filter((m) => m.indexable).slice(0, 20).map((m, i) => ({
 			'@type': 'ListItem',
 			position: i + 1,
 			name: m.displayName,

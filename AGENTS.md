@@ -979,3 +979,17 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
 
 Viz `docs/DECISIONS.md`. Migrační plán: `~/.claude/plans/lovely-waddling-curry.md`.
 Přístupy: `~/ai/credentials/.ecamx-credentials.env` (nikdy do gitu ani do chatu).
+142. **Astro ≥ 7.4.4 chce Node ≥ 22.23.4** (D92). CI to má (`node-version: 22`
+    = latest), Malina má nvm 22.23.1 — `astro build` tam spadne hned na
+    kontrole verze a záložní deploy (`bin/ecamx-pi-deploy.sh`) nepostaví,
+    dokud se Node neaktualizuje. Lokální ověření jde přímo přes
+    `node_modules/astro/dist/cli/index.js` (`cli(['node','astro','build'])`),
+    ale nasazovat se má z CI.
+143. **Archivní stránka modelky smí mít text jen z naměřených polí.** Archiv
+    z registry (`minimalArchive`) má `first/last/seen/peak/hours` → historie
+    ano (`hasHistory()`); legacy stránka (`seen: 0`) nemá nic → jen dvě
+    obecné věty. Text o vzhledu, tagách nebo zemi u archivu nikdy (D26, D92).
+144. **Pošta ecamx jde přes Cloudflare Email Routing** (`info@` →
+    napis@sbalit.cz, catch-all drop) a doména nic neposílá: DMARC
+    `p=reject`. Kdo by chtěl z domény posílat (newsletter, formulář), musí
+    nejdřív doplnit SPF/DKIM odesílatele, jinak to DMARC zahodí (D92).

@@ -39,7 +39,7 @@ const title = win.page > 1
 ---
 <Layout
 	title={title}
-	description={`All ${fmt(win.total)} cam models on eCamx whose name starts with ${upper}. Free live webcam profiles, no signup.`}
+	description={`All ${fmt(win.total)} cam models on eCamx whose name starts with ${upper}${win.page > 1 ? ` – page ${win.page}` : ''}. Free live webcam profiles, no signup.`}
 >
 	<Breadcrumbs items={[
 		{ label: 'All models', href: '/models/' },

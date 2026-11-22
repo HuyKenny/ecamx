@@ -50,7 +50,7 @@ const title = win.page > 1
 ---
 <Layout
 	title={title}
-	description={`${approx(NICKS.length)} nicknames broadcasting on more than one of the seven cam sites we track. We match names and public profile fields — we don't verify identity.`}
+	description={`${approx(NICKS.length)} nicknames broadcasting on more than one of the cam sites we track. We match names and public profile fields — we don't verify identity.`}
 	noindex={win.page > 1}
 >
 	<Breadcrumbs items={[
@@ -65,7 +65,7 @@ const title = win.page > 1
 	{win.page === 1 && (
 		<div class="mt-3 max-w-3xl space-y-3 text-sm leading-relaxed text-ink-200">
 			<p>
-				We track seven cam sites at once, which lets us notice something none of
+				We track several cam sites at once, which lets us notice something none of
 				those sites will tell you: <strong>{fmt(NICKS.length)} nicknames</strong> are
 				broadcasting under the same name on two or more of them, across
 				{' '}{fmt(pageCountTotal)} profiles in our catalogue. Performers do this on

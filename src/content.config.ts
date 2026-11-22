@@ -18,6 +18,8 @@ const guides = defineCollection({
 		/** Main search phrase the guide is written for (from the keyword report). */
 		keyword: z.string(),
 		updated: z.coerce.date(),
+		// První vydání; když chybí, bere se `updated` (Article.datePublished).
+		published: z.coerce.date().optional(),
 		/** Order on /guides/ — lower first. */
 		order: z.number().default(50),
 		photo: z.object({

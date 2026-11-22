@@ -27,5 +27,11 @@ const { title, description, heading, updated } = Astro.props;
 		<div class="mt-6 space-y-4 text-ink-200">
 			<slot />
 		</div>
+		{/* Provozovatel jen jurisdikcí, bez jména (Kenny 22. 11. 2026). */}
+		<p class="mt-10 border-t border-ink-800 pt-4 text-sm text-ink-400">
+			eCamx is operated from the Czech Republic (EU). Contact:
+			{' '}<a href="mailto:info@ecamx.com" class="underline hover:text-white">info@ecamx.com</a>
+			{' '}· <a href="/about/methodology/" class="underline hover:text-white">How we measure</a>
+		</p>
 	</article>
 </Layout>
