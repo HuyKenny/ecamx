@@ -693,6 +693,16 @@ const liveBudget = parseInt(process.env.LIVE_REGISTRY_MAX || String(Math.max(100
 
 const registry = await loadRegistry();
 migrateRegistry(registry);
+/**
+ * D93 (22. 11. 2026, Kenny): stránky, na které z vyhledávače někdo opravdu
+ * KLIKL (GSC nebo Bing), drží statický soubor i po `PAGE_OFFLINE_DAYS` a mimo
+ * strop `MAX_MODEL_PAGES`. Změřeno 22. 11.: D88 přesměroval 580 stránek
+ * s 897 kliky z Bingu (40 % kliků na modelky) a Bing kliky spadly
+ * z ~330 na ~200 týdně. Imprese bez kliku výjimku nedávají.
+ */
+const clickedPages = new Set<string>();
+const hasClicks = (v: { clicks?: number; bing_clicks?: number }) => (v.clicks ?? 0) > 0 || (v.bing_clicks ?? 0) > 0;
+
 const demand = await loadDemand();
 
 const models: Model[] = (() => {
@@ -852,13 +862,14 @@ function demandScore(v: DemandEntry): number {
 
 async function loadDemand(): Promise<Record<string, number>> {
 	const out: Record<string, number> = {};
-	const add = (page: string, score: number) => {
+	const add = (page: string, score: number, v?: DemandEntry) => {
 		if (score > (out[page] ?? 0)) out[page] = score;
+		if (v && hasClicks(v)) clickedPages.add(page);
 	};
 	const stats = join(ROOT, 'seed', 'legacy-gone-stats.json');
 	if (existsSync(stats)) {
 		const gsc = JSON.parse(readFileSync(stats, 'utf8')) as Record<string, DemandEntry>;
-		for (const [page, v] of Object.entries(gsc)) add(page, demandScore(v));
+		for (const [page, v] of Object.entries(gsc)) add(page, demandScore(v), v);
 		log(`poptávka: ${Object.keys(gsc).length} stránek z GSC historie`);
 	}
 	const { CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID, CF_API_TOKEN } = process.env;
@@ -867,7 +878,7 @@ async function loadDemand(): Promise<Record<string, number>> {
 		const res = await fetch(url, { headers: { Authorization: `Bearer ${CF_API_TOKEN}` } });
 		if (res.ok) {
 			const kv = await res.json() as Record<string, DemandEntry>;
-			for (const [page, v] of Object.entries(kv)) add(page, demandScore(v));
+			for (const [page, v] of Object.entries(kv)) add(page, demandScore(v), v);
 			const byBing = Object.values(kv).filter((v) => (v.bing_impressions ?? 0) > 0).length;
 			log(`poptávka: ${Object.keys(kv).length} záznamů z KV `
 				+ `(objem hledání + imprese; ${byBing} z nich drží Bing)`);
@@ -1145,7 +1156,15 @@ const archiveRanked = [...archiveCandidates].sort((a, b) => {
 	// běhy mění, a tail by blikal i při jinak shodném řazení.
 	return a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0;
 });
-const archiveKeys = archiveRanked.slice(0, archiveBudget).map(([k]) => k);
+const rankedKeys = archiveRanked.slice(0, archiveBudget).map(([k]) => k);
+// D93: offline stránky s naměřeným klikem navíc — mimo rozpočet i mimo 30 dní.
+const rankedSet = new Set(rankedKeys);
+const keptByClicks = Object.entries(registry)
+	.filter(([k, e]) => !DISABLED_NETWORKS.has(e.network) && !liveKeys.has(k) && !!e.page
+		&& clickedPages.has(e.page) && !rankedSet.has(k))
+	.map(([k]) => k)
+	.sort();
+const archiveKeys = [...rankedKeys, ...keptByClicks];
 // Co rozpočet odřízl. Do 24. 8. to bylo neviditelné: v logu stálo jen kolik
 // stránek poptávka OCHRÁNILA, ne kolik jich strop vyhodil — a vyhozená stránka
 // s poptávkou je přesně to, co web stálo vlastní pozice (D53).
@@ -1366,7 +1385,7 @@ log(`kolotoč: ${revived} modelek se vrátilo z přesměrování na vlastní str
 const staleNoDemand = Object.entries(registry).filter(([k, e]) =>
 	!liveKeys.has(k) && !!e.page && !e.gone && !wanted(e)
 	&& !!e.snap && e.last < cutoffNoDemand && e.last >= cutoffPage).length;
-log(`rozpočet: ${archiveRanked.length} kandidátů na archiv, ${archiveKeys.length} se vešlo, `
+log(`rozpočet: ${archiveRanked.length} kandidátů na archiv, ${rankedKeys.length} se vešlo + ${keptByClicks.length} s klikem mimo strop (D93), `
 	+ `${evicted.length} odříznuto stropem ${MAX_MODEL_PAGES}; `
 	+ `prořezáno bez poptávky po ${GRACE_DAYS_NO_DEMAND} dnech: ${staleNoDemand}`);
 if (evictedWithDemand > 0) {
@@ -1475,7 +1494,7 @@ if (DRY) {
 	if (process.env.SYNC_DUMP) writeFileSync(process.env.SYNC_DUMP, JSON.stringify([...pageKeys].map((k) => registry[k]!.page)));
 	if (process.env.SYNC_CHECK) for (const slug of process.env.SYNC_CHECK.split(',')) {
 		const hit = Object.entries(registry).find(([, e]) => e.page === slug);
-		log(`kontrola ${slug}: ${hit ? `last=${hit[1].last} seen=${hit[1].seen} demand=${demandFor(slug)} gone=${hit[1].gone ?? '-'} live=${liveKeys.has(hit[0])}` : 'není v registry'}`);
+		log(`kontrola ${slug}: ${hit ? `net=${hit[1].network} last=${hit[1].last} seen=${hit[1].seen} demand=${demandFor(slug)} gone=${hit[1].gone ?? '-'} live=${liveKeys.has(hit[0])}` : 'není v registry'}`);
 	}
 	log(`ukázka kategorií: ${categories.slice(0, 15).map((c) => `${c.slug}(${c.count})`).join(', ')}`);
 	log(`ukázka zemí: ${countries.slice(0, 12).map((c) => `${c.slug}(${c.count})`).join(', ')}`);
