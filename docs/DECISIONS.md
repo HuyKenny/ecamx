@@ -4312,3 +4312,48 @@ nespouští deploy — workflow jede jen na push do `main`).
 Vědomě beze změny: 302 pro odstraněné modelky (D35/D88), sitemap jen `stable`
 (D75), blokace Applebot/Amazonbot a `Crawl-delay: 5` pro Bing (náklady),
 HSTS bez `preload`, CSP s hostem GTM (nonce = velký zásah za malý přínos).
+
+## D93 — Audit návštěvnosti, stránky s kliky zpět, best cam sites, top modelky (22. 11. 2026)
+
+Kenny: „dostaň na web 1 000 uživatelů denně, content gap + klíčová slova,
+optimalizuj, případně články". Report: `reports/ecamx/seo-audit-2026-11-22.md`
+(workspace).
+
+**Změřený stav (22. 11.):**
+- Skuteční lidé z vyhledávání ≈ 30/den. Bing+DDG+Yahoo = ~93 % organiku, Google 11 uživatelů za 28 dní.
+- Google: Googlebot ~40 URL/den (ověřený, WAF ho neblokuje), 18 z 24 URL ve vzorku sitemapy „unknown". DR 12, 0 rankujících slov v Ahrefs. Úzké hrdlo je autorita, ne obsah.
+- Bing: 79 % kliků na `/live/`. **D88 přesměroval 580 stránek s 897 kliky z Bingu**, Bing kliky ~330 → ~200 týdně.
+
+**Kenny 22. 11.: „vrátit s kliky"** — mění D88:
+- Stránka, na kterou z GSC nebo Bingu někdo klikl (`clicks`/`bing_clicks > 0` v KV `demand` nebo v `legacy-gone-stats`), drží statický archiv i po `PAGE_OFFLINE_DAYS` a **mimo strop `MAX_MODEL_PAGES`** (`keptByClicks` v `sync-cams.ts`).
+- Dry-run 22. 11.: +342 stránek mimo strop.
+- Z 580 přesměrovaných se hned vrací 279; 33 patří vypnutým sítím (LiveJasmin/ImLive, D86); 268 už registry nezná (prořezané před měřením Bingu) — vrátí se samy, až modelka znovu vysílá (poptávka v KV zůstává).
+
+**Stránky:**
+- `/site/` = „Best Cam Sites ({rok}) – N Live Cam Sites Compared" („cam sites" 4 200, „best cam sites" 1 700 při KD 7). Pořadí jen podle živých modelek ze snímku (`META.networks`), mix a publikum z pravidelných modelek.
+- `/finder/` = „Cam Girl Finder" (2 700, KD 8).
+- `/site/{síť}/alternatives/` i pro Stripchat, CamSodu, Cam4 (`ALTERNATIVES_FOR`); rozdíl dvojice z měřených čísel (`pairFacts()`), u Chaturbate dál ručně. Existenci řídí `alternativesNetworks()` (stránka, sitemapa, odkazy).
+- `/site/chaturbate/top/` „Top Chaturbate models" (450, KD 4) — pořadí podle naměřeného `peak`, `topModelsNetworks()`; `top` je rezervovaný podslug.
+- Průvodce `chaturbate-vs-stripchat` (180).
+- „every two hours" opraveno všude (build je denní, živá kontrola á 5 min).
+
+**Zamítnuto / nejde:**
+- VR (`/cams/vr/`, `/site/stripchat/vr/`, 15 tis. hledání): feed Stripchatu z CrakRevenue VR nenese (800 pokojů, žádný příznak ani tag).
+- Návody „how to delete {síť} account" (500): oficiální nápověda je za Cloudflare challenge, postup nejde ověřit → nepsat.
+- Tokeny Stripchat/CamSoda: dál bez dvou zdrojů (D50).
+- Placené katalogy: Kenny „jen zdarma".
+
+## D94 — Španělský pilot `/es/` (22. 11. 2026)
+
+Kenny: „pilot /es/ hned". Ahrefs MX/global: „sexo en vivo" 136 tis. (KD 18),
+„porno en vivo" 458 tis. (KD 48), „mujeres desnudas en vivo" 20 tis. (KD 1),
+„porno gay en vivo" 11 tis. (KD 0), „cam gay" 18 tis. (KD 1), „tetonas en vivo"
+3,5 tis. (KD 0). Kombinace kategorie × země („colombianas en vivo") ≈ 0 →
+pilot je 9 stránek, ne překlad webu.
+
+- Trasy `ES_ROUTES` v `src/lib/i18n.ts` (`/es/`, mujeres-desnudas, tetonas, gay, hombres, trans, milf, anal, squirt), každá s anglickým párem.
+- `ES_ACTIVE` vyřadí kategorie, které v buildu nejsou (`facets.json`) — stránka, hreflang i sitemapa čtou totéž.
+- Texty ručně ve španělštině (`src/content/es-pages.ts`), čísla z buildu, tvrzení ověřená proti datům (muži/trans hlavně Chaturbate, Kolumbie nejvíc modelek).
+- Layout: `lang` z cesty, `og:locale es_ES`, hreflang en/es/x-default na obou stranách páru, ES navigace a lišta, odkaz „Español/English" v patičce. Karty: `cardHtml(…, { lang })`, mřížka nese `data-lang`, země přes `Intl.DisplayNames('es')`, tagy na ES kartách skryté (anglické popisky).
+- Stránky modelek, právní stránky a průvodci zůstávají anglické.
+- Měřit: GSC/Bing imprese `/es/*` 15. 12. a 5. 1. Teprve s impresemi rozšiřovat (ES stránky modelek, další kategorie).

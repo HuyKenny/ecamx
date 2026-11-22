@@ -993,3 +993,13 @@ Přístupy: `~/ai/credentials/.ecamx-credentials.env` (nikdy do gitu ani do chat
     napis@sbalit.cz, catch-all drop) a doména nic neposílá: DMARC
     `p=reject`. Kdo by chtěl z domény posílat (newsletter, formulář), musí
     nejdřív doplnit SPF/DKIM odesílatele, jinak to DMARC zahodí (D92).
+145. **Stránka modelky s naměřeným klikem se nepřesměrovává** (D93): `keptByClicks`
+    v `sync-cams.ts` drží archiv mimo 30denní pravidlo i mimo strop. Kdo mění
+    retenci, ať nejdřív spočítá, kolik URL s kliky z Bingu (`demand.py show`)
+    by šlo na 302 — D88 tak tiše vzal 40 % kliků na modelky.
+146. **Podstránky sítě (`alternatives`, `top`) a `/es/` existují jen přes helpery**
+    `alternativesNetworks()`, `topModelsNetworks()`, `ES_ACTIVE` — stránka,
+    sitemapa i odkazy musí číst totéž, jinak odkaz nebo hreflang vede na 404.
+    Nový podslug pod `/site/{síť}/` patří do `RESERVED_NETWORK_SUBPAGES`.
+147. **Španělské texty (D94) jen s ověřeným tvrzením.** Než se napíše „nejvíc X je
+    na Y", ověřit v `models.json`; čísla jen přes `{n}`/`{sites}`.
