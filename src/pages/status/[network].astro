@@ -21,8 +21,13 @@ import { withSecurityHeaders } from '../../lib/security-headers';
 export const prerender = false;
 const CSP = '__ECAMX_CSP__';
 
-const net = (Astro.params.network ?? '').toLowerCase();
-if (!NETWORK_IDS.has(net)) return new Response(null, { status: 404 });
+const raw = Astro.params.network ?? '';
+const net = raw.toLowerCase();
+if (!NETWORK_IDS.has(net)) {
+	return new Response('Not found', { status: 404, headers: withSecurityHeaders(new Headers({ 'content-type': 'text/plain; charset=utf-8' })) });
+}
+// Jedna URL na síť — `/status/Chaturbate/` by byla duplicita (audit 22. 11.).
+if (raw !== net) return Astro.redirect(`/status/${net}/`, 301);
 const label = NETWORK_LABELS[net] ?? net;
 const snap = await readSnapshot();
 const now = Date.now();

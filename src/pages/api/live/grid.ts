@@ -31,7 +31,8 @@ export const GET: APIRoute = async ({ request }) => {
 	const wants: Array<[string, number]> = [];
 	for (const part of (url.searchParams.get('q') ?? 'all~60').split(',').slice(0, 6)) {
 		const [key, n] = part.split('~');
-		if (!key || !allowedFacet(key)) continue;
+		// Duplicitní klíč (`all~60,all~60,…`) by stejný výběr počítal víckrát.
+		if (!key || !allowedFacet(key) || wants.some(([k]) => k === key)) continue;
 		wants.push([key, roundN(Math.min(120, Math.max(1, parseInt(n ?? '60', 10) || 60)))]);
 	}
 	if (!wants.length) return new Response('{"error":"bad q"}', { status: 400, headers: HEADERS });
@@ -56,17 +57,22 @@ export const GET: APIRoute = async ({ request }) => {
 		// Bez snímku nic netvrdit — klient nechá statické karty.
 		return new Response(JSON.stringify({ age: null, fresh: false, failed: [], g: {} }), { headers: HEADERS });
 	}
+	// `x` jen pro modelku, která ve snímku je. Vymyšlené `x` by jinak minulo
+	// cache i memo a každý request by projel celý snímek (levné pálení CPU) —
+	// teď se spočítá jako dotaz bez výjimky a do cache se neukládá.
+	const ix = snapIndex(snap);
+	const excludeOk = exclude && ix.byKey.has(exclude) ? exclude : undefined;
 	const now = Date.now();
 	const failed = Object.keys(snap.nets).filter((n) => !isFresh(snap, n, now));
 	const g: Record<string, unknown> = {};
 	const total: Record<string, number> = {};
 	// Výběr bez filtru a bez výjimky je pro všechny stejný → počítá se jednou
 	// na snímek (D85), ne při každém requestu (prokládání řadí ~6k záznamů).
-	const memo = snapIndex(snap).picks as Map<string, ReturnType<typeof pick>>;
+	const memo = ix.picks as Map<string, ReturnType<typeof pick>>;
 	for (const [key, n] of wants) {
-		const plain = !sites.size && !exclude;
+		const plain = !sites.size && !excludeOk;
 		const mk = `${key}~${n}`;
-		const r = (plain && memo.get(mk)) || pick(snap.m, key, n, { sites, exclude });
+		const r = (plain && memo.get(mk)) || pick(snap.m, key, n, { sites, exclude: excludeOk });
 		if (plain && !memo.has(mk)) memo.set(mk, r);
 		g[key] = r.cards;
 		total[key] = r.total;
@@ -80,6 +86,6 @@ export const GET: APIRoute = async ({ request }) => {
 		g,
 	});
 	const out = new Response(body, { headers: HEADERS });
-	try { if (cache) await cache.put(cacheKey, out.clone()); } catch { /* bonus */ }
+	try { if (cache && excludeOk === exclude) await cache.put(cacheKey, out.clone()); } catch { /* bonus */ }
 	return out;
 };

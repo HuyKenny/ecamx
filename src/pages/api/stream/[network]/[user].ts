@@ -26,7 +26,7 @@
  */
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { readSnapshot, snapIndex, isFresh } from '../../../../lib/live-snapshot';
+import { readSnapshot, snapIndex } from '../../../../lib/live-snapshot';
 
 export const prerender = false;
 
@@ -134,7 +134,11 @@ export const GET: APIRoute = async ({ params, request }) => {
 	 */
 	const snap = await readSnapshot();
 	const rec = snap ? snapIndex(snap).byUser.get(`${net}:${user.toLowerCase()}`) : undefined;
-	if (snap && isFresh(snap, net) && !rec) {
+	// I u NEčerstvého snímku (výpadek feedu sítě) se upstream ptáme jen na
+	// nick, který v posledním snímku byl — jinak by vymyšlené nicky tloukly
+	// do API sítě na náš affiliate účet (audit 22. 11. 2026). Bez snímku
+	// vůbec zůstává dotaz jako záchrana.
+	if (snap && !rec) {
 		const off = json({ offline: true }, 200, TTL);
 		try { if (cache && cacheKey) await cache.put(cacheKey, off.clone()); } catch { /* bonus */ }
 		return off;

@@ -11,6 +11,11 @@ export const SECURITY_HEADERS: Record<string, string> = {
 	'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), interest-cohort=()',
 	'x-frame-options': 'DENY',
 	'strict-transport-security': 'max-age=31536000; includeSubDomains',
+	// Okno otevřené z cizí stránky na nás nesahá a naopak (audit 22. 11. 2026).
+	// Odchozí odkazy mají `noopener`, takže to nic nerozbije.
+	'cross-origin-opener-policy': 'same-origin',
+	// Štítek RTA i v hlavičce, nejen v <meta> — rodičovské filtry čtou obojí.
+	rating: 'RTA-5042-1996-1400-1577-RTA',
 };
 
 export function withSecurityHeaders(h: Headers, csp?: string): Headers {

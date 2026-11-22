@@ -42,7 +42,7 @@ const NETWORKS = new Set([
 
 export const GET: APIRoute = async ({ params, request }) => {
 	const id = params.network ?? '';
-	if (!NETWORKS.has(id)) return new Response('{"error":"unknown network"}', { status: 404 });
+	if (!NETWORKS.has(id)) return new Response('{"error":"unknown network"}', { status: 404, headers: HEADERS });
 	const wantCards = Math.min(40, Math.max(0, parseInt(
 		new URL(request.url).searchParams.get('cards') ?? '0', 10) || 0));
 

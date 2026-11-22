@@ -84,9 +84,8 @@ export default {
 		}
 		if (request.method !== "POST") return new Response("jen POST\n", { status: 405 });
 
-		// Porovnání konstantním časem — token je krátký a hádání by mělo být
-		// drahé. `timingSafeEqual` potřebuje stejnou délku, proto se délka
-		// kontroluje předem.
+		// Porovnání konstantním časem přes SHA-256 obou stran — hashe mají
+		// vždy stejnou délku, takže odpověď neprozradí ani délku tokenu.
 		const given = (request.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "");
 		if (!(await tokenMatches(given, env.MANUAL_TOKEN))) {
 			return new Response("ne\n", { status: 401 });
@@ -111,7 +110,7 @@ export default {
 
 /** Porovnání tokenu v konstantním čase. */
 async function tokenMatches(given: string, expected: string): Promise<boolean> {
-	if (!expected || given.length !== expected.length) return false;
+	if (!expected || !given) return false;
 	const enc = new TextEncoder();
 	const [a, b] = await Promise.all([
 		crypto.subtle.digest("SHA-256", enc.encode(given)),

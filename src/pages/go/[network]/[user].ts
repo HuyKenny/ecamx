@@ -154,7 +154,10 @@ export const GET: APIRoute = ({ params, url, request, locals }) => {
 		const country = (request.headers.get('cf-ipcountry') ?? '').toUpperCase();
 		const allowed = consent === 'granted'
 			|| (consent !== 'denied' && !CONSENT_REQUIRED.has(country));
-		const cid = cookie(cookies, 'ecamx_cid');
+		// Jen tvar, který vyrábí `ensureCid()` (UUID, nebo `čas.náhoda`) — jinak
+		// by kdokoli nastavením cookie plnil GA4 vymyšlenými uživateli.
+		const rawCid = cookie(cookies, 'ecamx_cid') ?? '';
+		const cid = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|\d{10,14}\.\d{1,10})$/i.test(rawCid) ? rawCid : '';
 		const secret = env('GA4_MP_API_SECRET');
 		if (allowed && cid && secret) {
 			const session = sessionId(cookies);
