@@ -153,15 +153,22 @@ export function countriesHubSeo(countries: number, models: number): PageSeo {
 }
 
 /**
- * Rozcestník sítí. Cílí sekundárně na „best cam sites" (1 733/měs, KD 43) —
- * je to bonus, ne důvod, proč stránka vzniká: hlavní důvod je, že na
- * `/site/{síť}/` odkazuje 16 830 stránek a rodič **neexistoval**.
+ * Rozcestník sítí = „best cam sites". D93 (22. 11. 2026, Ahrefs US): „cam sites"
+ * 4 200/měs (KD 7), „best cam sites" 1 700 (KD 7), „best webcam sites" 400
+ * (KD 4). Pořadí na stránce je jen podle změřeného počtu živých modelek —
+ * žádné vymyšlené hodnocení (D26).
  */
-export function siteHubSeo(networks: number, models: number): PageSeo {
+export function siteHubSeo(networks: number, models: number, year: number): PageSeo {
 	return {
-		title: `Cam Sites Compared – ${networks} Networks, ${approx(models)} Models Live | ${SITE_NAME}`,
-		description: `We track ${networks} cam sites and count what is actually live on each. ` +
-			`How many models, who they are, and what each site does and does not tell you.`,
+		title: fitTitle(
+			`Best Cam Sites (${year}) – ${networks} Live Cam Sites Compared | ${SITE_NAME}`,
+			`Best Cam Sites (${year}) – ${networks} Sites Compared | ${SITE_NAME}`,
+		),
+		description: fitDescription(
+			`The best cam sites ranked by who is live right now: ${approx(models)} models across ${networks} sites, counted by us.`,
+			[' Free to watch.'],
+			' What each site shows and hides.',
+		),
 	};
 }
 

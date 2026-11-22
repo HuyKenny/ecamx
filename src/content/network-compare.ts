@@ -27,7 +27,15 @@ export interface NetworkCompare {
  * je poptávka změřená — u ostatních se nejdřív měří, pak se přidává URL.
  * Čte to `getStaticPaths()`, odkaz na recenzi i sitemapa, ať to nemá tři pravdy.
  */
-export const ALTERNATIVES_FOR: NetworkId[] = ['chaturbate'];
+export const ALTERNATIVES_FOR: NetworkId[] = ['chaturbate', 'stripchat', 'camsoda', 'cam4'];
+/**
+ * D93 (22. 11. 2026, Ahrefs US): „sites like stripchat" 300 (KD 2) +
+ * „stripchat alternatives" 150 (TP 1 100), „sites like camsoda" 150 (KD 0),
+ * „sites like cam4" 60 (KD 1). Pro tyhle sítě se rozdíl NEPÍŠE ručně
+ * (`COMPARE_WITH_CHATURBATE` je jen proti Chaturbate) — skládá se z měřených
+ * čísel dvojice (`pairFacts()` v `alternatives.astro`) + `bestFor`
+ * z `networks.ts`, který popisuje síť samu, ne vztah.
+ */
 
 /** Klíčem je síť, se kterou se Chaturbate porovnává. */
 export const COMPARE_WITH_CHATURBATE: Partial<Record<NetworkId, NetworkCompare>> = {
@@ -43,14 +51,14 @@ export const COMPARE_WITH_CHATURBATE: Partial<Record<NetworkId, NetworkCompare>>
 		insteadWhen: 'You want Eastern European performers, or you care about filtering by ethnicity, hair and body type.',
 		body: [
 			'BongaCams is where the catalogue tilts hardest towards Eastern Europe — Russia, Ukraine, Latvia and their neighbours dominate its roster in a way they do not on Chaturbate, which skews Latin American. If that is what you are looking for, you are choosing between a big site with a smaller share and a smaller site with a much larger share.',
-			'It is also one of only two networks we track that publishes structured appearance data (ethnicity and hair colour) alongside every model. Chaturbate publishes none of it — its rooms are described by free-text tags the performer writes herself. That is invisible on the sites themselves, but it is exactly why some filters on eCamx cover BongaCams and LiveJasmin and skip the rest.',
+			'It is also one of the few networks we track that publishes structured appearance data (ethnicity and hair colour) alongside every model. Chaturbate publishes none of it — its rooms are described by free-text tags the performer writes herself. That is invisible on the sites themselves, but it is exactly why some appearance filters on eCamx lean on BongaCams.',
 			'Interactive toys are the other visible difference: BongaCams flags them in its feed on the majority of rooms. Chaturbate rooms use them at least as much, but you have to read the tags to find out.',
 		],
 	},
 	cam4: {
 		insteadWhen: 'You are looking for men, couples or trans performers rather than solo women.',
 		body: [
-			'Every cam site is majority women, but the majorities differ enormously, and Cam4 has the most mixed roster of the seven we track. If you open Chaturbate looking for male or couple broadcasters you are filtering a small slice of a very large site; on Cam4 you are browsing a much larger share of a smaller one.',
+			'Every cam site is majority women, but the majorities differ enormously, and Cam4 has one of the most mixed rosters we track. If you open Chaturbate looking for male or couple broadcasters you are filtering a small slice of a very large site; on Cam4 you are browsing a much larger share of a smaller one.',
 			'The viewing model is the same freemium one, so nothing you learned on Chaturbate stops applying. Room sizes are smaller across the board, which cuts both ways — less spectacle, more chance of being talked to.',
 		],
 	},
@@ -65,15 +73,15 @@ export const COMPARE_WITH_CHATURBATE: Partial<Record<NetworkId, NetworkCompare>>
 	xlovecam: {
 		insteadWhen: 'You want European performers, especially French-speaking ones.',
 		body: [
-			'XLoveCam is the most European roster of the seven, with a French and Southern European core that barely registers on Chaturbate. It is a small site by comparison, so treat it as a specific place to look rather than a replacement.',
+			'XLoveCam is the most European roster we track, with a French and Southern European core that barely registers on Chaturbate. It is a small site by comparison, so treat it as a specific place to look rather than a replacement.',
 			'Be aware of one thing before you compare numbers anywhere: XLoveCam does not publish viewer counts at all. Any "most popular" list that ranks it against Chaturbate is either guessing or quietly leaving it out. We say "not published" instead of writing a zero.',
 		],
 	},
 	amateur: {
 		insteadWhen: 'You want Spanish-language rooms and a genuinely amateur, small-room feel.',
 		body: [
-			'Amateur.tv is the smallest network we track and the most Spanish-language one. It is not a Chaturbate replacement by size — it is a different neighbourhood, with rooms that stay small enough that chat is a conversation rather than a scroll.',
-			'Technically it is also the odd one out: it has no embeddable player of the kind the other six provide, which is why its models appear here with a link out rather than an inline stream.',
+			'Amateur.tv is one of the smallest networks we track and the most Spanish-language one. It is not a Chaturbate replacement by size — it is a different neighbourhood, with rooms that stay small enough that chat is a conversation rather than a scroll.',
+			'Technically it is also the odd one out: it has no embeddable player of the kind the other sites provide, which is why its models appear here with a link out rather than an inline stream.',
 		],
 	},
 };

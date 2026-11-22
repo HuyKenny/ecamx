@@ -1,0 +1,124 @@
+---
+/**
+ * „Top {síť} models" (D93, 22. 11. 2026): „top chaturbate models" 450/měs
+ * (KD 4, TP 1 200), „most popular chaturbate models" 30 — Ahrefs US.
+ *
+ * **Pořadí = nejvyšší počet diváků, který jsme u modelky sami naměřili**
+ * (`peak` z registry, sbíráno při každém syncu). Žádné „naše oblíbené",
+ * žádný placený výběr (D26). Sledující (`followers`) jsou číslo ze sítě
+ * a ukazují se jen jako doplněk. Stránka existuje jen pro sítě z
+ * `TOP_MODELS_FOR` (měřená poptávka) a jen když síť diváky hlásí — jinak by
+ * `peak` byl všude nula a pořadí nesmysl.
+ */
+import Layout from '../../../layouts/Layout.astro';
+import Breadcrumbs from '../../../components/Breadcrumbs.astro';
+import { META, NETWORK_LABELS, usualHours, type Model, type NetworkId } from '../../../lib/data';
+import { topModels, topModelsNetworks } from '../../../lib/network-stats';
+import { SITE_NAME, SITE_URL, fmt } from '../../../lib/seo';
+import { safeJsonLd } from '../../../lib/jsonld';
+
+export function getStaticPaths() {
+	return topModelsNetworks().map((id) => ({ params: { network: id }, props: { network: id } }));
+}
+
+const { network } = Astro.props as { network: NetworkId };
+const label = NETWORK_LABELS[network];
+const top = topModels(network);
+const built = new Date(META.generatedAt);
+const month = built.toLocaleDateString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+const liveNow = top.filter((m) => m.online).length;
+const withFollowers = top.some((m) => (m.followers ?? 0) > 0);
+const shortDate = (iso: string) => new Date(iso + 'T00:00:00Z')
+	.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const hours = (m: Model) => {
+	const h = usualHours(m);
+	return h ? `${String(h.from).padStart(2, '0')}–${String(h.to).padStart(2, '0')} UTC` : '—';
+};
+
+const title = `Top ${label} Models, ${month} – Most Watched | ${SITE_NAME}`;
+const description = `The ${top.length} most-watched ${label} models by the biggest audience we measured ourselves. ` +
+	`${liveNow} of them live at our last check. Updated daily, no paid placements.`;
+
+const jsonLd = {
+	'@context': 'https://schema.org',
+	'@type': 'ItemList',
+	name: `Top ${label} models`,
+	description,
+	url: `${SITE_URL}/site/${network}/top/`,
+	numberOfItems: top.length,
+	itemListElement: top.map((m, i) => ({
+		'@type': 'ListItem',
+		position: i + 1,
+		name: m.displayName,
+		url: `${SITE_URL}/live/${m.page}/`,
+	})),
+};
+---
+<Layout title={title} description={description}>
+	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
+	<Breadcrumbs items={[
+		{ label: 'Cam sites', href: '/site/' },
+		{ label, href: `/site/${network}/` },
+		{ label: 'Top models' },
+	]} />
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Top {label} models, {month}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		Most "top {label} models" lists are someone's favourites. This one is a measurement: we check
+		{' '}{label} every five minutes and keep the biggest audience we have ever seen in each room.
+		The {top.length} models below had the largest rooms we recorded —
+		{' '}<strong class="text-white">{liveNow} of them were live</strong> at our last rebuild.
+	</p>
+
+	<div class="mt-6 overflow-x-auto">
+		<table class="w-full min-w-[40rem] border-collapse text-sm">
+			<thead>
+				<tr class="border-b border-ink-800 text-left text-ink-400">
+					<th class="py-2 pr-3 font-medium">#</th>
+					<th class="py-2 pr-4 font-medium">Model</th>
+					<th class="py-2 pr-4 font-medium">Biggest audience we saw</th>
+					{withFollowers && <th class="py-2 pr-4 font-medium">Followers</th>}
+					<th class="py-2 pr-4 font-medium">Days seen live</th>
+					<th class="py-2 font-medium">Usually on</th>
+				</tr>
+			</thead>
+			<tbody>
+				{top.map((m, i) => (
+					<tr class="border-b border-ink-800/60 align-top">
+						<td class="py-2.5 pr-3 tabular-nums text-ink-400">{i + 1}</td>
+						<td class="py-2.5 pr-4">
+							<a href={`/live/${m.page}/`} class="font-medium text-white underline">{m.displayName}</a>
+							{m.online
+								? <span class="live-pill ml-2">Live</span>
+								: <span class="ml-2 text-xs text-ink-500">last seen {shortDate(m.last)}</span>}
+						</td>
+						<td class="py-2.5 pr-4 tabular-nums">{fmt(m.peak)} watching</td>
+						{withFollowers && <td class="py-2.5 pr-4 tabular-nums text-ink-300">{m.followers ? fmt(m.followers) : '—'}</td>}
+						<td class="py-2.5 pr-4 tabular-nums text-ink-300">{fmt(m.seen)}</td>
+						<td class="py-2.5 text-ink-300 tabular-nums">{hours(m)}</td>
+					</tr>
+				))}
+			</tbody>
+		</table>
+	</div>
+
+	<section class="mt-8 max-w-3xl text-sm leading-relaxed text-ink-300">
+		<h2 class="mb-2 text-lg font-bold text-white">How this list is made</h2>
+		<p class="mb-2">
+			"Biggest audience" is the highest viewer count {label} reported for that room at any of our
+			checks since we started tracking it. It rewards big moments, so a model with one huge show can
+			sit above someone who is steadily busy — the "days seen live" column shows which is which.
+			"Usually on" is the two-hour window where we caught her live most often, in UTC, and only
+			appears after at least a week of observations.
+		</p>
+		<p>
+			Followers are {label}'s own number. Nobody pays to be on this list, and our links to {label}
+			{' '}are affiliate links (<a href="/about/methodology/" class="underline">how we measure</a>).
+			Rebuilt once a day — last {built.toISOString().slice(0, 16).replace('T', ' ')} UTC.
+		</p>
+	</section>
+
+	<p class="mt-8 text-sm">
+		<a href={`/site/${network}/`} class="text-accent underline">Everyone live on {label} right now →</a>
+	</p>
+</Layout>

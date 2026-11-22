@@ -22,7 +22,9 @@ import { goLink } from '../../lib/affiliate';
 import { safeJsonLd } from '../../lib/jsonld';
 import { networkSeo, SITE_URL, approx } from '../../lib/seo';
 import { NETWORK_REVIEWS } from '../../content/networks';
-import { ALTERNATIVES_FOR } from '../../content/network-compare';
+import { alternativesNetworks, topModelsNetworks } from '../../lib/network-stats';
+const ALTERNATIVES_FOR = alternativesNetworks();
+const TOP_FOR = topModelsNetworks();
 import { TOKEN_RATES } from '../../content/token-rates';
 
 export function getStaticPaths() {
@@ -185,8 +187,13 @@ const jsonLd = {
 		</div>
 		{/* Odkazy vznikají jen tam, kde ta stránka opravdu existuje — jinak by
 		    `check-links.ts` spadl, a spadl by právem. */}
-		{(ALTERNATIVES_FOR.includes(facet.slug as NetworkId) || TOKEN_RATES[facet.slug as NetworkId]) && (
+		{(ALTERNATIVES_FOR.includes(facet.slug as NetworkId) || TOKEN_RATES[facet.slug as NetworkId] || TOP_FOR.includes(facet.slug as NetworkId)) && (
 			<p class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+				{TOP_FOR.includes(facet.slug as NetworkId) && (
+					<a href={`/site/${facet.slug}/top/`} class="text-accent underline">
+						Top {label} models — ranked by measured audience →
+					</a>
+				)}
 				{ALTERNATIVES_FOR.includes(facet.slug as NetworkId) && (
 					<a href={`/site/${facet.slug}/alternatives/`} class="text-accent underline">
 						Sites like {label} — compared with live numbers →

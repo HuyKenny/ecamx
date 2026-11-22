@@ -33,6 +33,8 @@
  */
 import { MODEL_PAGES, MODELS, type Model, type NetworkId } from './data.ts';
 import { crossNetworkNicks } from './cross-network.ts';
+import { ALTERNATIVES_FOR } from '../content/network-compare.ts';
+import { TOP_MODELS_FOR } from '../content/network-facets.ts';
 
 /** Pod tímhle podílem vyplněnosti se pole považuje za „síť to nehlásí". */
 const REPORTED_MIN = 0.5;
@@ -107,4 +109,37 @@ export function networkStats(): NetworkStats[] {
 	}
 	out.sort((a, b) => b.online - a.online);
 	return out;
+}
+
+/**
+ * Sítě, pro které `/site/{síť}/alternatives/` opravdu existuje: z
+ * `ALTERNATIVES_FOR` jen ty, které mají v buildu data (D93). Stránka,
+ * sitemapa i odkazy čtou TUTO funkci, ať odkaz nikdy nevede na 404.
+ */
+let altCache: NetworkId[] | null = null;
+export function alternativesNetworks(): NetworkId[] {
+	if (altCache) return altCache;
+	const have = new Set(networkStats().map((s) => s.id));
+	altCache = ALTERNATIVES_FOR.filter((id) => have.has(id));
+	return altCache;
+}
+
+/** `/site/{síť}/top/` (D93): nejvyšší naměřený peak diváků, jen indexovatelné stránky. */
+export const TOP_LIMIT = 50;
+const TOP_MIN_RANKED = 20;
+const topCache = new Map<NetworkId, Model[]>();
+export function topModels(net: NetworkId): Model[] {
+	let out = topCache.get(net);
+	if (!out) {
+		out = MODEL_PAGES
+			.filter((m) => m.network === net && m.indexable && m.peak > 0)
+			.sort((a, b) => (b.peak - a.peak) || ((b.followers ?? 0) - (a.followers ?? 0)) || a.page.localeCompare(b.page))
+			.slice(0, TOP_LIMIT);
+		topCache.set(net, out);
+	}
+	return out;
+}
+/** Sítě, kde stránka top modelek opravdu vznikne — čte ji stránka, sitemapa i odkazy. */
+export function topModelsNetworks(): NetworkId[] {
+	return (TOP_MODELS_FOR as readonly NetworkId[]).filter((id) => topModels(id).length >= TOP_MIN_RANKED);
 }

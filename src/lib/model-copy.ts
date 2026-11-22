@@ -168,7 +168,7 @@ export function historyParagraphs(m: Model): string[] {
 		out.push(
 			`${m.displayName} is new to our listings — ${p.subj} first showed up on ` +
 			`${longDate(m.first)}, so there is no viewing history to report yet. ` +
-			`This page updates every two hours as ${p.subj} ${v(p, 'stream', 'streams')} again.`
+			`This page is rebuilt once a day as ${p.subj} ${v(p, 'stream', 'streams')} again.`
 		);
 		return out;
 	}
@@ -359,7 +359,7 @@ export function faqItems(
 			+ (m.online
 				? `At our last sweep on ${longDate(m.last)} ${p.subj} ${v(p, 'were', 'was')} broadcasting.`
 				: `${cap(p.subj)} ${v(p, 'were', 'was')} last seen live on ${longDate(m.last)}.`)
-			+ ' We re-check every two hours.',
+			+ ' Our history log is updated once a day.',
 	});
 
 	out.push({

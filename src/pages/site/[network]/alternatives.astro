@@ -1,59 +1,120 @@
 ---
 /**
- * „Sites like {síť}" — nejlepší poměr objemu a obtížnosti na celém webu:
- * „sites like chaturbate" 748/měs + „websites like chaturbate" 340 při **KD 21**,
- * plus „chaturbate alternatives" 321 při KD 0 (Ahrefs US, 19. 8. 2026).
+ * „Sites like {síť}" — „sites like chaturbate" 748/měs + „websites like
+ * chaturbate" 340 při KD 21, „chaturbate alternatives" 321 při KD 0
+ * (Ahrefs US, 19. 8. 2026); od D93 (22. 11.) i Stripchat, CamSoda a Cam4
+ * (viz `ALTERNATIVES_FOR`).
  *
- * **Existuje jen pro sítě, kde je poptávka změřená a text napsaný ručně** —
- * dnes tedy jediná URL. Sedm variant vygenerovaných z jedné šablony by byla
- * sedmkrát tatáž stránka, což je přesně ta duplicita, kterou tenhle web
- * v jiných sekcích hlídá.
+ * **Text rozdílu:** u Chaturbate ručně psaný (`COMPARE_WITH_CHATURBATE`).
+ * U ostatních se rozdíl skládá z čísel, která měříme stejně u všech sítí
+ * (`pairFacts()`): velikost, mix pohlaví, medián diváků, co síť zveřejňuje.
+ * Nic se nevymýšlí (D26) — kde síť pole neposílá, napíše se to slovy.
+ * Ručně psaný je jen `bestFor` z `networks.ts`, který popisuje síť samu.
  *
- * Čím se to liší od stovky affiliate blogů se stejným titulkem: **čísla jsou
- * naše a živá.** Kdo píše „Site X has thousands of models", opisuje tiskovku;
- * my počítáme, co je online právě teď, a když síť něco nezveřejňuje, napíšeme
- * to místo abychom tam dali nulu.
+ * Čím se to liší od affiliate blogů se stejným titulkem: **čísla jsou naše
+ * a živá.** Když síť něco nezveřejňuje, napíšeme to místo nuly.
  */
 import Layout from '../../../layouts/Layout.astro';
 import Breadcrumbs from '../../../components/Breadcrumbs.astro';
-import { FACETS, NETWORK_LABELS, MODELS, type NetworkId } from '../../../lib/data';
+import { META, NETWORK_LABELS, type NetworkId } from '../../../lib/data';
 import { NETWORK_REVIEWS } from '../../../content/networks';
-import { ALTERNATIVES_FOR, COMPARE_WITH_CHATURBATE } from '../../../content/network-compare';
-import { networkStats } from '../../../lib/network-stats';
-import { alternativesSeo, SITE_URL, fmt, approx } from '../../../lib/seo';
+import { COMPARE_WITH_CHATURBATE } from '../../../content/network-compare';
+import { networkStats, alternativesNetworks, type NetworkStats } from '../../../lib/network-stats';
+import { alternativesSeo, fmt } from '../../../lib/seo';
 import { safeJsonLd } from '../../../lib/jsonld';
 
 export function getStaticPaths() {
-	// Gated: jen sítě z `ALTERNATIVES_FOR` (dnes jediná). Sedm variant jedné
-	// šablony by byla sedmkrát tatáž stránka.
-	return ALTERNATIVES_FOR.map((id) => ({ params: { network: id }, props: { network: id } }));
+	return alternativesNetworks().map((id) => ({ params: { network: id }, props: { network: id } }));
 }
 
-const { network } = Astro.props;
+const { network } = Astro.props as { network: NetworkId };
 const label = NETWORK_LABELS[network];
-const stats = networkStats();
-const self = stats.find((s) => s.id === network)!;
+/** „Live now" = celá síť ze snímku (META), ne jen pravidelné modelky (D93). */
+const liveNow = new Map(META.networks.map((n) => [n.id, n.count]));
+type Row = NetworkStats & { live: number };
+const stats: Row[] = networkStats()
+	.map((s) => ({ ...s, live: liveNow.get(s.id) ?? s.online }))
+	.sort((a, b) => b.live - a.live);
+const self = stats.find((s) => s.id === network);
+if (!self) throw new Error(`alternatives: ${network} nemá data`);
 // Řadí se podle toho, kolik je jich živých — ne podle výše provize.
-const others = stats.filter((s) => s.id !== network && COMPARE_WITH_CHATURBATE[s.id]);
-const seo = alternativesSeo(label, others.length, MODELS.length);
+const others = stats.filter((s) => s.id !== network
+	&& (network !== 'chaturbate' || COMPARE_WITH_CHATURBATE[s.id]));
+const seo = alternativesSeo(label, others.length, META.modelCount);
 
+const pct = (n: number, of: number) => (of ? Math.round(n / of * 100) : 0);
+const notWomen = (s: Row) => pct(s.online - s.genders.female, s.online);
+const REPORT_NAMES: Record<keyof Row['reports'], string> = {
+	age: 'age', country: 'country', hd: 'an HD flag', toy: 'interactive toys', looks: 'ethnicity and hair',
+};
+const list = (xs: string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
+
+/** Rozdíl dvojice jen z měřených čísel. Každá věta platí jen pro tuhle dvojici. */
+function pairFacts(alt: Row, base: Row): string[] {
+	const altL = NETWORK_LABELS[alt.id], baseL = NETWORK_LABELS[base.id];
+	const out: string[] = [];
+	const ratio = base.live ? alt.live / base.live : 0;
+	out.push(ratio >= 1.15
+		? `${altL} is the bigger site right now: we count ${fmt(alt.live)} models live there against ${fmt(base.live)} on ${baseL}, so if you are hunting for something specific, the odds are better.`
+		: ratio <= 0.87
+			? `${altL} is the smaller site: ${fmt(alt.live)} models live at our last count against ${fmt(base.live)} on ${baseL}. Smaller means fewer choices at any given hour, not a worse room.`
+			: `By size the two are close — ${fmt(alt.live)} models live on ${altL} against ${fmt(base.live)} on ${baseL} at our last count.`);
+	const a = notWomen(alt), b = notWomen(base);
+	if (Math.abs(a - b) >= 5) {
+		out.push(a > b
+			? `The roster is more mixed: ${a}% of ${altL}'s regular rooms are men, couples or trans performers, against ${b}% on ${baseL}. If that is what you are after, you are browsing a bigger share of the site.`
+			: `It leans harder towards solo women: ${100 - a}% of its regular rooms, against ${100 - b}% on ${baseL}.`);
+	}
+	if (alt.medianViewers != null && base.medianViewers != null) {
+		if (alt.medianViewers !== base.medianViewers) {
+			out.push(alt.medianViewers < base.medianViewers
+				? `Rooms are quieter: the median regular room has ${fmt(alt.medianViewers)} watching against ${fmt(base.medianViewers)} on ${baseL}, so chat moves slower and you are more likely to be noticed.`
+				: `Rooms are busier: the median regular room has ${fmt(alt.medianViewers)} watching against ${fmt(base.medianViewers)} on ${baseL}.`);
+		}
+	} else if (alt.medianViewers == null && base.medianViewers != null) {
+		out.push(`${altL} does not publish viewer counts, so any list that ranks its rooms by popularity against ${baseL} is guessing.`);
+	} else if (alt.medianViewers != null && base.medianViewers == null) {
+		out.push(`Unlike ${baseL}, ${altL} publishes viewer counts — the median regular room has ${fmt(alt.medianViewers)} watching.`);
+	}
+	const keys = Object.keys(REPORT_NAMES) as Array<keyof Row['reports']>;
+	const gains = keys.filter((k) => alt.reports[k] && !base.reports[k]).map((k) => REPORT_NAMES[k]);
+	const losses = keys.filter((k) => !alt.reports[k] && base.reports[k]).map((k) => REPORT_NAMES[k]);
+	if (gains.length || losses.length) {
+		out.push([
+			gains.length ? `${altL} tells you ${list(gains)} for its models, which ${baseL} does not` : '',
+			losses.length ? `${gains.length ? '; on the other hand it' : `${altL}`} does not publish ${list(losses)}, which ${baseL} does` : '',
+		].filter(Boolean).join('') + ' — it decides how far you can filter before you click.');
+	}
+	if (alt.alsoElsewhere > 0) {
+		out.push(`${fmt(alt.alsoElsewhere)} of its regulars (${pct(alt.alsoElsewhere, alt.online)}%) also broadcast on another site under the same nickname — a name match, not a verified identity.`);
+	}
+	return out;
+}
+
+const sections = others.map((s) => ({
+	s,
+	insteadWhen: network === 'chaturbate' ? COMPARE_WITH_CHATURBATE[s.id]!.insteadWhen : NETWORK_REVIEWS[s.id].bestFor,
+	body: network === 'chaturbate' ? COMPARE_WITH_CHATURBATE[s.id]!.body : pairFacts(s, self),
+}));
+
+const biggestOther = others[0];
 const faq = [
 	{
-		q: `What is the closest alternative to ${label}?`,
-		a: `${NETWORK_LABELS.camsoda} runs the same free-to-watch, tip-funded format, so nothing about ` +
-			`how you watch changes — it is simply smaller. We currently see ${fmt(stats.find((s) => s.id === 'camsoda')?.online ?? 0)} ` +
-			`models live there against ${fmt(self.online)} on ${label}.`,
+		q: `What is the biggest alternative to ${label}?`,
+		a: biggestOther
+			? `${NETWORK_LABELS[biggestOther.id]}, by the number of models live: we count ${fmt(biggestOther.live)} there against ${fmt(self.live)} on ${label} at our last rebuild.`
+			: `None of the sites we track is comparable in size.`,
 	},
 	{
 		q: `Is any cam site bigger than ${label}?`,
-		a: `Not among the ${stats.length} we track. ${label} has more models online than the other ` +
-			`${stats.length - 1} networks combined — we count ${fmt(self.online)} of ${fmt(MODELS.length)} live right now.`,
+		a: stats[0].id === network
+			? `Not among the ${stats.length} we track. ${label} has the most models online — ${fmt(self.live)} of ${fmt(META.modelCount)} live across all of them at our last count.`
+			: `Yes. ${stats.filter((s) => s.live > self.live).map((s) => NETWORK_LABELS[s.id]).join(', ')} ${stats.filter((s) => s.live > self.live).length > 1 ? 'have' : 'has'} more models live than ${label} (${fmt(self.live)}) at our last count.`,
 	},
 	{
 		q: `Do the same models appear on more than one cam site?`,
-		a: `Often. We match nicknames across all ${stats.length} networks and currently find ` +
-			`${fmt(self.alsoElsewhere)} ${label} models broadcasting under the same name somewhere else. ` +
-			`A shared nickname is not proof of a shared person, so we say where the profiles agree and where they do not.`,
+		a: `Often. We match nicknames across all ${stats.length} networks and find ${fmt(self.alsoElsewhere)} of ${label}'s regulars ` +
+			`broadcasting under the same name somewhere else. A shared nickname is not proof of a shared person.`,
 	},
 ];
 
@@ -78,8 +139,8 @@ const jsonLd = {
 	<h1 class="text-2xl font-extrabold sm:text-3xl">{others.length} sites like {label}</h1>
 	<p class="mt-2 max-w-3xl text-ink-400">
 		Every list like this one tells you a site is "great" without saying how big it is
-		or who broadcasts there. We track all {stats.length} of these networks every two
-		hours, so the numbers below are counted, not quoted — and where a site keeps
+		or who broadcasts there. We check all {stats.length} of these networks every five
+		minutes, so the numbers below are counted, not quoted — and where a site keeps
 		something to itself, we say so instead of printing a zero.
 	</p>
 
@@ -96,22 +157,18 @@ const jsonLd = {
 			<tbody>
 				<tr class="border-b border-ink-800/60 bg-ink-900/40 align-top">
 					<td class="py-3 pr-4 font-medium text-white">{label} <span class="text-xs text-ink-500">(the one you know)</span></td>
-					<td class="py-3 pr-4 tabular-nums">{fmt(self.online)}</td>
-					<td class="py-3 pr-4 tabular-nums">
-						{Math.round((self.online - self.genders.female) / self.online * 100)}%
-					</td>
+					<td class="py-3 pr-4 tabular-nums">{fmt(self.live)}</td>
+					<td class="py-3 pr-4 tabular-nums">{notWomen(self)}%</td>
 					<td class="py-3 text-ink-300">{NETWORK_REVIEWS[network].bestFor}</td>
 				</tr>
-				{others.map((s) => (
+				{sections.map(({ s, insteadWhen }) => (
 					<tr class="border-b border-ink-800/60 align-top">
 						<td class="py-3 pr-4">
 							<a href={`/site/${s.id}/`} class="font-medium text-white underline">{NETWORK_LABELS[s.id]}</a>
 						</td>
-						<td class="py-3 pr-4 tabular-nums">{fmt(s.online)}</td>
-						<td class="py-3 pr-4 tabular-nums">
-							{Math.round((s.online - s.genders.female) / s.online * 100)}%
-						</td>
-						<td class="py-3 text-ink-300">{COMPARE_WITH_CHATURBATE[s.id]!.insteadWhen}</td>
+						<td class="py-3 pr-4 tabular-nums">{fmt(s.live)}</td>
+						<td class="py-3 pr-4 tabular-nums">{notWomen(s)}%</td>
+						<td class="py-3 text-ink-300">{insteadWhen}</td>
 					</tr>
 				))}
 			</tbody>
@@ -119,24 +176,24 @@ const jsonLd = {
 	</div>
 
 	<p class="mt-3 text-xs text-ink-500">
-		Counted from our own sync of all {stats.length} networks, refreshed every two hours.
-		"Not women" is the share of live rooms listed as men, couples or trans performers —
-		it is the single number that most changes which site you should open.
+		"Live now" is every model online on that site at our last rebuild, which runs once a day.
+		"Not women" is the share of regular rooms (models we have seen on ten or more days) listed
+		as men, couples or trans performers — the single number that most changes which site you
+		should open (<a href="/about/methodology/" class="underline">how we measure</a>).
 	</p>
 
-	{others.map((s) => (
+	{sections.map(({ s, body }) => (
 		<section class="mt-10 max-w-3xl" aria-labelledby={`alt-${s.id}`}>
 			<h2 id={`alt-${s.id}`} class="mb-1 text-xl font-bold">
 				{NETWORK_LABELS[s.id]} instead of {label}
 			</h2>
 			<p class="mb-3 text-sm text-ink-500">
-				{fmt(s.online)} live now
+				{fmt(s.live)} live now
 				{s.medianViewers != null
-					? ` · median room has ${fmt(s.medianViewers)} watching`
+					? ` · median regular room has ${fmt(s.medianViewers)} watching`
 					: ' · viewer counts not published'}
-				{' '}· {fmt(s.alsoElsewhere)} of them also broadcast elsewhere under the same name
 			</p>
-			{COMPARE_WITH_CHATURBATE[s.id]!.body.map((para) => (
+			{body.map((para) => (
 				<p class="mb-3 text-sm leading-relaxed text-ink-200">{para}</p>
 			))}
 			<p class="text-sm">
@@ -160,6 +217,6 @@ const jsonLd = {
 	</section>
 
 	<p class="mt-10 text-sm">
-		<a href="/site/" class="text-accent underline">All {stats.length} sites compared side by side →</a>
+		<a href="/site/" class="text-accent underline">All {stats.length} cam sites compared side by side →</a>
 	</p>
 </Layout>

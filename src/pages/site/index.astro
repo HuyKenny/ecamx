@@ -26,9 +26,19 @@ import { networkStats } from '../../lib/network-stats';
 import { siteHubSeo, SITE_URL, fmt, approx } from '../../lib/seo';
 import { safeJsonLd } from '../../lib/jsonld';
 
-const stats = networkStats();
-const totalLive = MODELS.length;
-const seo = siteHubSeo(stats.length, totalLive);
+/**
+ * D93: „Live now" je celá síť ze živého snímku (`META.networks`), ne jen
+ * statické stránky v `MODELS` — ty jsou výběr pravidelných modelek (D88)
+ * a dřív tu stálo „2 200 modelek" vedle 13 800 na úvodní stránce.
+ * Mix pohlaví a medián diváků se dál měří na `MODELS` = pravidelné modelky.
+ */
+const onlineNow = new Map(META.networks.map((n) => [n.id, n.count]));
+const stats = networkStats()
+	.map((s) => ({ ...s, live: onlineNow.get(s.id) ?? s.online }))
+	.sort((a, b) => b.live - a.live);
+const totalLive = META.modelCount;
+const year = new Date(META.generatedAt).getUTCFullYear();
+const seo = siteHubSeo(stats.length, totalLive, year);
 
 /** „nehlásí" se musí dát napsat slovem, ne nulou. */
 const reportLabels: Array<[keyof typeof stats[0]['reports'], string]> = [
@@ -39,7 +49,7 @@ const reportLabels: Array<[keyof typeof stats[0]['reports'], string]> = [
 const jsonLd = {
 	'@context': 'https://schema.org',
 	'@type': 'CollectionPage',
-	name: 'Cam sites we track',
+	name: `Best cam sites (${year})`,
 	description: seo.description,
 	url: `${SITE_URL}/site/`,
 	mainEntity: {
@@ -58,18 +68,21 @@ const jsonLd = {
 	<script type="application/ld+json" is:inline set:html={safeJsonLd(jsonLd)} slot="head" />
 	<Breadcrumbs items={[{ label: 'Cam sites' }]} />
 
-	<h1 class="text-2xl font-extrabold sm:text-3xl">The cam sites we track</h1>
+	<h1 class="text-2xl font-extrabold sm:text-3xl">Best cam sites, ranked by who is live right now</h1>
 	<p class="mt-2 max-w-3xl text-ink-400">
-		eCamx pulls {stats.length} cam networks into one catalogue every two hours, so
-		instead of guessing which site is busiest, we can count it. Right now
-		{' '}<strong class="text-white">{fmt(totalLive)} models</strong> are live across all
-		of them.
+		eCamx checks {stats.length} cam sites every five minutes, so instead of guessing which
+		site is busiest, we count it. At the last rebuild
+		{' '}<strong class="text-white">{fmt(totalLive)} models</strong> were live across all
+		of them. The order below is that count and nothing else — no site pays for its place.
+		Links to the sites are affiliate links
+		(<a href="/about/methodology/" class="underline">how we measure</a>).
 	</p>
 
 	<div class="mt-6 overflow-x-auto">
 		<table class="w-full min-w-[46rem] border-collapse text-sm">
 			<thead>
 				<tr class="border-b border-ink-800 text-left text-ink-400">
+					<th class="py-2 pr-3 font-medium">#</th>
 					<th class="py-2 pr-4 font-medium">Site</th>
 					<th class="py-2 pr-4 font-medium">Live now</th>
 					<th class="py-2 pr-4 font-medium">Women / men / trans / couples</th>
@@ -78,8 +91,9 @@ const jsonLd = {
 				</tr>
 			</thead>
 			<tbody>
-				{stats.map((s) => (
+				{stats.map((s, i) => (
 					<tr class="border-b border-ink-800/60 align-top">
+						<td class="py-3 pr-3 tabular-nums text-ink-400">{i + 1}</td>
 						<td class="py-3 pr-4">
 							<a href={`/site/${s.id}/`} class="font-medium text-white underline">
 								{NETWORK_LABELS[s.id]}
@@ -88,7 +102,7 @@ const jsonLd = {
 								{NETWORK_REVIEWS[s.id].tagline}
 							</div>
 						</td>
-						<td class="py-3 pr-4 tabular-nums">{fmt(s.online)}</td>
+						<td class="py-3 pr-4 tabular-nums">{fmt(s.live)}</td>
 						<td class="py-3 pr-4 text-ink-300 tabular-nums">
 							{Math.round(s.genders.female / s.online * 100)}% /
 							{' '}{Math.round(s.genders.male / s.online * 100)}% /
@@ -111,8 +125,11 @@ const jsonLd = {
 	</div>
 
 	<p class="mt-3 max-w-3xl text-xs text-ink-500">
-		Counted from our own sync, refreshed every two hours — last run
-		{' '}{new Date(META.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC.
+		„Live now" counts every model online on that site at our last rebuild
+		({new Date(META.generatedAt).toISOString().slice(0, 16).replace('T', ' ')} UTC).
+		The gender mix, audience and „also on another site" columns are measured on the
+		models we have seen on at least ten different days, so a site full of one-off
+		streams does not skew them.
 		„Also on another site" means we found the same nickname broadcasting on one of the
 		other networks; it is a name match, not a verified identity
 		(<a href="/models/same-nickname/" class="underline">how we count it</a>).

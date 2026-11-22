@@ -21,7 +21,9 @@ export const NETWORK_GENDERS: Record<string, { gender: string; label: string; no
 };
 
 /** Slugs under `/site/{network}/` that are other page types — never a facet. */
-export const RESERVED_NETWORK_SUBPAGES = new Set(['alternatives', 'tokens']);
+export const RESERVED_NETWORK_SUBPAGES = new Set(['alternatives', 'tokens', 'top']);
+/** D93: `/site/{síť}/top/` — „top chaturbate models" 450/měs (KD 4, TP 1 200). Jen kde je poptávka změřená. */
+export const TOP_MODELS_FOR = ['chaturbate'] as const;
 
 /**
  * Networks that also get speculative pages for every curated ("money")

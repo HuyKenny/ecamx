@@ -25,7 +25,8 @@ import { safeJsonLd } from '../../../lib/jsonld';
 import { networkFacetSeo, SITE_URL, approx, fmt } from '../../../lib/seo';
 import { NETWORK_GENDERS } from '../../../content/network-facets';
 import { TOKEN_RATES } from '../../../content/token-rates';
-import { ALTERNATIVES_FOR } from '../../../content/network-compare';
+import { alternativesNetworks } from '../../../lib/network-stats';
+const ALTERNATIVES_FOR = alternativesNetworks();
 
 export function getStaticPaths() {
 	return networkFacetPages().map((f) => ({ params: { network: f.net, facet: f.slug }, props: { f } }));
