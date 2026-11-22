@@ -13,6 +13,7 @@
  * živých — `fill={false}` to vypne (podobné modelky na profilu).
  */
 import { cardHtml, type CardData } from '../lib/card';
+import type { Lang } from '../lib/i18n';
 
 interface Props {
 	/**
@@ -33,8 +34,10 @@ interface Props {
 	fill?: boolean;
 	class?: string;
 	label?: string;
+	/** Jazyk karet (D94); klient ho čte z `data-lang`. */
+	lang?: Lang;
 }
-const { cards, q, n = 24, eager = 0, exclude, fill = true, class: cls = '', label } = Astro.props;
+const { cards, q, n = 24, eager = 0, exclude, fill = true, class: cls = '', label, lang = 'en' } = Astro.props;
 const shown = cards.slice(0, n);
 const pad = Math.max(0, n - shown.length);
 ---
@@ -46,13 +49,14 @@ const pad = Math.max(0, n - shown.length);
 	data-eager={eager}
 	data-x={exclude}
 	data-fill={fill ? undefined : 'no'}
+	data-lang={lang === 'en' ? undefined : lang}
 	aria-label={label}
 	aria-live="off"
 >
 	{/* Statické karty bez `eager`/`fetchpriority` (D85): klient je stejně
 	    vymění za živé, takže by se 8 obrázků stahovalo zbytečně před LCP.
 	    Prioritu dostanou až živé karty (`live.ts`, `data-eager`). */}
-	{shown.map((c) => <Fragment set:html={cardHtml(c)} />)}
+	{shown.map((c) => <Fragment set:html={cardHtml(c, { lang })} />)}
 	{Array.from({ length: pad }, () => (
 		<article class="card is-stale" aria-hidden="true"><div class="thumb-wrap"></div><div class="card-meta"></div></article>
 	))}

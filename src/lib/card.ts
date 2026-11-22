@@ -13,6 +13,7 @@
  *  - `.thumb-wrap` + `img[data-preview]` čte hover náhled a záchrana obrázku.
  */
 import { NETWORK_LABELS, countryName, facetLabel } from './labels.ts';
+import { CARD_UI, type Lang } from './i18n.ts';
 
 export interface CardData {
 	/** síť */
@@ -55,31 +56,45 @@ export function viewersText(v: number): string {
 }
 
 /** HTML jedné karty. `eager` = prvních pár karet nad ohybem (LCP). */
-export function cardHtml(d: CardData, opts: { eager?: boolean; priority?: boolean } = {}): string {
+/** Název země ve španělštině (D94) přes Intl — v prohlížeči i v Node zdarma. */
+let esRegions: Intl.DisplayNames | null = null;
+function countryEs(code: string): string {
+	try {
+		esRegions ??= new Intl.DisplayNames(['es'], { type: 'region' });
+		return esRegions.of(code.toUpperCase()) ?? countryName(code);
+	} catch {
+		return countryName(code);
+	}
+}
+
+export function cardHtml(d: CardData, opts: { eager?: boolean; priority?: boolean; lang?: Lang } = {}): string {
+	const lang = opts.lang ?? 'en';
+	const ui = CARD_UI[lang];
 	const label = NETWORK_LABELS[d.n] ?? d.n;
 	const age = d.a && d.a >= 18 && d.a <= 80 ? d.a : null;
-	const meta = [label, d.c ? countryName(d.c) : null, age].filter(Boolean).join(' · ');
+	const meta = [label, d.c ? (lang === 'es' ? countryEs(d.c) : countryName(d.c)) : null, age].filter(Boolean).join(' · ');
 	const href = `/live/${encodeURIComponent(d.p)}/`;
 	const thumb = safeUrl(d.t);
 	const fb = safeUrl(d.tf);
 	const pv = safeUrl(d.pv);
 	const badges = [
 		d.h ? '<span class="sticker sticker-hd">HD</span>' : '',
-		d.nw ? '<span class="sticker sticker-new">New</span>' : '',
-		d.ty ? '<span class="sticker sticker-toy" title="Interactive toy — reacts to tips">Toy</span>' : '',
+		d.nw ? `<span class="sticker sticker-new">${ui.new}</span>` : '',
+		d.ty ? `<span class="sticker sticker-toy" title="${ui.toyTitle}">${ui.toy}</span>` : '',
 	].join('');
-	const tags = (d.tg ?? []).slice(0, 2)
+	// Tagy jsou anglické popisky kategorií — na španělské stránce se nezobrazují.
+	const tags = (lang === 'es' ? [] : d.tg ?? []).slice(0, 2)
 		.map((t) => `<span class="card-tag">${esc(tagLabel(t))}</span>`).join('');
 	const live = d.stale ? '' : d.pr
-		? '<span class="live-pill live-pill-private">Private</span>'
-		: '<span class="live-pill" data-live-badge>Live</span>';
+		? `<span class="live-pill live-pill-private">${ui.private}</span>`
+		: `<span class="live-pill" data-live-badge>${ui.live}</span>`;
 	const viewers = !d.stale && d.v && d.v > 0
-		? `<span class="viewer-pill" data-viewers>${viewersText(d.v)}<span class="sr-only"> watching</span></span>`
+		? `<span class="viewer-pill" data-viewers>${viewersText(d.v)}<span class="sr-only">${ui.watching}</span></span>`
 		: '';
 	return `<article class="card${d.stale ? ' is-stale' : ''}" data-network="${esc(d.n)}" data-k="${esc(d.n)}:${esc(d.s)}">`
 		+ `<div class="thumb-wrap">`
 		+ (thumb
-			? `<img src="${esc(thumb)}" alt="${esc(d.u)} live cam" width="320" height="180"`
+			? `<img src="${esc(thumb)}" alt="${esc(d.u)} ${ui.alt}" width="320" height="180"`
 				+ ` loading="${opts.eager ? 'eager' : 'lazy'}" decoding="async"`
 				+ (opts.priority ? ' fetchpriority="high"' : '')
 				+ ` referrerpolicy="no-referrer"`

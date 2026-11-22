@@ -1,0 +1,143 @@
+---
+/**
+ * Španělský pilot (D94): `/es/` + pár stránek s měřenou poptávkou
+ * (`ES_ROUTES` v `src/lib/i18n.ts`, texty v `src/content/es-pages.ts`).
+ *
+ * Mřížka je stejná jako na anglických stránkách (`LiveGrid`, klíč fasety),
+ * jen karty jsou ve španělštině (`lang="es"`). Stránky modelek zůstávají
+ * anglické — pilot měří, jestli španělské huby vůbec rankují, než se
+ * překládá víc. Čísla v textu doplňuje build z dat (D26), nic se nepíše
+ * natvrdo.
+ */
+import Layout from '../../layouts/Layout.astro';
+import LiveGrid from '../../components/LiveGrid.astro';
+import { toCards } from '../../lib/card-model';
+import { facetKey, liveQueryFor } from '../../lib/live-grid';
+import { FACETS, META, allLive, allByGender, allInCategory, allCategoryFacets, type Model } from '../../lib/data';
+import { ES_ACTIVE as ES_ROUTES, esPath, esNumber, type EsRoute } from '../../lib/i18n';
+import { ES_PAGES } from '../../content/es-pages';
+import { approx, SITE_NAME, SITE_URL } from '../../lib/seo';
+import { safeJsonLd } from '../../lib/jsonld';
+
+export function getStaticPaths() {
+	return ES_ROUTES.map((r) => ({ params: { slug: r.slug || undefined }, props: { route: r } }));
+}
+
+const { route } = Astro.props as { route: EsRoute };
+const page = ES_PAGES[route.slug];
+if (!page) throw new Error(`es: no copy for /es/${route.slug}`);
+
+const N = 48;
+let models: Model[];
+let q: string;
+let count: number;
+if (route.source.kind === 'all') {
+	models = allLive();
+	q = 'all';
+	count = META.modelCount;
+} else if (route.source.kind === 'gender') {
+	const g = route.source.gender;
+	models = allByGender(g);
+	q = `g:${g}`;
+	count = FACETS.genders.find((x) => x.slug === g)?.count ?? models.length;
+} else {
+	const slug = route.source.slug;
+	const facet = allCategoryFacets().find((c) => c.slug === slug);
+	if (!facet) throw new Error(`es: category ${slug} missing from build`);
+	models = allInCategory(slug, facet.kind);
+	q = facetKey(facet.kind, slug);
+	count = facet.count;
+}
+
+const fill = (s: string) => s
+	.replaceAll('{n}', esNumber(approx(count)))
+	.replaceAll('{sites}', String(FACETS.networks.length));
+const title = `${fill(page.title)} | ${SITE_NAME}`;
+const description = fill(page.description);
+const path = esPath(route.slug);
+const others = ES_ROUTES.filter((r) => r.slug !== route.slug);
+
+const jsonLd = [
+	{
+		'@context': 'https://schema.org',
+		'@type': 'CollectionPage',
+		name: page.h1,
+		description,
+		inLanguage: 'es',
+		url: `${SITE_URL}${path}`,
+		mainEntity: {
+			'@type': 'ItemList',
+			numberOfItems: Math.min(models.filter((m) => m.indexable).length, 20),
+			itemListElement: models.filter((m) => m.indexable).slice(0, 20).map((m, i) => ({
+				'@type': 'ListItem', position: i + 1, name: m.displayName, url: `${SITE_URL}/live/${m.page}/`,
+			})),
+		},
+	},
+	{
+		'@context': 'https://schema.org',
+		'@type': 'FAQPage',
+		inLanguage: 'es',
+		mainEntity: page.faq.map((f) => ({
+			'@type': 'Question', name: fill(f.q), acceptedAnswer: { '@type': 'Answer', text: fill(f.a) },
+		})),
+	},
+	{
+		'@context': 'https://schema.org',
+		'@type': 'BreadcrumbList',
+		itemListElement: [
+			{ '@type': 'ListItem', position: 1, name: 'Inicio', item: `${SITE_URL}/es/` },
+			...(route.slug ? [{ '@type': 'ListItem', position: 2, name: page.label, item: `${SITE_URL}${path}` }] : []),
+		],
+	},
+];
+---
+<Layout lang="es" liveQuery={liveQueryFor([[q, N]])} title={title} description={description}>
+	<script type="application/ld+json" slot="head" is:inline set:html={safeJsonLd(jsonLd)} />
+
+	{route.slug && (
+		<nav aria-label="Migas de pan" class="mb-4 text-sm text-ink-400">
+			<ol class="flex flex-wrap gap-1">
+				<li><a href="/es/" class="hover:text-white">Inicio</a> /</li>
+				<li><span class="text-ink-200">{page.label}</span></li>
+			</ol>
+		</nav>
+	)}
+
+	<h1 class="text-2xl font-extrabold sm:text-3xl">{page.h1}</h1>
+	<p class="mt-2 max-w-3xl text-ink-400">
+		<strong class="text-white">{esNumber(approx(count))}</strong> en vivo ahora mismo en
+		{' '}{FACETS.networks.length} sitios de webcams. Gratis, sin registro: abre cualquier tarjeta para ver la cam.
+	</p>
+
+	<LiveGrid cards={toCards(models)} q={q} n={N} eager={8} class="mt-6" lang="es" label={page.h1} />
+
+	<section class="mt-10 max-w-3xl space-y-3 text-sm leading-relaxed text-ink-200">
+		{page.intro.map((p) => <p>{fill(p)}</p>)}
+	</section>
+
+	<section class="mt-10 max-w-3xl" aria-labelledby="faq-h">
+		<h2 id="faq-h" class="mb-3 text-xl font-bold">Preguntas frecuentes</h2>
+		<dl class="space-y-4 text-sm leading-relaxed">
+			{page.faq.map((f) => (
+				<div>
+					<dt class="font-medium text-white">{fill(f.q)}</dt>
+					<dd class="mt-1 text-ink-200">{fill(f.a)}</dd>
+				</div>
+			))}
+		</dl>
+	</section>
+
+	<section class="mt-10" aria-labelledby="more-h">
+		<h2 id="more-h" class="mb-3 text-lg font-bold">Más cams en vivo en español</h2>
+		<div class="flex flex-wrap gap-2">
+			{others.map((r) => (
+				<a href={esPath(r.slug)} class="pill">{r.slug ? ES_PAGES[r.slug]!.label : 'Todas las cams'}</a>
+			))}
+		</div>
+		<p class="mt-4 text-xs text-ink-500">
+			Las fichas de cada modelo, las categorías completas y las guías están en inglés.
+			{' '}<a href={route.en} hreflang="en" lang="en" class="underline">View this page in English</a> ·
+			{' '}<a href="/about/methodology/" lang="en" class="underline">How we measure</a>
+		</p>
+	</section>
+</Layout>

@@ -91,7 +91,8 @@ function fillGrid(grid: HTMLElement, data: GridResp): boolean {
 		}
 	}
 	const eager = Number(grid.dataset.eager ?? 0);
-	grid.innerHTML = cards.map((c, i) => cardHtml(c, { eager: i < eager, priority: i === 0 && eager > 0 })).join('');
+	const lang = grid.dataset.lang === 'es' ? 'es' : 'en';
+	grid.innerHTML = cards.map((c, i) => cardHtml(c, { eager: i < eager, priority: i === 0 && eager > 0, lang })).join('');
 	const shown = own.length;
 	if (shown < Math.min(n, 4)) ga('grid_sparse', { shown, target: n, facet: key });
 	return true;

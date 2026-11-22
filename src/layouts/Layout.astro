@@ -15,6 +15,8 @@ import { canonicalUrl, SITE_NAME, SITE_URL } from '../lib/site';
 import { THUMBNAIL_HOSTS } from '../lib/thumbnail-hosts';
 import { NETWORK_WEIGHT } from '../lib/network-weight';
 import { facetLabel } from '../lib/labels';
+import { UI, alternatesFor, langOf, ES_ACTIVE as ES_ROUTES, esPath, type Lang } from '../lib/i18n';
+import { ES_PAGES } from '../content/es-pages';
 import facets from '../data/facets.json';
 import meta from '../data/meta.json';
 import '../styles/global.css';
@@ -36,9 +38,18 @@ interface Props {
 	liveQuery?: string;
 	/** Čas buildu; dynamická stránka posílá čas snímku. */
 	built?: string;
+	/** Jazyk stránky (D94). Default podle cesty: `/es/…` = es. */
+	lang?: Lang;
 }
 
 const { title, description, noindex = false, image, imageAlt, ogType = 'website', liveQuery, built } = Astro.props;
+const lang: Lang = Astro.props.lang ?? langOf(Astro.url.pathname);
+const u = UI[lang];
+const es = lang === 'es';
+// hreflang jen na párových stránkách (D94) a jen u indexovatelných.
+const alternates = noindex ? [] : alternatesFor(Astro.url.pathname);
+const otherLang = alternates.find((a) => a.hreflang === (es ? 'en' : 'es'));
+const esRail = ES_ROUTES.filter((r) => r.slug).map((r) => ({ href: esPath(r.slug), label: ES_PAGES[r.slug]?.label ?? r.slug }));
 const canonical = canonicalUrl(Astro.url.pathname);
 // Brandovaný OG obrázek záměrně: adult náhled se na sociálních sítích blokuje
 // a navíc expiruje (Cam4 podepsané URL).
@@ -59,7 +70,7 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang={lang}>
 <head>
 	<meta charset="utf-8" />
 	{/*
@@ -84,7 +95,8 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 
 	<meta property="og:type" content={ogType} />
 	<meta property="og:site_name" content={SITE_NAME} />
-	<meta property="og:locale" content="en_US" />
+	<meta property="og:locale" content={es ? 'es_ES' : 'en_US'} />
+	{alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={new URL(a.href, SITE_URL).toString()} />)}
 	<meta property="og:title" content={title} />
 	<meta property="og:description" content={description} />
 	<meta property="og:image" content={ogImage} />
@@ -277,65 +289,65 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 	<slot name="head" />
 </head>
 <body class="bg-ink-950 text-ink-50" data-network-weight={JSON.stringify(NETWORK_WEIGHT)}>
-	<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:p-3">Skip to content</a>
+	<a href="#main" class="sr-only focus:not-sr-only focus:absolute focus:z-[60] focus:p-3">{u.skip}</a>
 
 	<div id="age-notice" class="age-notice border-b border-ink-800 bg-ink-900 text-xs sm:text-sm">
 		<div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-2 gap-y-1 px-3 py-1.5">
 			<strong class="text-accent">18+</strong>
 			<span class="text-ink-200">
-				Adult content.<span class="consent-only"> Analytics cookies.</span>
+				{u.adult}<span class="consent-only">{u.analytics}</span>
 			</span>
-			<a href="/terms/" class="text-ink-400 underline hover:text-white">Terms</a>
-			<a href="/privacy/" class="consent-only text-ink-400 underline hover:text-white">Privacy</a>
+			<a href="/terms/" class="text-ink-400 underline hover:text-white">{u.terms}</a>
+			<a href="/privacy/" class="consent-only text-ink-400 underline hover:text-white">{u.privacy}</a>
 			<span class="ml-auto flex gap-2">
 				<button
 					type="button" id="age-dismiss"
 					class="rounded bg-ink-700 px-3 py-1 font-medium text-white hover:bg-ink-600"
-				><span class="consent-only">Accept</span><span
-					class="no-consent-only">I&#39;m 18+</span></button>
+				><span class="consent-only">{u.accept}</span><span
+					class="no-consent-only">{es ? 'Tengo 18+' : "I'm 18+"}</span></button>
 				{/* Stejná velikost i tvar jako „Accept" — odmítnutí musí být
 				    stejně snadné, jinak souhlas není platný (D45). */}
 				<button
 					type="button" id="consent-decline"
 					class="consent-only rounded bg-ink-700 px-3 py-1 font-medium text-white hover:bg-ink-600"
-				>Decline</button>
+				>{u.decline}</button>
 			</span>
 		</div>
 	</div>
 
 	<header class="topbar">
-		<button type="button" class="rail-toggle" data-rail-toggle aria-label="Live channels" aria-expanded="false" aria-controls="rail">
+		<button type="button" class="rail-toggle" data-rail-toggle aria-label={u.liveChannels} aria-expanded="false" aria-controls="rail">
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
 		</button>
-		<a href="/" class="brand" aria-label="eCamx home">
+		<a href={es ? '/es/' : '/'} class="brand" aria-label={u.home}>
 			<img src="/logo-mark.svg" alt="" width="34" height="34" />
 			<span class="brand-word">e<b>Camx</b></span>
 		</a>
-		<nav aria-label="Main" class="topnav">
-			<a href="/cams/" aria-current={current('/cams/')}>Browse</a>
-			<a href="/girls/" aria-current={current('/girls/')}>Girls</a>
-			<a href="/couples/" aria-current={current('/couples/')}>Couples</a>
-			<a href="/guys/" aria-current={current('/guys/')}>Guys</a>
-			<a href="/trans/" aria-current={current('/trans/')}>Trans</a>
+		<nav aria-label={u.main} class="topnav">
+			<a href="/cams/" aria-current={current('/cams/')}>{u.browse}</a>
+			<a href={es ? '/es/mujeres-desnudas/' : '/girls/'} aria-current={current(es ? '/es/mujeres-desnudas/' : '/girls/')}>{u.girls}</a>
+			<a href="/couples/" aria-current={current('/couples/')}>{u.couples}</a>
+			<a href={es ? '/es/hombres/' : '/guys/'} aria-current={current(es ? '/es/hombres/' : '/guys/')}>{u.guys}</a>
+			<a href={es ? '/es/trans/' : '/trans/'} aria-current={current(es ? '/es/trans/' : '/trans/')}>{u.trans}</a>
 		</nav>
-		<a href="/finder/" class="search" aria-label="Find a model by name">
+		<a href="/finder/" class="search" aria-label={u.findModel}>
 			<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
-			<span>Find a model by name…</span>
+			<span>{u.findModelDots}</span>
 		</a>
 		{/* „Tvoje modelky" — ukazuje se jen s `has-follows` (blokující skript), nic neskáče. */}
 		<a href="/my/" class="watch-link" data-watch-link>
-			Your models<span class="watch-count" data-watch-count hidden></span>
+			{es ? 'Tus modelos' : 'Your models'}<span class="watch-count" data-watch-count hidden></span>
 		</a>
 	</header>
 
 	<div class="shell">
-		<aside class="rail" id="rail" aria-label="Live channels">
-			<button type="button" class="rail-close" data-rail-toggle aria-label="Close menu">
+		<aside class="rail" id="rail" aria-label={u.liveChannels}>
+			<button type="button" class="rail-close" data-rail-toggle aria-label={u.closeMenu}>
 				<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
 			</button>
-			<div class="rail-h"><span>Live now</span><a href="/">See all</a></div>
+			<div class="rail-h"><span>{u.liveNow}</span><a href={es ? '/es/' : '/'}>{u.seeAll}</a></div>
 			{/* Sloty mají pevnou výšku; plní je `live.ts` ze snímku (D82). */}
-			<nav class="rail-list" data-rail data-n={RAIL_N} aria-label="Most watched live now">
+			<nav class="rail-list" data-rail data-n={RAIL_N} aria-label={u.mostWatched}>
 				{Array.from({ length: RAIL_N }, () => (
 					<span class="rail-item" aria-hidden="true">
 						<span class="rail-ph"></span>
@@ -345,7 +357,15 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 				))}
 			</nav>
 			<div class="rail-sep"></div>
-			<div class="rail-h"><span>Browse</span></div>
+			<div class="rail-h"><span>{u.browse}</span></div>
+			{es ? (
+			<nav class="rail-list" aria-label={u.browse}>
+				{esRail.map((r, i) => (
+					<a class="rail-cat" href={r.href}><i style={`background:${CAT_COLORS[i % CAT_COLORS.length]}`}>{r.label.charAt(0)}</i>{r.label}</a>
+				))}
+				<a class="rail-cat" href="/site/"><i style="background:#f9a03f">S</i>{u.camSites}</a>
+			</nav>
+			) : (
 			<nav class="rail-list" aria-label="Browse">
 				<a class="rail-cat" href="/girls/"><i style="background:#ff4f6d">G</i>Girls</a>
 				<a class="rail-cat" href="/couples/"><i style="background:#ffd23f">C</i>Couples</a>
@@ -355,6 +375,8 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 				<a class="rail-cat" href="/country/"><i style="background:#d7d6df">W</i>Countries</a>
 				<a class="rail-cat" href="/guides/"><i style="background:#c9a7ff">?</i>Guides</a>
 			</nav>
+			)}
+			{!es && <>
 			<div class="rail-sep"></div>
 			<div class="rail-h"><span>Popular categories</span><a href="/cams/">All</a></div>
 			<nav class="rail-list" aria-label="Popular categories">
@@ -364,6 +386,7 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 					</a>
 				))}
 			</nav>
+			</>}
 			<img class="rail-mascot" src="/logo-mark.svg" alt="" width="72" height="72" loading="lazy" />
 		</aside>
 
@@ -376,7 +399,8 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 				<div class="mx-auto max-w-[110rem] px-4 md:px-7">
 					<div class="mb-5 flex items-center gap-3">
 						<img src="/logo-mark.svg" alt="" width="40" height="40" loading="lazy" />
-						<p class="max-w-xl text-ink-200">Every big cam site in one grid, checked every five minutes so the cams you see are actually live.</p>
+						<p class="max-w-xl text-ink-200">{u.tagline}</p>
+						{otherLang && <a href={otherLang.href} hreflang={otherLang.hreflang} lang={otherLang.hreflang} class="ml-auto rounded border border-ink-700 px-2 py-1 text-xs hover:text-white" aria-label={u.otherLangLabel}>{u.otherLang}</a>}
 					</div>
 					{/* Adresář je jediná trvalá cesta ke stránkám modelek, které právě
 					    nevysílají — mřížky ukazují jen živé (D33). Proto je v patičce. */}
