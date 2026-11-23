@@ -14,10 +14,10 @@ name: Live snapshot
 # nothing. Repo is PUBLIC → Actions minutes are free; logs are public too, so
 # the scripts print counts only, never URLs or keys.
 #
-# **One job publishes three times, five minutes apart.** GitHub delays and
-# drops `*/5` schedules under load (5–20 min measured on other repos), so a
-# job every 15 min that loops gives a steadier cadence and one `pnpm install`
-# instead of three. Clients treat data older than 30 min as "don't know" and
+# **One job publishes three times, five minutes apart, then dispatches the
+# next job** (see "Chain next run"). GitHub delays and drops schedules — here
+# it skipped every slot for 2 h — so the schedule only restarts a broken
+# chain. Clients treat data older than 30 min as "don't know" and
 # keep the static cards (`FRESH_MS` in `src/lib/live-static.ts`).
 on:
   schedule:
@@ -138,16 +138,28 @@ jobs:
           CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
         run: node --experimental-strip-types scripts/deploy-watch-gh.ts
 
+      # **The job re-dispatches itself** (measured 23. 11. 2026: the `schedule`
+      # above did not fire once in 2 h, and `deploy.yml`'s nightly schedule
+      # starts 7–8 h late — GitHub cron is best-effort). A `workflow_dispatch`
+      # from GITHUB_TOKEN does start a run; it waits in the `live` concurrency
+      # group until this one ends, and a second pending run replaces the first,
+      # so the chain never multiplies. The schedule stays as the restarter when
+      # the chain breaks. Kill switch: repo variable `LIVE_CHAIN=off`.
+      - name: Chain next run
+        if: ${{ !cancelled() && vars.LIVE_CHAIN != 'off' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run live.yml -R "$GITHUB_REPOSITORY" --ref main -f rounds=3
+
       # GitHub disables schedules of a public repo after 60 days without
       # commits. Re-enabling through the API once a day keeps both schedules
       # alive when nobody touches the code.
       - name: Keep schedules enabled
-        if: github.event_name == 'schedule'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          [ "$(date -u +%H%M)" \< "0020" ] || exit 0
+          [ "$(date -u +%H%M)" \< "0030" ] || exit 0
           for wf in live.yml deploy.yml; do
             gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/enable" && echo "$wf enabled"
           done

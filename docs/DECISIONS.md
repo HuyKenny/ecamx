@@ -4407,3 +4407,9 @@ adaptéru se importuje líně), mapa zaniklých stránek po ~30 kB místo 240 kB
 (první znak + 32 kyblíčků FNV, převod v `build-redirects.ts`, takže funguje
 i s artefaktem starého syncu) a živé řádky ve 256 shardech `x/` místo 64 `w/`
 (`w/` se dál publikuje pro JS z doby před změnou; po týdnu smazat z publisheru).
+
+**Plánovač Actions nestačí.** `schedule` v `live.yml` za první 2 h nevystřelil
+ani jednou (a noční `deploy.yml` startuje o 7–8 h později). Job proto na konci
+spustí sám sebe (`workflow_dispatch` z `GITHUB_TOKEN` běh založí; v concurrency
+skupině `live` čeká jen jeden, takže se řetěz nenásobí). `schedule` zůstává jako
+restart přerušeného řetězu; vypínač = proměnná repa `LIVE_CHAIN=off`.

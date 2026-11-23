@@ -50,7 +50,7 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
   Lokálně padá na `seed/registry.json`.
 - **Živý stav = statické JSON soubory na `/livedata/`** (D95, od 23. 11. 2026;
   dřív KV + cron Worker `ecamx-cron`, D82). Skládá je GitHub Actions `live.yml`
-  (á 15 min job, uvnitř 3 publikace po 5 min) skriptem `scripts/live-publish.ts`
+  (job s 3 publikacemi po 5 min, na konci spustí sám sebe — `schedule` GitHubu je jen restart, nespolehlivý) skriptem `scripts/live-publish.ts`
   a nahrává `wrangler deploy -c wrangler.live.jsonc` do assets-only Workeru
   `ecamx-live` (route `ecamx.com/livedata/*`, žádný skript neběží = zdarma).
   Tvar souborů: `src/lib/live-static.ts`; prohlížeč čte přes
