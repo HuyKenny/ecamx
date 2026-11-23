@@ -372,10 +372,20 @@ function trimSnap(m: Model): Model {
  * je to mrtvá váha: 5 889 záznamů = 5,18 MB. Je to bezpečné a samoopravné,
  * protože snapshot se ukládá znovu při každém výskytu modelky ve feedu.
  */
-function pruneSnapshots(reg: Registry): number {
+function pruneSnapshots(reg: Registry, keepSnap: ReadonlySet<string>): number {
 	let freed = 0;
-	for (const e of Object.values(reg)) {
+	for (const [k, e] of Object.entries(reg)) {
 		if (e.snap && e.seen < INDEX_MIN_DAYS) { delete e.snap; freed++; }
+		/**
+		 * D96 (23. 11. 2026): snapshot drží jen modelka, která má zveřejněnou
+		 * stránku (`pub`), vysílá v tomhle běhu, nebo má měřenou poptávku.
+		 * Offline modelka bez stránky ho nepotřebuje: archivní stránku dostane
+		 * jen málokdo (strop 5 000, 14 960 kandidátů odříznuto), a když se vrátí
+		 * do vysílání, snapshot se uloží znovu. Bez tohohle mělo `registry`
+		 * 26,31 MB nad limitem KV 25 MB a noční sync od 22. 11. padal; z 20 MB
+		 * snapshotů bylo ~9 MB právě tahle skupina.
+		 */
+		else if (e.snap && !e.pub && !keepSnap.has(k)) { delete e.snap; freed++; }
 		// Rozvrh má smysl jen u modelky, která má stránku, kde ho lze ukázat.
 		if (e.hours && !e.page) { delete e.hours; freed++; }
 	}
@@ -385,10 +395,10 @@ function pruneSnapshots(reg: Registry): number {
 /** Limit jednoho KV zápisu. Nad ním Cloudflare zápis odmítne. */
 const KV_VALUE_LIMIT = 25 * 1024 * 1024;
 
-async function saveRegistry(reg: Registry): Promise<void> {
+async function saveRegistry(reg: Registry, keepSnap: ReadonlySet<string>): Promise<void> {
 	if (DRY) { log('dry-run: registry se neukládá'); return; }
 
-	const pruned = pruneSnapshots(reg);
+	const pruned = pruneSnapshots(reg, keepSnap);
 
 	// Rozdělení na dvě hodnoty. Kritérium je `gone`: zaniklá stránka nese jen
 	// přesměrování, živá a archivní všechno ostatní.
@@ -1634,7 +1644,11 @@ if (DRY) {
 		networks: networkFacets.map((n) => ({ id: n.slug, count: n.count })),
 		degraded: failures,
 	});
-	await saveRegistry(registry);
+	// Snapshot zůstává živým (vrátí se do katalogu s plnými daty) a stránkám
+	// s poptávkou (archiv je bere i bez `pub`) — D96.
+	const keepSnap = new Set<string>(liveKeys);
+	for (const [k, e] of Object.entries(registry)) if (wanted(e)) keepSnap.add(k);
+	await saveRegistry(registry, keepSnap);
 }
 
 log(`hotovo za ${((Date.now() - started.getTime()) / 1000).toFixed(1)} s`);

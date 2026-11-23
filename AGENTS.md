@@ -1034,3 +1034,8 @@ Přístupy: `~/ai/credentials/.ecamx-credentials.env` (nikdy do gitu ani do chat
     převádí `build-redirects.ts`) a živé řádky ve 256 shardech `x/`.
     Kdo do `catchAll()` přidá import, ať zkontroluje velikost chunku
     `catch-all_*.mjs` v logu Deploy.
+149. **Registry drží `snap` jen u `pub`, živých a poptávaných (D96).** Limit
+    hodnoty KV je 25 MB a snapshoty jsou 80 % registry; 22. 11. 2026 přetekla
+    na 26,31 MB a noční sync padal. Kdo přidá do archivu kandidáty bez `pub`,
+    musí počítat s tím, že snapshot nemají — stránka pak jde přes
+    `minimalArchive` (jen naměřená pole, past 143).

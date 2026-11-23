@@ -4413,3 +4413,23 @@ ani jednou (a noční `deploy.yml` startuje o 7–8 h později). Job proto na ko
 spustí sám sebe (`workflow_dispatch` z `GITHUB_TOKEN` běh založí; v concurrency
 skupině `live` čeká jen jeden, takže se řetěz nenásobí). `schedule` zůstává jako
 restart přerušeného řetězu; vypínač = proměnná repa `LIVE_CHAIN=off`.
+
+## D96 — registry: snapshot jen pro zveřejněné, živé a poptávané (23. 11. 2026)
+
+Noční sync od 22. 11. padal: `registry` 26,31 MB nad limitem hodnoty KV 25 MB
+(36 650 záznamů). Rozbor uložené verze (24,1 MB, 33 315 záznamů): 20 MB jsou
+snapshoty (`snap`), z toho ~8,9 MB u modelek, které nevysílají a nemají
+zveřejněnou stránku (`pub`). Archivní stránku z nich dostane málokdo — strop
+5 000 stránek odřízl 14 960 z 17 754 kandidátů.
+
+**Řešení (Kenny schválil).** `pruneSnapshots()` při uložení zahodí `snap`
+každému záznamu bez `pub`, který v tomhle běhu nevysílá a nemá měřenou
+poptávku (`wanted`). Zůstává vše, co potřebují stránky (`pub` → archivní
+stránka i cíl přesměrování z `redirectTarget()`), mapa zaniklých stránek
+(`gone`, nezávisí na `snap`) a živý snímek (ten registry nečte vůbec).
+Statistiky (`first/last/seen/peak/hours`) zůstávají, takže historie i práh
+`seen` běží dál.
+
+**Cena.** Offline modelka bez stránky přestane být kandidátem archivu
+(podmínka `!!e.snap`), dokud znovu nevysílá — pak se snapshot uloží znovu.
+Stránky s poptávkou to nemění (vstupují do archivu i bez snapshotu, D40).
