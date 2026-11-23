@@ -1026,3 +1026,11 @@ Přístupy: `~/ai/credentials/.ecamx-credentials.env` (nikdy do gitu ani do chat
     `/live-pages.json`: bez něj by modelka se statickou `slug-síť` stránkou
     dostala holý `slug` cizí modelky. Z runneru se na vlastní web chodí
     s hlavičkou `x-malina-warm` (WAF BotWall).
+    **CPU studeného isolate je to, co na Free bolí** (změřeno 23. 11.: teplý
+    `/live/{slug}/` 0–3 ms, první request isolate 6–25 ms). Proto
+    `src/worker.ts` (wrangler `main`) posílá `/live/*` rovnou do
+    `src/lib/catch-all.ts` bez startu Astra, mapa zaniklých stránek je
+    v ~1 150 shardech po ~30 kB (`shardOf()` = první znak + 32 kyblíčků,
+    převádí `build-redirects.ts`) a živé řádky ve 256 shardech `x/`.
+    Kdo do `catchAll()` přidá import, ať zkontroluje velikost chunku
+    `catch-all_*.mjs` v logu Deploy.

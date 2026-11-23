@@ -391,8 +391,8 @@ jobs:
           echo "$snap" | python3 -c "import sys,json,time; d=json.load(sys.stdin); age=time.time()-d['ts']/1000; n=len(d.get('c',[])); print('snímek: stáří', int(age), 's, karet', n, ', spadlé sítě', d['failed']); sys.exit(0 if age<1800 and n>0 else 1)" \
             || { echo "::error::živý snímek není čerstvý nebo je prázdný (workflow live.yml)"; fail=1; }
           # Živá modelka bez statické stránky musí dostat dynamickou (200), ne 302.
-          # Shard `w/00` = živí bez `st` (statické stránky) jsou právě ti dynamičtí.
-          dyn=$(curl -s -A "$UA" --max-time 30 "https://ecamx.com/livedata/w/00.json?t=$RANDOM" \
+          # Shard `x/000` = živí bez `st` (statické stránky) jsou právě ti dynamičtí.
+          dyn=$(curl -s -A "$UA" --max-time 30 "https://ecamx.com/livedata/x/000.json?t=$RANDOM" \
             | python3 -c "import sys,json,urllib.parse; d=json.load(sys.stdin); print(next(urllib.parse.quote(k) for k,r in d.items() if not r.get('st')))" 2>/dev/null)
           if [ -n "$dyn" ]; then
             code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com/live/$dyn/")

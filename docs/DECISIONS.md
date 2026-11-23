@@ -4398,3 +4398,12 @@ z KV na `/api/live/grid/`, `/api/online/*` a `/watch/` (p99 ~190 ms).
 **Cena.** Cloudflare: 0 cron triggerů, KV ≤ 24 zápisů/den (přítomnost) +
 noční sync, Worker requesty jen `/go/`, `/api/stream/`, `/status/` a catch-all.
 GitHub: ~96 jobů/den po ~12 min ve veřejném repu (zdarma).
+
+**Doplněk téhož dne (CPU studených isolate).** Po přepnutí měl Worker p50
+11–13 ms: teplý `/live/{slug}/` 0–3 ms, ale první request isolate 6–25 ms
+(crawler na starých URL = skoro vždy první request). Tři kroky: vlastní vstup
+`src/worker.ts` (`/live/*` → `catchAll()` bez `createApp()` Astra, handler
+adaptéru se importuje líně), mapa zaniklých stránek po ~30 kB místo 240 kB
+(první znak + 32 kyblíčků FNV, převod v `build-redirects.ts`, takže funguje
+i s artefaktem starého syncu) a živé řádky ve 256 shardech `x/` místo 64 `w/`
+(`w/` se dál publikuje pro JS z doby před změnou; po týdnu smazat z publisheru).

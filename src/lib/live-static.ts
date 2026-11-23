@@ -16,14 +16,24 @@
  *   g/{facet}.json       GFile — default grid for a facet (diversified, `G_DEPTH` cards)
  *   p/{facet}.json       PFile — per-network pools of that facet (site filter, `key@net`)
  *   online/{net}.json    OnlineFile — slug → viewers for one network + 40 player cards
- *   w/{00..63}.json      { [p]: WRec } — every live model, sharded by `shardOf(p)`
+ *   x/{000..255}.json    { [p]: WRec } — every live model, sharded by `shardOf(p)`
+ *   w/{00..63}.json      the same in the pre-D95-entry layout (cached old JS)
  *
  * Pure module: no DOM, no `cloudflare:workers`, no Node — importable anywhere.
  */
 import type { CardData } from './card.ts';
 
 export const LIVE_BASE = '/livedata';
-export const W_SHARDS = 64;
+/**
+ * Live rows by page path, `{W_DIR}/{000..255}.json`. 256 shards (~20 kB) since
+ * D95 — the Worker parses one per cold isolate for `/live/{p}/`, and 64 shards
+ * (~80 kB) cost ~0.6 ms of the 10 ms budget. New directory, so a web build and
+ * a publish from different moments never disagree about the layout.
+ */
+export const W_SHARDS = 256;
+export const W_DIR = 'x';
+/** Old 64-shard layout, still published for HTML/JS cached before the switch. */
+export const W_LEGACY = { dir: 'w', shards: 64 } as const;
 /** Default grid depth per facet (largest grid on the site is 48 + reserve). */
 export const G_DEPTH = 60;
 /** Per-network pool depth (pair pages `/site/{net}/{facet}/` show 48). */
@@ -96,7 +106,7 @@ export interface OnlineFile {
 	cards: Array<{ s: string; n: string; t: string; v: number; e: string; f?: string }>;
 }
 
-/** A live model in a `w/` shard — everything the watch page and `/api/stream/` need. */
+/** A live model in a `x/` shard — everything the watch page and `/api/stream/` need. */
 export interface WRec {
 	n: string;
 	u: string;
@@ -125,13 +135,13 @@ export interface WRec {
 }
 
 /** FNV-1a 32 → two-digit shard. Same function in publisher, Worker and browser. */
-export function shardOf(p: string): string {
+export function shardOf(p: string, n: number = W_SHARDS): string {
 	let h = 0x811c9dc5;
 	for (let i = 0; i < p.length; i++) {
 		h ^= p.charCodeAt(i);
 		h = Math.imul(h, 0x01000193) >>> 0;
 	}
-	return String(h % W_SHARDS).padStart(2, '0');
+	return String(h % n).padStart(n > 100 ? 3 : 2, '0');
 }
 
 /** Facet key → file name: `t:latina` → `t_latina`. Slugs are `[a-z0-9-]`, so `_` is free. */

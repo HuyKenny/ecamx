@@ -9,7 +9,7 @@
  * well inside the 10 ms CPU of Workers Free.
  */
 import { env } from 'cloudflare:workers';
-import { LIVE_BASE, metaFresh, shardOf, FRESH_MS, type LiveMeta, type WRec, type PFile } from './live-static.ts';
+import { LIVE_BASE, W_DIR, metaFresh, shardOf, FRESH_MS, type LiveMeta, type WRec, type PFile } from './live-static.ts';
 
 type Fetcher = { fetch(req: Request): Promise<Response> };
 const binding = (): Fetcher | undefined => (env as unknown as { LIVE_DATA?: Fetcher }).LIVE_DATA;
@@ -42,7 +42,7 @@ export const readPools = (facetFileName: string) => getFile<PFile>(`p/${facetFil
  * `null` = not live in the last snapshot.
  */
 export async function liveByPath(p: string): Promise<WRec | null | undefined> {
-	const shard = await getFile<Record<string, WRec>>(`w/${shardOf(p)}.json`);
+	const shard = await getFile<Record<string, WRec>>(`${W_DIR}/${shardOf(p)}.json`);
 	if (!shard) return undefined;
 	return Object.prototype.hasOwnProperty.call(shard, p) ? shard[p]! : null;
 }

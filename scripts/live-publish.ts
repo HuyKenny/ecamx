@@ -30,7 +30,7 @@ import { MONEY_CATEGORIES, matchesMoney } from '../src/lib/money-categories.ts';
 import { weightOf, payingScore, DEFAULT_WEIGHT } from '../src/lib/network-weight.ts';
 import { embedUrl } from '../src/lib/affiliate.ts';
 import {
-	G_DEPTH, P_DEPTH, RAIL_N, LIVE_BASE, categoryTags, facetFile, roundRobin, shardOf, toCard,
+	G_DEPTH, P_DEPTH, RAIL_N, LIVE_BASE, W_DIR, W_LEGACY, W_SHARDS, categoryTags, facetFile, roundRobin, shardOf, toCard,
 	type GFile, type LiveMeta, type NetState, type OnlineFile, type PFile, type WRec,
 } from '../src/lib/live-static.ts';
 import type { CardData } from '../src/lib/card.ts';
@@ -242,8 +242,9 @@ async function main(): Promise<void> {
 	let carried: WRec[] = [];
 	if (carry.length) {
 		// The previous rows of a failed network live in the published shards.
-		const shards = await Promise.all(Array.from({ length: 64 }, (_, i) =>
-			getJson<Record<string, WRec>>(`${SITE}${LIVE_BASE}/w/${String(i).padStart(2, '0')}.json?t=${Date.now()}`)));
+		// The legacy 64-shard copy: fewer requests, same rows.
+		const shards = await Promise.all(Array.from({ length: W_LEGACY.shards }, (_, i) =>
+			getJson<Record<string, WRec>>(`${SITE}${LIVE_BASE}/${W_LEGACY.dir}/${String(i).padStart(2, '0')}.json?t=${Date.now()}`)));
 		carried = shards.flatMap((s) => Object.values(s ?? {})).filter((r) => carry.includes(r.n));
 	}
 	for (const net of NETWORKS) {
@@ -323,10 +324,13 @@ async function main(): Promise<void> {
 		put(`online/${net.id}.json`, { v: 1, network: net.id, ts, ok: st.ok, nts: st.ts, count: recs.length, online, cards } satisfies OnlineFile);
 	}
 
-	const shards: Record<string, Record<string, WRec>> = {};
-	for (let i = 0; i < 64; i++) shards[String(i).padStart(2, '0')] = {};
-	for (const r of m) shards[shardOf(r.p)]![r.p] = r;
-	for (const [k, v] of Object.entries(shards)) put(`w/${k}.json`, v);
+	// Every shard file exists even when empty (a 404 would read as "no data").
+	for (const [dir, n] of [[W_DIR, W_SHARDS], [W_LEGACY.dir, W_LEGACY.shards]] as const) {
+		const shards: Record<string, Record<string, WRec>> = {};
+		for (let i = 0; i < n; i++) shards[String(i).padStart(n > 100 ? 3 : 2, '0')] = {};
+		for (const r of m) shards[shardOf(r.p, n)]![r.p] = r;
+		for (const [k, v] of Object.entries(shards)) put(`${dir}/${k}.json`, v);
+	}
 
 	// ── presence (≤ 24 KV writes/day) ──────────────────────────────────────
 	const now = new Date(ts);

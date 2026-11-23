@@ -12,7 +12,7 @@
 import type { CardData } from './card';
 import { weightOf } from './network-weight';
 import {
-	FRESH_MS, LIVE_BASE, fileFor, metaFresh, pickFromPools, shardOf,
+	FRESH_MS, LIVE_BASE, W_DIR, fileFor, metaFresh, pickFromPools, shardOf,
 	type GFile, type LiveMeta, type OnlineFile, type PFile, type WRec,
 } from './live-static';
 
@@ -117,7 +117,7 @@ export async function fetchOnline(network: string): Promise<OnlineResp | null> {
  */
 export async function isLive(p: string, network: string, slug: string): Promise<{ live: boolean | null; v?: number | null }> {
 	const [shard, meta] = await Promise.all([
-		getFile<Record<string, WRec>>(`w/${shardOf(p)}.json`),
+		getFile<Record<string, WRec>>(`${W_DIR}/${shardOf(p)}.json`),
 		getFile<LiveMeta>('meta.json'),
 	]);
 	const st = meta?.nets[network];

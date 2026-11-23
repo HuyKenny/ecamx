@@ -15,12 +15,29 @@
  * musel by být bit po bitu stejný v Node i ve V8 — zbytečné riziko.
  *
  * Naměřeno na dnešní mapě: 36 shardů, největší `s` má 21 520 záznamů.
+ *
+ * **D95 (Workers Free, 10 ms CPU):** shard `s` měl 240 kB a jeho `JSON.parse`
+ * stál ~2,5 ms při každém studeném isolate — u crawleru na starých URL skoro
+ * při každém requestu. Teď první znak + 32 kyblíčků podle hashe (`s07.json`,
+ * ~30 kB, ~1 150 souborů). Starý tvar ze syncu (`s.json`) převede
+ * `scripts/build-redirects.ts` před každým buildem (i rychlým).
  */
+/** Buckets per first character (D95). */
+export const SUB_SHARDS = 32;
+
 export function shardOf(slug: string): string {
 	const c = slug.charCodeAt(0);
-	if (c >= 97 && c <= 122) return slug[0]!; // a–z
-	if (c >= 48 && c <= 57) return slug[0]!; // 0–9
-	if (c >= 65 && c <= 90) return slug[0]!.toLowerCase(); // A–Z sloučíme s malými
-	// Pomlčka, podtržítko, diakritika, cokoli nečekaného.
-	return '_';
+	let first: string;
+	if (c >= 97 && c <= 122) first = slug[0]!; // a–z
+	else if (c >= 48 && c <= 57) first = slug[0]!; // 0–9
+	else if (c >= 65 && c <= 90) first = slug[0]!.toLowerCase(); // A–Z sloučíme s malými
+	else first = '_'; // Pomlčka, podtržítko, diakritika, cokoli nečekaného.
+	// FNV-1a přes UTF-16 jednotky: `Math.imul` a `charCodeAt` dávají v Node
+	// i ve Workeru (obojí V8) bit po bitu totéž.
+	let h = 0x811c9dc5;
+	for (let i = 0; i < slug.length; i++) {
+		h ^= slug.charCodeAt(i);
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return first + String(h % SUB_SHARDS).padStart(2, "0");
 }

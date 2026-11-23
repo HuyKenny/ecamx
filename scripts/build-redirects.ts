@@ -15,10 +15,11 @@
  * žádný limit není. Tenhle skript proto jen přenese legacy pravidla a ověří,
  * že se pořád vejdou. Viz docs/DECISIONS.md D35.
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, rmSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { CATEGORY_MERGES, CATEGORY_TO_COUNTRY, canonicalTerm } from '../src/lib/taxonomy.ts';
+import { shardOf } from '../src/lib/redirect-shard.ts';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LEGACY = join(ROOT, 'seed', 'legacy-redirects.txt');
@@ -109,4 +110,37 @@ log(`${rules} legacy pravidel (limit ${HARD_LIMIT}); zaniklé modelky obsluhuje 
 if (rules > HARD_LIMIT) {
 	console.error(`[redirects] CHYBA: ${rules} > ${HARD_LIMIT}, Cloudflare přebytek zahodí`);
 	process.exit(1);
+}
+
+/**
+ * Shardy mapy zaniklých stránek (`public/gone/`) do tvaru, který čte Worker
+ * (`shardOf()`, D95: první znak + 32 kyblíčků). Sync je píše po prvním znaku
+ * a rychlý režim CI je bere z artefaktu posledního syncu — proto se převádí
+ * tady, před každým buildem. Idempotentní: už převedené shardy jen přepíše.
+ */
+{
+	const dir = join(ROOT, 'public', 'gone');
+	if (existsSync(dir)) {
+		const all: Record<string, string> = {};
+		let files = 0;
+		for (const name of readdirSync(dir)) {
+			if (!name.endsWith('.json')) continue;
+			Object.assign(all, JSON.parse(readFileSync(join(dir, name), 'utf8')) as Record<string, string>);
+			files++;
+		}
+		const out = new Map<string, Record<string, string>>();
+		for (const [slug, to] of Object.entries(all)) {
+			const k = shardOf(slug);
+			(out.get(k) ?? out.set(k, {}).get(k)!)[slug] = to;
+		}
+		rmSync(dir, { recursive: true, force: true });
+		mkdirSync(dir, { recursive: true });
+		let max = 0;
+		for (const [k, m] of out) {
+			const body = JSON.stringify(m);
+			max = Math.max(max, body.length);
+			writeFileSync(join(dir, `${k}.json`), body);
+		}
+		log(`gone/: ${Object.keys(all).length} přesměrování, ${files} → ${out.size} shardů (největší ${(max / 1024).toFixed(0)} kB)`);
+	}
 }
