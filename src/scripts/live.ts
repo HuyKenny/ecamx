@@ -5,7 +5,7 @@
  * Proč to jde jednodušeji: od 17. 11. 2026 skládá cron Worker á 5 minut
  * snímek z KOMPLETNÍCH feedů všech sítí. Mřížka se proto nemusí dohadovat,
  * které statické karty ještě žijí — prostě si řekne o ty, které vysílají
- * teď (`/api/live/grid/`), a vykreslí je stejnou šablonou jako build
+ * teď (statické `/livedata/` soubory, D95), a vykreslí je stejnou šablonou jako build
  * (`cardHtml`). Statické karty z buildu zůstávají v HTML pro crawler a jako
  * záloha, když snímek není čerstvý nebo API neodpoví.
  *
@@ -17,6 +17,9 @@
  */
 import { cardHtml, viewersText, type CardData } from '../lib/card';
 import { NETWORK_LABELS } from '../lib/labels';
+import { fetchGrid, fetchOnline, isLive, type GridResp } from '../lib/live-client';
+
+const safeDecode = (x: string): string | null => { try { return decodeURIComponent(x); } catch { return null; } };
 
 const ga = (name: string, params?: Record<string, unknown>) => {
 	try { (window as unknown as { gtag?: Function }).gtag?.('event', name, params); } catch { /* měření až druhé */ }
@@ -30,13 +33,6 @@ function storedSites(): string[] {
 	} catch { return []; }
 }
 
-interface GridResp {
-	age: number | null;
-	fresh: boolean;
-	failed: string[];
-	total?: Record<string, number>;
-	g: Record<string, CardData[]>;
-}
 
 // `let`: po výměně stránky bez načtení (D88, `zap.ts`) se sbírají znovu.
 let grids = Array.from(document.querySelectorAll<HTMLElement>('[data-live-grid]'));
@@ -44,7 +40,8 @@ const rail = document.querySelector<HTMLElement>('[data-rail]');
 /** Jak dlouho smí mřížka čekat na data, než ukáže statické karty. */
 const WAIT_MS = 1600;
 
-function buildQuery(sites: string[]): string {
+/** Grid keys and sizes of this page, the same set the old `?q=` carried. */
+function buildParts(): Array<[string, number]> {
 	const parts = new Map<string, number>();
 	for (const g of grids) {
 		const k = g.dataset.q ?? 'all';
@@ -55,25 +52,16 @@ function buildQuery(sites: string[]): string {
 	const maxN = Math.max(0, ...grids.map((g) => Number(g.dataset.n ?? 0)));
 	if (grids.length && !parts.has('all')) parts.set('all', maxN);
 	if (rail) parts.set('rail', Number(rail.dataset.n ?? 10));
-	const q = [...parts].map(([k, n]) => `${k}~${n}`).slice(0, 6).join(',');
-	const x = grids.find((g) => g.dataset.x)?.dataset.x;
-	// Ručně, ne přes URLSearchParams: ten zakóduje `:` a `,` a URL by se
-	// pak neshodovala s přednačtením v <head> (`Layout.astro`, `liveQuery`).
-	// Všechny znaky jsou z [a-z0-9:~,-], takže kódovat není co.
-	// `v=` jen mění URL: do 17. 11. 2026 zóna přepisovala Browser TTL na rok,
-	// takže prohlížeče měly starou odpověď uloženou pod původní adresou.
-	let url = `/api/live/grid/?v=2&q=${q}`;
-	if (sites.length) url += `&s=${[...sites].sort().join(',')}`;
-	if (x) url += `&x=${encodeURIComponent(x)}`;
-	return url;
+	return [...parts].slice(0, 6);
 }
 
-async function fetchLive(url: string): Promise<GridResp | null> {
-	try {
-		const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
-		if (!r.ok) return null;
-		return await r.json() as GridResp;
-	} catch { return null; }
+/**
+ * Live cards from the static files under `/livedata/` (D95) — no Worker
+ * runs for them. `Layout.astro` preloads the same files (`livePreloads`).
+ */
+function fetchLive(sites: string[]): Promise<GridResp | null> {
+	const x = grids.find((g) => g.dataset.x)?.dataset.x;
+	return fetchGrid(buildParts(), sites, x);
 }
 
 function fillGrid(grid: HTMLElement, data: GridResp): boolean {
@@ -136,7 +124,7 @@ async function hydrate(sites: string[], first: boolean): Promise<void> {
 		shownStatic = true;
 		for (const g of grids) g.classList.add('is-ready');
 	}, WAIT_MS) : 0;
-	const data = await fetchLive(buildQuery(sites));
+	const data = await fetchLive(sites);
 	clearTimeout(timer);
 	if (!data) {
 		ga('live_feed_fail', { reason: 'api' });
@@ -202,12 +190,19 @@ function checkModelLive(): void {
 	const badge = document.querySelector<HTMLElement>('[data-live-scope] [data-live-badge]');
 	const [net, slug] = (badge?.dataset.liveBadge ?? '').split(':');
 	if (badge && net && slug) {
-		void fetch(`/api/online/${net}/`, { signal: AbortSignal.timeout(8000) })
-			.then((r) => r.json() as Promise<{ online?: Record<string, number>; stale?: boolean; truncated?: boolean }>)
+		// Stránka modelky je `/live/{p}/` → stačí jeden shard (~20 kB) místo
+		// celé mapy sítě (Chaturbate ~45 kB); mimo `/live/` mapa sítě (D95).
+		const pm = /^\/live\/([^/]+)\/?$/.exec(location.pathname);
+		const p = pm ? safeDecode(pm[1]!) : null;
+		const state: Promise<{ live: boolean | null; v?: number | null }> = p
+			? isLive(p, net, slug)
+			: fetchOnline(net).then((d) => (!d || d.stale || d.truncated ? { live: null }
+				: d.online[slug] === undefined ? { live: false } : { live: true, v: d.online[slug] }));
+		void state
 			.then((d) => {
 				// Nečerstvá nebo neúplná odpověď nic nedokazuje — nechat build.
-				if (!d?.online || d.stale || d.truncated) return;
-				const viewers = d.online[slug];
+				if (d.live === null) return;
+				const viewers = d.live ? (d.v ?? 0) : undefined;
 				const scope = badge.closest<HTMLElement>('[data-live-scope]')!;
 				if (viewers === undefined) {
 					badge.textContent = 'Offline';
@@ -251,7 +246,7 @@ document.addEventListener('ecamx:zapped', () => {
 	const a = document.querySelector<HTMLAnchorElement>('[data-cta-retarget]');
 	const m = a && /^\/go\/([a-z0-9]+)\//.exec(new URL(a.href, location.href).pathname);
 	if (a && m) {
-		void fetchLive(`/api/live/grid/?v=2&q=n:${m[1]}~1`).then((d) => {
+		void fetchGrid([[`n:${m[1]}`, 1]]).then((d) => {
 			const c = d?.fresh ? d.g[`n:${m[1]}`]?.[0] : undefined;
 			if (c) a.href = `/go/${m[1]}/${encodeURIComponent(c.u)}/?p=network`;
 		});

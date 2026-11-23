@@ -117,6 +117,7 @@ const countries = FACETS.countries.slice(0, 14);
 	 */
 	import { loadIndex, type Idx, type IdxMeta } from '../lib/search-index-client';
 	import { readWatch } from '../lib/watchlist';
+	import { fetchOnline } from '../lib/live-client';
 
 	const root = document.querySelector<HTMLElement>('[data-finder]');
 	if (root) {
@@ -259,11 +260,8 @@ const countries = FACETS.countries.slice(0, 14);
 			live = new Map();
 			await Promise.all(meta.nets.map(async (net) => {
 				try {
-					const r = await fetch(`/api/online/${net}/`, { signal: AbortSignal.timeout(6000) });
-					if (!r.ok) return;
-					const feed = await r.json() as {
-						online: Record<string, number>; truncated?: boolean;
-					};
+					const feed = await fetchOnline(net);
+					if (!feed) return;
 					for (const [slug, viewers] of Object.entries(feed.online ?? {})) {
 						live!.set(`${net}:${slug}`, viewers);
 					}

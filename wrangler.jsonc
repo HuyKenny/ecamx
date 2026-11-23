@@ -16,10 +16,13 @@
 
   "assets": { "binding": "ASSETS" },
 
-  // Binding jen na namespace `ecamx-live` se ŽIVÝM SNÍMKEM (D82, od D85 oddělený od registry) — píše ho cron
-  // Worker á 5 min, web ho čte (`src/lib/live-snapshot.ts`). Registry a
-  // `registry-gone` web dál NEČTE (megabajty, D3) — ty zná jen sync přes REST.
-  "kv_namespaces": [{ "binding": "LIVE_KV", "id": "0c5a6fee4bcf4a45916324a697912c24" }],
+  // Živý snímek (D95): statické soubory assets-only Workeru `ecamx-live` na
+  // `ecamx.com/livedata/*` (publikuje GitHub Actions `live.yml` á ~5 min).
+  // Prohlížeč je čte přímo (žádný Worker), tenhle Worker přes service binding —
+  // `fetch()` na stejnou zónu by route cizího Workeru přeskočil. KV binding
+  // (`ecamx-live`, D85) je pryč: na Workers Free je 1 000 zápisů KV denně na
+  // celý účet a snímek by jich sám spotřeboval ~860.
+  "services": [{ "binding": "LIVE_DATA", "service": "ecamx-live" }],
 
   "observability": { "enabled": true }
 }

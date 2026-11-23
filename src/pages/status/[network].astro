@@ -1,19 +1,19 @@
 ---
 /**
  * „Is Chaturbate down?" (D91) — live status of a cam site from our own
- * 5-minute check (cron `ecamx-cron`, snapshot in KV, D82).
+ * 5-minute check (GitHub Actions `live.yml`, static `/livedata/`, D95).
  *
  * Honest wording matters: when our fetch fails, that can be the site OR our
  * side, so the page says "we could not reach its feed", never "it is down".
  * Rules: no `data.ts` (13 MB into the Worker, AGENTS 135), no inline logic
- * scripts (CSP). The snapshot read is memoised per isolate (`readSnapshot`).
+ * scripts (CSP). Data: `/livedata/meta.json` + `p/all.json` via `LIVE_DATA` (D95).
  * Searched ~2,500×/month in the US ("chaturbate down", "down detector", …).
  */
 // Breadcrumbs.astro se sem NEimportuje: bundler ho sdílí v chunku s data.ts
 // a SSR stránka by do Workeru přitáhla celý katalog (AGENTS 135, D91).
 import Layout from '../../layouts/Layout.astro';
-import { readSnapshot, isFresh } from '../../lib/live-snapshot';
-import { NETWORK_IDS, pick } from '../../lib/live-grid';
+import { readMeta, readPools, netFresh } from '../../lib/live-data';
+import { NETWORK_IDS } from '../../lib/live-grid';
 import { NETWORK_LABELS } from '../../lib/labels';
 import { SITE_NAME } from '../../lib/site';
 import { withSecurityHeaders } from '../../lib/security-headers';
@@ -29,17 +29,19 @@ if (!NETWORK_IDS.has(net)) {
 // Jedna URL na síť — `/status/Chaturbate/` by byla duplicita (audit 22. 11.).
 if (raw !== net) return Astro.redirect(`/status/${net}/`, 301);
 const label = NETWORK_LABELS[net] ?? net;
-const snap = await readSnapshot();
+// D95: per-network state from `/livedata/meta.json`, counts and the top rooms
+// from the per-network pool of `p/all.json` (≤ 48 rows) — no 5 MB snapshot.
+const [snap, pools] = await Promise.all([readMeta(), readPools('all')]);
 const now = Date.now();
 const state = snap?.nets[net];
-const fresh = !!snap && isFresh(snap, net, now);
+const fresh = !!snap && netFresh(snap, net, now);
 const mins = (ts: number) => Math.max(0, Math.round((now - ts) / 60_000));
-const recs = snap ? snap.m.filter((r) => r.n === net) : [];
-const live = state?.count ?? recs.length;
-const privateNow = recs.filter((r) => r.pr).length;
-const viewers = recs.map((r) => r.v ?? 0).filter((v) => v > 0);
-const watching = viewers.reduce((a, b) => a + b, 0);
-const top = snap ? pick(snap.m, `n:${net}`, 8).cards : [];
+const recs = pools?.nets[net] ?? [];
+const live = state?.count ?? pools?.tn[net] ?? 0;
+const privateNow = state?.pr ?? 0;
+const watching = state?.w ?? 0;
+const viewers = { length: state?.wn ?? 0 };
+const top = recs.filter((r) => !r.pr).slice(0, 8);
 const others = snap ? Object.entries(snap.nets).filter(([id]) => id !== net && NETWORK_IDS.has(id))
 	.sort((a, b) => b[1].count - a[1].count) : [];
 const fmt = (n: number) => n.toLocaleString('en-US');
@@ -114,8 +116,8 @@ const tone = { up: 'border-emerald-500/40 bg-emerald-500/10', warn: 'border-ambe
 					{others.map(([id, s]) => (
 						<li class="flex items-center justify-between py-2">
 							<a href={`/status/${id}/`} class="text-ink-200 hover:text-white">{NETWORK_LABELS[id] ?? id}</a>
-							<span class={isFresh(snap!, id, now) ? 'text-emerald-400' : 'text-amber-400'}>
-								{isFresh(snap!, id, now) ? `up · ${fmt(s.count)} live` : 'feed not reached'}
+							<span class={netFresh(snap!, id, now) ? 'text-emerald-400' : 'text-amber-400'}>
+								{netFresh(snap!, id, now) ? `up · ${fmt(s.count)} live` : 'feed not reached'}
 							</span>
 						</li>
 					))}

@@ -14,6 +14,7 @@
 import { canonicalUrl, SITE_NAME, SITE_URL } from '../lib/site';
 import { THUMBNAIL_HOSTS } from '../lib/thumbnail-hosts';
 import { NETWORK_WEIGHT } from '../lib/network-weight';
+import { LIVE_BASE, fileFor } from '../lib/live-static';
 import { facetLabel } from '../lib/labels';
 import { UI, alternatesFor, langOf, ES_ACTIVE as ES_ROUTES, esPath, type Lang } from '../lib/i18n';
 import { ES_PAGES } from '../content/es-pages';
@@ -43,6 +44,13 @@ interface Props {
 }
 
 const { title, description, noindex = false, image, imageAlt, ogType = 'website', liveQuery, built } = Astro.props;
+/**
+ * Static live files this page's grids will ask for (D95) — the same
+ * `fileFor()` `live-client.ts` uses, or the preload is wasted. Without a site
+ * filter; a filtering visitor fetches the per-network pools instead.
+ */
+const livePreloads = [...new Set((liveQuery ?? '').split(',').map((p) => p.split('~')[0]!).filter(Boolean)
+	.map((k) => fileFor(k, false)))];
 const lang: Lang = Astro.props.lang ?? langOf(Astro.url.pathname);
 const u = UI[lang];
 const es = lang === 'es';
@@ -282,9 +290,9 @@ const builtAt = built ?? (meta as { generatedAt: string }).generatedAt;
 
 	{/* Živá data mřížky se začnou stahovat UŽ TEĎ (D63) — stejná URL, jakou
 	    pak složí `src/scripts/live.ts`, jinak by se přednačtení nevyužilo. */}
-	{liveQuery && (
-		<link rel="preload" as="fetch" crossorigin="anonymous" href={`/api/live/grid/?v=2&q=${liveQuery}`} />
-	)}
+	{livePreloads.map((f) => (
+		<link rel="preload" as="fetch" crossorigin="anonymous" href={`${LIVE_BASE}/${f}`} />
+	))}
 
 	<slot name="head" />
 </head>

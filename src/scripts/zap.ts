@@ -5,17 +5,19 @@
  * - Tlačítko `[data-zap-next]` ve `watch-bar` (statická i dynamická stránka),
  *   klávesa `N`, klik na řádek v pravém sloupci „Live now like…".
  * - Další modelka = první nenavštívená z fasety podobných (`data-zap-q`)
- *   v `/api/live/grid/`, doplněná z `all`.
+ *   ve statických `/livedata/` souborech (D95), doplněná z `all`.
  * - Výměna: stáhne se `/live/{p}/` (statická nebo `/watch/`, obojí v edge
  *   cache), vymění se `<main>`, titulek, canonical, robots a JSON-LD,
  *   `history.pushState`. Skripty se znovu inicializují přes `ecamx:zapped`
  *   (`model-page.ts`, `watch.ts`, `live.ts`, `site.ts`); skript stránky, který
  *   tu ještě nebyl (statická ↔ `/watch/`), se doplní a spustí sám.
- * - Konec streamu během sledování: dotaz `/api/live/is/` každé 2 min →
+ * - Konec streamu během sledování: shard `/livedata/w/` každé 2 min (D95) →
  *   odpočet 5 s na další (Zrušit = dnešní náhrada / hláška, D63/D67).
  *   Stránka otevřená jako offline (příchod z Googlu) se sama nepřepíná.
  * - Selhání čehokoli = obyčejná navigace na `/live/{p}/`.
  */
+
+import { fetchGrid, isLive } from '../lib/live-client';
 
 interface Card { n: string; u: string; p: string; s: string }
 
@@ -58,11 +60,10 @@ async function nextCard(): Promise<Card | null> {
 	const skip = new Set([...seen(), cur]);
 	queue = queue.filter((c) => !skip.has(c.p));
 	if (!queue.length || queueFor !== q) {
-		const parts = q === 'all' ? 'all~24' : `${q}~24,all~24`;
+		const parts: Array<[string, number]> = q === 'all' ? [['all', 24]] : [[q, 24], ['all', 24]];
 		try {
-			const r = await fetch(`/api/live/grid/?v=2&q=${parts}&x=${encodeURIComponent(x)}`, { signal: AbortSignal.timeout(6000) });
-			const d = await r.json() as { fresh?: boolean; g?: Record<string, Card[]> };
-			if (d.fresh && d.g) {
+			const d = await fetchGrid(parts, [], x);
+			if (d?.fresh) {
 				const all = [...(d.g[q] ?? []), ...(q === 'all' ? [] : d.g.all ?? [])];
 				const uniq = new Map(all.map((c) => [c.p, c]));
 				queue = [...uniq.values()].filter((c) => !skip.has(c.p) && `${c.n}:${c.s}` !== x);
@@ -179,8 +180,10 @@ function startPoll(): void {
 	if (!key || !badge) return;
 	pollTimer = window.setInterval(() => {
 		if (document.hidden || ended || busy) return;
-		void fetch(`/api/live/is/?k=${encodeURIComponent(key)}`, { signal: AbortSignal.timeout(6000) })
-			.then((r) => r.json() as Promise<{ live: boolean | null }>)
+		const [net, slug] = key.split(':');
+		let p: string;
+		try { p = decodeURIComponent(new URL(location.href).pathname.split('/')[2] ?? ''); } catch { return; }
+		void isLive(p, net ?? '', slug ?? '')
 			.then((d) => { if (d.live === false && currentKey() === key) void streamEnded(key); })
 			.catch(() => { /* příště */ });
 	}, POLL_MS);

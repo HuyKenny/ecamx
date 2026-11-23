@@ -28,6 +28,7 @@
  * Modul **nesmí importovat `data.ts`** — ten tahá 13 MB katalogu a šel by do
  * klientského bundlu.
  */
+import { fetchOnline } from './live-client';
 
 export const WATCH_KEY = 'ecamx-watch';
 
@@ -141,9 +142,8 @@ const inflight = new Map<string, Promise<Feed | null>>();
 function feedOf(network: string): Promise<Feed | null> {
 	let p = inflight.get(network);
 	if (!p) {
-		p = fetch(`/api/online/${network}/`, { signal: AbortSignal.timeout(6000) })
-			.then((r) => (r.ok ? (r.json() as Promise<Feed>) : null))
-			.catch(() => null);
+		// Static `/livedata/online/{net}.json` (D95), same contract as the old API.
+		p = fetchOnline(network).then((r) => r as Feed | null).catch(() => null);
 		inflight.set(network, p);
 	}
 	return p;

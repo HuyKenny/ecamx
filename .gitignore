@@ -34,3 +34,4 @@ seed/facets-published.json
 .DS_Store
 *.log
 worker-configuration.d.ts
+live-out/

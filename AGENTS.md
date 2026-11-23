@@ -48,10 +48,18 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
 - **Registry v Cloudflare KV** (přes REST API, jen při buildu — ne binding).
   Drží streak/first/last u každé modelky, aby profilové URL nemizely mezi buildy.
   Lokálně padá na `seed/registry.json`.
-- **Živý stav = snímek v KV** (`live-snapshot`, cron `ecamx-cron` á 5 min, D82).
-  Dynamické routy: `/api/online/[network]`, `/api/live/grid`, `/watch/[p]`
-  (SSR stránka živé modelky bez statické), `/go/`, `/api/stream/`, catch-all.
-  Ostatní je statika. Design a značka viz D83 (`src/lib/card.ts`,
+- **Živý stav = statické JSON soubory na `/livedata/`** (D95, od 23. 11. 2026;
+  dřív KV + cron Worker `ecamx-cron`, D82). Skládá je GitHub Actions `live.yml`
+  (á 15 min job, uvnitř 3 publikace po 5 min) skriptem `scripts/live-publish.ts`
+  a nahrává `wrangler deploy -c wrangler.live.jsonc` do assets-only Workeru
+  `ecamx-live` (route `ecamx.com/livedata/*`, žádný skript neběží = zdarma).
+  Tvar souborů: `src/lib/live-static.ts`; prohlížeč čte přes
+  `src/lib/live-client.ts`, Worker přes service binding `LIVE_DATA`
+  (`src/lib/live-data.ts`). Dynamické routy Workeru: `/go/`, `/api/stream/`,
+  `/status/`, catch-all (zaniklé stránky + `/live/{p}/` živé modelky bez
+  statické stránky = předrenderovaná kostra `/watch-shell/` doplněná
+  `HTMLRewriter`em, `src/lib/watch-render.ts`). `/api/online/*` a
+  `/api/live/*` jsou jen konstantní „nevíme" pro staré HTML. Ostatní je statika. Design a značka viz D83 (`src/lib/card.ts`,
   `src/components/LiveGrid.astro`, `src/scripts/live.ts`, `design/src/`).
 
 ## Pasti, na které se tu už narazilo
@@ -428,7 +436,8 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     píše mřížka, jak je výpis starý, a nabídne načtení bez cache. Bez toho web
     tvrdil „Nobody in this category is live right now" ve chvíli, kdy byly živé
     tisíce pokojů. Karty se dál skrývají, mění se jen tvrzení. Viz D56.
-72. **Zamrzlý deploy hlídá `bin/ecamx-deploy-watch.py`** (cron 30 min, Discord).
+72. **Zamrzlý deploy hlídá `workers/cron/deploy-watch.ts`** (od D95 krok v `live.yml`
+    á 15 min přes `scripts/deploy-watch-gh.ts`, Discord; dřív Malina, pak cron Worker).
     Hlídá SYMPTOM — věk nasazeného buildu a stav posledního běhu CI — ne
     konkrétní guard, protože příště spadne jiný. Pět spadlých běhů za sebou
     zůstalo deset hodin bez povšimnutí; to bylo dražší než ta chyba sama.
@@ -935,9 +944,10 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     `PUBLIC_*` se proto čte líně v `try`. Viz D82.
 134. **Kdo vysílá, ví jen snímek (D82) — a jen když je čerstvý.** Klient smí
     kartu nebo přehrávač zhasnout jen při `fresh` a síti `ok`; jinak nechává
-    stav z buildu. Nový kód nad živým stavem čte `src/lib/live-snapshot.ts`,
-    ne feedy sítí.
-135. **Layout, `LiveGrid`, `card.ts` a vše pod `/watch/` NESMÍ importovat
+    stav z buildu. Nový kód nad živým stavem čte `/livedata/` přes
+    `src/lib/live-client.ts` (prohlížeč) nebo `src/lib/live-data.ts` (Worker),
+    ne feedy sítí. Čerstvost = `FRESH_MS` 30 min (D95).
+135. **Layout, `LiveGrid`, `card.ts`, `watch-shell.astro` a `watch-render.ts` NESMÍ importovat
     `data.ts`.** Dynamická stránka modelky běží ve Workeru a katalog (13 MB)
     by skončil v bundlu. Převod modelky na kartu dělá stránka (`toCards()`
     v `card-model.ts`), popisky jsou v `labels.ts`, konstanty v `site.ts`.
@@ -950,7 +960,7 @@ Dev server pouštěj na pozadí: `astro dev --background`, pak `astro dev logs` 
     `init()`, která čte aktuální DOM a spouští se znovu na `ecamx:zapped`;
     listenery na `document` jen jednou (guard na `window`), HLS se ruší na
     `ecamx:zap-before`. Žádné inline `<script>` s logikou v `live/[slug].astro`
-    ani `watch/[p].astro` (po výměně by se nespustily) — jen import modulu.
+    ani `watch-shell.astro` (po výměně by se nespustily) — jen import modulu.
 138. **Strop 5 000 stránek modelek (D88) drží `staticLive` + vyhrazené místo
     pro offline stránky s poptávkou, NE `liveBudget`.** `liveBudget` řídí,
     kdo se zapíše do registry (sbírá `seen`); svázat ho se stropem stránek
@@ -1003,3 +1013,16 @@ Přístupy: `~/ai/credentials/.ecamx-credentials.env` (nikdy do gitu ani do chat
     Nový podslug pod `/site/{síť}/` patří do `RESERVED_NETWORK_SUBPAGES`.
 147. **Španělské texty (D94) jen s ověřeným tvrzením.** Než se napíše „nejvíc X je
     na Y", ověřit v `models.json`; čísla jen přes `{n}`/`{sites}`.
+148. **Na Workers Free (D95) nepatří do Workeru nic periodického ani těžkého.**
+    10 ms CPU na volání, 100 000 Worker requestů/den na CELÝ účet, 1 000 zápisů
+    KV/den na účet a cron triggery jen pro hub. Živá data proto skládá Actions
+    a servíruje assets-only Worker (`ecamx-live`) — requesty na statické assety
+    se nepočítají. Kdo přidá do klienta `fetch` na `/api/…`, vrací Worker do hry
+    u každého zobrazení; patří to do `/livedata/`. Kostra `/watch-shell/` se
+    plní `HTMLRewriter`em (data-w-* sloty), ne Astro renderem. Route na cestě
+    (`ecamx.com/livedata/*`) vyhrává nad custom doménou webu a `fetch()` na
+    stejnou zónu z Workeru by ji přeskočil — proto service binding `LIVE_DATA`.
+    Publikace padá (a nechá starý snímek), když se nedá načíst
+    `/live-pages.json`: bez něj by modelka se statickou `slug-síť` stránkou
+    dostala holý `slug` cizí modelky. Z runneru se na vlastní web chodí
+    s hlavičkou `x-malina-warm` (WAF BotWall).

@@ -26,7 +26,12 @@
  */
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { readSnapshot, snapIndex } from '../../../../lib/live-snapshot';
+import { liveByPath } from '../../../../lib/live-data';
+import type { WRec } from '../../../../lib/live-static';
+
+/** Same as `slugify()` in `scripts/cam-networks.ts` (page paths are built from it). */
+const slugify = (s: string) => s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+	.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 96);
 
 export const prerender = false;
 
@@ -132,8 +137,18 @@ export const GET: APIRoute = async ({ params, request }) => {
 	 * odpověď bez dotazu na síť. Cam4 navíc posílá adresu streamu přímo ve
 	 * feedu, takže ze snímku (max. 5 min starého) se vrací rovnou.
 	 */
-	const snap = await readSnapshot();
-	const rec = snap ? snapIndex(snap).byUser.get(`${net}:${user.toLowerCase()}`) : undefined;
+	// D95: the snapshot is static — the model's page path is `slug` or
+	// `slug-net` (`scripts/live-publish.ts`), one ~80 kB shard each.
+	const slug = slugify(user);
+	let known = false;
+	let rec: WRec | undefined;
+	for (const p of [slug, `${slug}-${net}`]) {
+		const r = await liveByPath(p);
+		if (r === undefined) continue;
+		known = true;
+		if (r && r.n === net && r.u.toLowerCase() === user.toLowerCase()) { rec = r; break; }
+	}
+	const snap = known;
 	// I u NEčerstvého snímku (výpadek feedu sítě) se upstream ptáme jen na
 	// nick, který v posledním snímku byl — jinak by vymyšlené nicky tloukly
 	// do API sítě na náš affiliate účet (audit 22. 11. 2026). Bez snímku

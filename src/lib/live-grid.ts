@@ -2,7 +2,7 @@
  * Výběr živých karet ze snímku pro mřížky (D82). Čistá logika bez I/O —
  * volá ji `/api/live/grid/` a dynamická stránka modelky ve Workeru.
  *
- * Fasety mají stejné klíče, jaké skládá cron (`workers/cron/live.ts`):
+ * Fasety mají stejné klíče, jaké skládá publisher (`scripts/live-publish.ts`, D95):
  * `all`, `g:female`, `t:latina`, `m:bbw`, `e:`/`h:`/`b:` (etnicita, vlasy,
  * postava), `c:co` (země), `n:chaturbate` (síť).
  */
@@ -10,10 +10,11 @@ import facets from '../data/facets.json';
 import type { LiveRec } from './live-snapshot-types.ts';
 import type { CardData } from './card.ts';
 import { weightOf, payingScore, DEFAULT_WEIGHT } from './network-weight.ts';
+import { categoryTags, roundRobin, toCard } from './live-static.ts';
 
 /** Kategorie, na které smí karta odkazovat tagem (existující stránky). */
 const f = facets as unknown as Record<string, { slug: string }[]>;
-const CATEGORY = new Set<string>([
+export const CATEGORY = new Set<string>([
 	...(f.categories ?? []).map((c) => c.slug),
 	...(f.curated ?? []).map((c) => c.slug),
 ]);
@@ -55,32 +56,14 @@ export function matches(r: LiveRec, key: string): boolean {
 }
 
 export function toCardData(r: LiveRec): CardData {
-	const tg: string[] = [];
-	for (const k of r.f) {
-		if (tg.length >= 2) break;
-		if ((k.startsWith('t:') || k.startsWith('m:')) && CATEGORY.has(k.slice(2)) && !tg.includes(k.slice(2))) {
-			tg.push(k.slice(2));
-		}
-	}
-	return {
-		n: r.n, u: r.u, p: r.p, s: r.s, t: r.t,
-		...(r.tf ? { tf: r.tf } : {}),
-		...(r.v ? { v: r.v } : {}),
-		...(r.h ? { h: 1 as const } : {}),
-		...(r.nw ? { nw: 1 as const } : {}),
-		...(r.ty ? { ty: 1 as const } : {}),
-		...(r.pr ? { pr: 1 as const } : {}),
-		...(r.c ? { c: r.c } : {}),
-		...(r.a ? { a: r.a } : {}),
-		...(r.pv ? { pv: r.pv } : {}),
-		...(tg.length ? { tg } : {}),
-	};
+	return toCard(r, categoryTags(r.f, CATEGORY));
 }
 
 /**
  * Prokládání sítí — stejné pravidlo jako `diversify()` v `data.ts` (váhy
  * z `network-weight.ts`, D63), jen nad řádky snímku. Vstup je seřazený podle
- * diváků (tak ho ukládá cron).
+ * diváků. Samotné prokládání je sdílené s publisherem a klientem
+ * (`roundRobin` v `live-static.ts`, D95).
  */
 export function diversifyRecs(list: LiveRec[], limit: number): LiveRec[] {
 	const by = new Map<string, LiveRec[]>();
@@ -93,24 +76,7 @@ export function diversifyRecs(list: LiveRec[], limit: number): LiveRec[] {
 		q.sort((a, b) => (payingScore({ viewers: b.v, toy: !!b.ty }) - payingScore({ viewers: a.v, toy: !!a.ty }))
 			|| ((b.v ?? 0) - (a.v ?? 0)));
 	}
-	const queues = [...by.entries()].sort((a, b) => weightOf(b[0]) - weightOf(a[0]));
-	const cursor = new Array(queues.length).fill(0);
-	const out: LiveRec[] = [];
-	let progress = true;
-	while (out.length < limit && progress) {
-		progress = false;
-		for (let i = 0; i < queues.length && out.length < limit; i++) {
-			const [net, q] = queues[i]!;
-			for (let n = weightOf(net); n > 0 && out.length < limit; n--) {
-				const r = q[cursor[i]];
-				if (!r) break;
-				cursor[i]++;
-				out.push(r);
-				progress = true;
-			}
-		}
-	}
-	return out;
+	return roundRobin([...by.entries()], limit, weightOf);
 }
 
 export interface PickOpts {

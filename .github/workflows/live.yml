@@ -1,0 +1,153 @@
+name: Live snapshot
+
+# **Who is live right now (D95, 23. 11. 2026).** Replaces the cron Worker
+# `ecamx-cron` (D82), which built the snapshot every 5 min into KV and made
+# the web Worker parse it on every grid request. The account moves to Workers
+# Free: 10 ms CPU per invocation, 100k Worker requests/day, 1 000 KV writes/day
+# and the 5 cron triggers reserved for the hub — none of that fits the old way.
+#
+# Now: `scripts/live-publish.ts` fetches every network here, writes the
+# answers as static JSON (`live-out/livedata/…`) and `wrangler deploy -c
+# wrangler.live.jsonc` uploads the changed files to the assets-only Worker
+# `ecamx-live`, routed at `ecamx.com/livedata/*`. Static asset requests run no
+# Worker script, so grids, the finder, `/my/` and the stream switcher cost
+# nothing. Repo is PUBLIC → Actions minutes are free; logs are public too, so
+# the scripts print counts only, never URLs or keys.
+#
+# **One job publishes three times, five minutes apart.** GitHub delays and
+# drops `*/5` schedules under load (5–20 min measured on other repos), so a
+# job every 15 min that loops gives a steadier cadence and one `pnpm install`
+# instead of three. Clients treat data older than 30 min as "don't know" and
+# keep the static cards (`FRESH_MS` in `src/lib/live-static.ts`).
+on:
+  schedule:
+    - cron: '4,19,34,49 * * * *'
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: 'How many publishes, 5 min apart'
+        default: '3'
+
+concurrency:
+  group: live
+  # A delayed run waits for the previous one instead of killing it mid-upload.
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # deploy watchdog: dispatch `deploy.yml` when the site froze; keepalive below
+  actions: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      # Pinned to SHAs like deploy.yml: this job holds the deploy token.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # Only wrangler is needed, but a partial install would not match the
+      # lockfile; with the pnpm cache this takes ~20 s.
+      - run: pnpm install --frozen-lockfile
+
+      - name: Publish live snapshot
+        env:
+          ROUNDS: ${{ inputs.rounds || '3' }}
+          MALINA_WARM_TOKEN: ${{ secrets.MALINA_WARM_TOKEN }}
+          # presence:YYYY-MM-DD (≤ 24 KV writes/day, REST)
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CHATURBATE_AFFILIATE: ${{ secrets.CHATURBATE_AFFILIATE }}
+          CHATURBATE_TOUR: ${{ vars.CHATURBATE_TOUR }}
+          CHATURBATE_TRACK: ${{ vars.CHATURBATE_TRACK }}
+          CAMSODA_AFFILIATE: ${{ secrets.CAMSODA_AFFILIATE }}
+          CAM4_SID: ${{ secrets.CAM4_SID }}
+          CAM4_AID: ${{ vars.CAM4_AID }}
+          CAM4_RP: ${{ vars.CAM4_RP }}
+          AMATEUR_API_KEY: ${{ secrets.AMATEUR_API_KEY }}
+          AMATEUR_LANG: ${{ vars.AMATEUR_LANG }}
+          BONGACAMS_USER_ID: ${{ secrets.BONGACAMS_USER_ID }}
+          XLOVE_AFFILIATE_ID: ${{ secrets.XLOVE_AFFILIATE_ID }}
+          XLOVE_API_KEY: ${{ secrets.XLOVE_API_KEY }}
+          LIVEJASMIN_USERID: ${{ secrets.LIVEJASMIN_USERID }}
+          LIVEJASMIN_API_KEY: ${{ secrets.LIVEJASMIN_API_KEY }}
+          LIVEJASMIN_PSPROGRAM: ${{ vars.LIVEJASMIN_PSPROGRAM }}
+          CRAKREVENUE_TOKEN: ${{ secrets.CRAKREVENUE_TOKEN }}
+          CRAKREVENUE_API_KEY: ${{ secrets.CRAKREVENUE_API_KEY }}
+          CRAKREVENUE_AFF_ID: ${{ secrets.CRAKREVENUE_AFF_ID }}
+        run: |
+          # Explicit status handling below; `-e` would stop the loop on the
+          # first harmless non-zero (`grep` without a match).
+          set +e
+          ok=0; fail=0
+          for i in $(seq 1 "$ROUNDS"); do
+            t0=$SECONDS
+            echo "::group::round $i"
+            if node --experimental-strip-types scripts/live-publish.ts --out live-out; then
+              # Public files must never carry a key (a feed could echo one
+              # back). Only names are printed.
+              leak=0
+              for k in AMATEUR_API_KEY XLOVE_API_KEY LIVEJASMIN_API_KEY CRAKREVENUE_TOKEN CRAKREVENUE_API_KEY CLOUDFLARE_API_TOKEN MALINA_WARM_TOKEN; do
+                v="${!k}"
+                if [ ${#v} -ge 8 ] && grep -rqF -- "$v" live-out; then echo "::error::$k found in live-out, not published"; leak=1; fi
+              done
+              if [ $leak = 0 ]; then
+                pnpm exec wrangler deploy -c wrangler.live.jsonc > deploy.log 2>&1
+                rc=$?
+                grep -E 'Uploaded|No updated|Deployed|Current Version|ERROR|error' deploy.log | head -n 12
+                # wrangler can exit 0 without deploying (pitfall 111): require the marker.
+                if [ $rc = 0 ] && grep -q 'Current Version ID' deploy.log; then ok=$((ok+1)); else tail -n 20 deploy.log; fail=$((fail+1)); fi
+              else
+                fail=$((fail+1))
+              fi
+            else
+              fail=$((fail+1))
+            fi
+            echo "::endgroup::"
+            if [ "$i" -lt "$ROUNDS" ]; then
+              wait=$((300 - (SECONDS - t0)))
+              if [ $wait -gt 0 ]; then sleep $wait; fi
+            fi
+          done
+          rm -f deploy.log
+          echo "published $ok, failed $fail"
+          # Red only when nothing went out; one lost round is not an incident.
+          [ $ok -gt 0 ]
+
+      # Deploy watchdog (D56), from the retired cron Worker: build age + last
+      # `deploy.yml` run → kick CI / Discord. State in KV only when it acts.
+      - name: Deploy watchdog
+        if: always()
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          MALINA_WARM_TOKEN: ${{ secrets.MALINA_WARM_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+        run: node --experimental-strip-types scripts/deploy-watch-gh.ts
+
+      # GitHub disables schedules of a public repo after 60 days without
+      # commits. Re-enabling through the API once a day keeps both schedules
+      # alive when nobody touches the code.
+      - name: Keep schedules enabled
+        if: github.event_name == 'schedule'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [ "$(date -u +%H%M)" \< "0020" ] || exit 0
+          for wf in live.yml deploy.yml; do
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/actions/workflows/$wf/enable" && echo "$wf enabled"
+          done

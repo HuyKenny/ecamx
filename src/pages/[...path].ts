@@ -24,7 +24,8 @@ import { ALLOWED_FACETS, NETWORK_IDS } from '../lib/live-grid';
 import type { APIRoute } from 'astro';
 import { env as workerEnv } from 'cloudflare:workers';
 import { redirectFor, type ShardLoader } from '../lib/gone';
-import { readLivePaths, safeDecode } from '../lib/live-snapshot';
+import { liveByPath, safeDecode } from '../lib/live-data';
+import { renderWatch } from '../lib/watch-render';
 import { withSecurityHeaders } from '../lib/security-headers';
 
 
@@ -90,21 +91,23 @@ function shardLoader(assets: { fetch(req: Request): Promise<Response> } | undefi
  */
 const PAGED = /^\/(page|girls|guys|couples|trans|(?:cams|country|site)\/[a-z0-9-]+)\/\d{1,3}\/?$/;
 
-export const GET: APIRoute = async ({ url, rewrite }) => {
+export const GET: APIRoute = async ({ url }) => {
+	const assets = (workerEnv as unknown as { ASSETS?: { fetch(req: Request): Promise<Response> } }).ASSETS;
 	/**
 	 * Živá modelka bez statické stránky (D82) → dynamická stránka ze snímku.
 	 * Musí to být PŘED mapou zaniklých stránek: modelka, která se vrátila,
 	 * má přednost před svým starým přesměrováním.
+	 *
+	 * D95: snímek je statický (`/livedata/w/{shard}.json`, služba `LIVE_DATA`),
+	 * stránka je předrenderovaná kostra `/watch-shell/` doplněná přes
+	 * `HTMLRewriter` — žádný Astro render ve Workeru (10 ms CPU).
 	 */
 	const live = /^\/live\/([^/]+)\/?$/.exec(url.pathname);
-	if (live) {
+	if (live && assets) {
 		const p = safeDecode(live[1]!);
-		// Malý klíč `live-paths` místo 5 MB snímku: crawler chodí hlavně na
-		// zaniklé slugy a ty by jinak parsovaly celý snímek (D85).
-		const paths = p === null ? null : await readLivePaths();
-		if (p !== null && paths?.has(p)) {
-			// Edge cache 60 s (D85): stránka se bez ní vykreslovala ve Workeru
-			// při každém zobrazení. Klíč je kanonická `/live/` adresa.
+		const rec = p === null ? null : await liveByPath(p);
+		if (rec) {
+			// Edge cache 60 s (D85). Klíč je kanonická `/live/` adresa.
 			let cache: Cache | null = null;
 			const key = new Request(`${url.origin}/live/${live[1]}/`);
 			try {
@@ -112,12 +115,19 @@ export const GET: APIRoute = async ({ url, rewrite }) => {
 				const hit = cache ? await cache.match(key) : null;
 				if (hit) return hit;
 			} catch { cache = null; }
-			const res = await rewrite(`/watch/${live[1]}/`);
-			if (cache && res.status === 200) {
-				try { await cache.put(key, res.clone()); } catch { /* cache je bonus */ }
+			const res = await renderWatch(rec, assets, url, CSP);
+			if (res) {
+				if (cache) {
+					try { await cache.put(key, res.clone()); } catch { /* cache je bonus */ }
+				}
+				return res;
 			}
-			return res;
 		}
+	}
+	// Stará adresa dynamické stránky (D82–D94) → kanonická `/live/` (D85).
+	const watch = /^\/watch\/([^/]+)\/?$/.exec(url.pathname);
+	if (watch) {
+		return new Response(null, { status: 301, headers: { location: `/live/${watch[1]}/`, 'cache-control': 'public, max-age=86400' } });
 	}
 	const paged = PAGED.exec(url.pathname);
 	if (paged) {
@@ -134,7 +144,6 @@ export const GET: APIRoute = async ({ url, rewrite }) => {
 		const to = gender ?? (isCat ? `/cams/${slug}/` : `/site/${pair[1]}/`);
 		return new Response(null, { status: 302, headers: { location: to, 'cache-control': 'public, max-age=300' } });
 	}
-	const assets = (workerEnv as unknown as { ASSETS?: { fetch(req: Request): Promise<Response> } }).ASSETS;
 	const target = await redirectFor(url.pathname, shardLoader(assets, url));
 	if (target) {
 		return new Response(null, {

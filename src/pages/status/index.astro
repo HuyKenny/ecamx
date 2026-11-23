@@ -3,7 +3,7 @@
 // Breadcrumbs.astro se sem NEimportuje: bundler ho sdílí v chunku s data.ts
 // a SSR stránka by do Workeru přitáhla celý katalog (AGENTS 135, D91).
 import Layout from '../../layouts/Layout.astro';
-import { readSnapshot, isFresh } from '../../lib/live-snapshot';
+import { readMeta, netFresh } from '../../lib/live-data';
 import { NETWORK_IDS } from '../../lib/live-grid';
 import { NETWORK_LABELS } from '../../lib/labels';
 import { SITE_NAME } from '../../lib/site';
@@ -12,7 +12,7 @@ import { withSecurityHeaders } from '../../lib/security-headers';
 export const prerender = false;
 const CSP = '__ECAMX_CSP__';
 
-const snap = await readSnapshot();
+const snap = await readMeta();
 const now = Date.now();
 const rows = snap ? Object.entries(snap.nets).filter(([id]) => NETWORK_IDS.has(id))
 	.sort((a, b) => b[1].count - a[1].count) : [];
@@ -35,8 +35,8 @@ Astro.response.headers.set('cache-control', 'public, max-age=60');
 				{rows.map(([id, s]) => (
 					<li class="flex items-center justify-between py-3">
 						<a href={`/status/${id}/`} class="font-semibold text-ink-50 hover:underline">Is {NETWORK_LABELS[id] ?? id} down?</a>
-						<span class={isFresh(snap!, id, now) ? 'text-emerald-400' : 'text-amber-400'}>
-							{isFresh(snap!, id, now) ? `up · ${fmt(s.count)} live` : 'feed not reached'}
+						<span class={netFresh(snap!, id, now) ? 'text-emerald-400' : 'text-amber-400'}>
+							{netFresh(snap!, id, now) ? `up · ${fmt(s.count)} live` : 'feed not reached'}
 						</span>
 					</li>
 				))}

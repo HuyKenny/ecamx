@@ -1,8 +1,10 @@
 /**
- * Společné pomocníky pro všechny úlohy cron Workeru.
+ * Pomocníci hlídače deploye (`deploy-watch.ts`).
  *
- * Worker je schválně **bez `nodejs_compat`** — `fetch`, WebCrypto, KV binding
- * a `TextEncoder` stačí, a menší bundle znamená rychlejší studený start.
+ * Do 23. 11. 2026 to byl cron Worker `ecamx-cron` (D77, D82). Na Workers Free
+ * patří cron triggery účtu hubu, takže hlídač spouští GitHub Actions
+ * (`live.yml` → `scripts/deploy-watch-gh.ts`, který KV a fetch podstrčí přes
+ * REST) a Worker je smazaný (D95). Kód zůstal jako modul bez Workeru.
  */
 
 /**
@@ -15,24 +17,12 @@
 export interface Env {
 	/** Namespace `ecamx-registry` — stejný jako pro registry a `demand`. */
 	KV: KVNamespace;
-	/** Namespace `ecamx-live` — živý snímek pro web (D85). */
-	LIVE: KVNamespace;
 	/** Fine-grained PAT na `HuyKenny/ecamx` (Actions: read + write). */
 	GITHUB_TOKEN: string;
 	/** Bot token z `/home/kenny/Discord/.env`. */
 	DISCORD_TOKEN: string;
 	/** Kanál pro hlášení; když chybí, použije se `DEFAULT_CHANNEL`. */
 	DISCORD_CHANNEL_ID?: string;
-	/** Master klíč portfolia pro Bing Webmaster Tools (`SubmitUrlBatch`). */
-	BING_WEBMASTER_API_KEY: string;
-	/**
-	 * Celý JSON service accountu pro Search Console (`~/.config/gsc/service-account.json`,
-	 * ~2,4 kB — vejde se do jednoho secretu, limit je 5 kB). Scope je jen
-	 * `webmasters.readonly`, takže umí číst a nic víc.
-	 */
-	GSC_SERVICE_ACCOUNT: string;
-	/** Token pro ruční spuštění přes `POST /run`. */
-	MANUAL_TOKEN: string;
 }
 
 /** #obecné na „Huy Place" — stejná konstanta jako v `bin/ecamx-deploy-watch.py`. */

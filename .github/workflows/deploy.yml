@@ -59,7 +59,8 @@ on:
     # množina s hysterezí), a na to stačí noc. Lichá minuta, protože GitHub
     # plánované běhy na celou hodinu zdržuje o hodiny (naměřeno 7–8 h).
     # Hlídače deploye (kick 16 h / poplach 18 h) jsou s tím v souladu jen
-    # napůl → posunuty na 30 h / 36 h (`workers/cron/deploy-watch.ts`).
+    # napůl → posunuty na 30 h / 36 h (`workers/cron/deploy-watch.ts`, od D95
+    # spouští ho `live.yml` á 15 min místo cron Workeru).
     - cron: '17 1 * * *'
   workflow_dispatch:
     inputs:
@@ -366,7 +367,7 @@ jobs:
           UA="ecamx-ci/1.0 (+https://github.com/HuyKenny/ecamx)"
           curl() { command curl -H "x-malina-warm: $WARM" "$@"; }
           fail=0
-          for p in / /cams/ /terms/ /sitemap.xml /api/online/chaturbate/ /api/live/grid/; do
+          for p in / /cams/ /terms/ /sitemap.xml /watch-shell/ /livedata/meta.json /livedata/online/chaturbate.json; do
             code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com$p")
             echo "$p → $code"
             [ "$code" = "200" ] || { echo "::error::$p vrátilo $code"; fail=1; }
@@ -384,12 +385,15 @@ jobs:
           echo "/live/$slug/ → $code $loc"
           [ "$code" = "302" ] || { echo "::error::catch-all na neznámý nick vrátil $code (čeká se 302 na rozcestník)"; fail=1; }
 
-          # Živý snímek (D82): čerstvý a s kartami, jinak mřížky nemají z čeho žít.
-          snap=$(curl -s -A "$UA" --max-time 30 "https://ecamx.com/api/live/grid/?q=all~5")
-          echo "$snap" | python3 -c "import sys,json; d=json.load(sys.stdin); n=len(d['g'].get('all',[])); print('snímek: stáří', d['age'], 's, karet', n, ', spadlé sítě', d['failed']); sys.exit(0 if d['fresh'] and n>0 else 1)" \
-            || { echo "::error::živý snímek není čerstvý nebo je prázdný (cron ecamx-cron live-snapshot)"; fail=1; }
+          # Živý snímek (D95): statické soubory z `live.yml` (assets-only Worker
+          # `ecamx-live`). Čerstvý = mladší 30 min, jinak mřížky drží statické karty.
+          snap=$(curl -s -A "$UA" --max-time 30 "https://ecamx.com/livedata/g/all.json?t=$RANDOM")
+          echo "$snap" | python3 -c "import sys,json,time; d=json.load(sys.stdin); age=time.time()-d['ts']/1000; n=len(d.get('c',[])); print('snímek: stáří', int(age), 's, karet', n, ', spadlé sítě', d['failed']); sys.exit(0 if age<1800 and n>0 else 1)" \
+            || { echo "::error::živý snímek není čerstvý nebo je prázdný (workflow live.yml)"; fail=1; }
           # Živá modelka bez statické stránky musí dostat dynamickou (200), ne 302.
-          dyn=$(echo "$snap" | python3 -c "import sys,json; print(json.load(sys.stdin)['g']['all'][0]['p'])" 2>/dev/null)
+          # Shard `w/00` = živí bez `st` (statické stránky) jsou právě ti dynamičtí.
+          dyn=$(curl -s -A "$UA" --max-time 30 "https://ecamx.com/livedata/w/00.json?t=$RANDOM" \
+            | python3 -c "import sys,json,urllib.parse; d=json.load(sys.stdin); print(next(urllib.parse.quote(k) for k,r in d.items() if not r.get('st')))" 2>/dev/null)
           if [ -n "$dyn" ]; then
             code=$(curl -s -A "$UA" -o /dev/null -w '%{http_code}' --max-time 30 "https://ecamx.com/live/$dyn/")
             echo "/live/$dyn/ (živá) → $code"

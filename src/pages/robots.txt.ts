@@ -38,6 +38,8 @@ export const GET: APIRoute = () => {
 		'Disallow: /api/',
 		'Disallow: /go/',
 		'Disallow: /gone/',
+		'Disallow: /livedata/',
+		'Disallow: /watch-shell/',
 		'',
 		'User-agent: *',
 		'Allow: /',
@@ -47,6 +49,10 @@ export const GET: APIRoute = () => {
 		// Shardy mapy přesměrování (D76) — Worker si je tahá přes ASSETS,
 		// ale pro crawler je to jen datový soubor bez obsahu.
 		'Disallow: /gone/',
+		// Živý snímek (D95) — datové soubory pro mřížky, nástupce `/api/`.
+		'Disallow: /livedata/',
+		// Kostra dynamické stránky modelky (D95), sama o sobě bez obsahu.
+		'Disallow: /watch-shell/',
 		'',
 		`Sitemap: ${SITE_URL}/sitemap.xml`,
 		'',

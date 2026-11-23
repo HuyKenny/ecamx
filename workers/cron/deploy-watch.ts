@@ -82,7 +82,9 @@ async function lastRun(env: Env): Promise<RunInfo> {
 	const empty: RunInfo = { conclusion: "?", status: "?", displayTitle: "?", databaseId: null, createdAt: "?" };
 	try {
 		const res = await fetchWithTimeout(
-			`https://api.github.com/repos/${REPO}/actions/runs?per_page=1`,
+			// Jen `deploy.yml` — od D95 běží á 5 min i `live.yml` a „poslední běh
+			// repa" by byl skoro vždycky ten.
+			`https://api.github.com/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1`,
 			{
 				headers: {
 					Authorization: `Bearer ${env.GITHUB_TOKEN}`,

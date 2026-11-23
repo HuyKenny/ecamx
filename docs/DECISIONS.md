@@ -4357,3 +4357,44 @@ pilot je 9 stránek, ne překlad webu.
 - Layout: `lang` z cesty, `og:locale es_ES`, hreflang en/es/x-default na obou stranách páru, ES navigace a lišta, odkaz „Español/English" v patičce. Karty: `cardHtml(…, { lang })`, mřížka nese `data-lang`, země přes `Intl.DisplayNames('es')`, tagy na ES kartách skryté (anglické popisky).
 - Stránky modelek, právní stránky a průvodci zůstávají anglické.
 - Měřit: GSC/Bing imprese `/es/*` 15. 12. a 5. 1. Teprve s impresemi rozšiřovat (ES stránky modelek, další kategorie).
+
+## D95 — Workers Free: živý snímek jako statické soubory z GitHub Actions (23. 11. 2026)
+
+Kenny převádí celý Cloudflare účet na Workers Free (0 $). Limity: 10 ms CPU na
+volání (i `scheduled`), 100 000 Worker requestů/den na účet, 1 000 zápisů KV/den
+na účet, cron triggery účtu (5) patří hubu `malina-cron`. Stav D82 se do toho
+nevešel: `ecamx-cron` měl p50 ~1 200 ms CPU á 5 min a web parsoval 5 MB snímek
+z KV na `/api/live/grid/`, `/api/online/*` a `/watch/` (p99 ~190 ms).
+
+**Řešení.**
+- `scripts/live-publish.ts` (port `workers/cron/live.ts`, stejná pravidla:
+  spadlá síť drží řádky 30 min s `ok:false`, opt-out, hodinová přítomnost do KV
+  `presence:YYYY-MM-DD` ≤ 24 zápisů/den) běží v `.github/workflows/live.yml`
+  (veřejné repo → minuty zdarma). Job á 15 min publikuje 3× po 5 min, protože
+  GitHub `*/5` plány zdržuje a zahazuje.
+- Výstup = JSON soubory (`src/lib/live-static.ts`): `meta.json`, `g/{faseta}`
+  (výchozí mřížka, 60 karet), `p/{faseta}` (bazény po sítích pro filtr a
+  `faseta@síť`), `online/{síť}` (kontrakt starého `/api/online`), `w/00–63`
+  (všechny živé podle cesty stránky, FNV shard). ~840 souborů, ~17 MB.
+- `wrangler deploy -c wrangler.live.jsonc` je nahraje do assets-only Workeru
+  `ecamx-live` na route `ecamx.com/livedata/*` (vyhrává nad custom doménou,
+  ověřeno). Bez skriptu → requesty zdarma a mimo 100k limit. Stejný origin →
+  žádné CORS, CSP `connect-src 'self'` stačí.
+- Prohlížeč skládá odpovědi sám (`src/lib/live-client.ts`: `fetchGrid`,
+  `fetchOnline`, `isLive`); čerstvost podle `ts` souboru, práh 30 min
+  (`FRESH_MS`), protože Actions nejsou přesné jako cron Worker.
+- Worker zůstává jen tam, kde musí: `/go/`, `/api/stream/`, `/status/`,
+  catch-all. Živá modelka bez statické stránky (`/live/{p}/`) = shard přes
+  service binding `LIVE_DATA` (~80 kB) + předrenderovaná kostra `/watch-shell/`
+  doplněná `HTMLRewriter`em (`src/lib/watch-render.ts`) — žádný Astro render
+  ve Workeru. `/watch/{p}/` → 301 na `/live/{p}/`. `/api/online/*`,
+  `/api/live/grid|is/` vrací konstantní „nevíme" (staré HTML v cache).
+- Hlídač deploye (D56) běží jako krok `live.yml` (`scripts/deploy-watch-gh.ts`
+  podstrčí KV přes REST); hlášky na Discord potřebují secret repa `DISCORD_TOKEN` (23. 11. ještě chybí — doplní Kenny; bez něj hlídač jen kopne CI). Cron Worker
+  `ecamx-cron` a KV namespace `ecamx-live` jsou smazané.
+- `live.yml` jednou denně volá `actions/workflows/*/enable`, aby GitHub
+  plány veřejného repa nevypnul po 60 dnech bez commitu.
+
+**Cena.** Cloudflare: 0 cron triggerů, KV ≤ 24 zápisů/den (přítomnost) +
+noční sync, Worker requesty jen `/go/`, `/api/stream/`, `/status/` a catch-all.
+GitHub: ~96 jobů/den po ~12 min ve veřejném repu (zdarma).

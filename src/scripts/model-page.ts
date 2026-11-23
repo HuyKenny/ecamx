@@ -12,6 +12,7 @@
  * D63/D67 (náhrada za dovysílanou modelku), D84 (EasyList pojistka),
  * D86 (Chaturbate `mountEmbed`).
  */
+import { fetchOnline } from '../lib/live-client';
 import { mountEmbed, NARROW_MQ } from '../lib/fit-embed';
 
 // `gtag` je globál z `is:inline` stubu v <head> (AGENTS.md bod 31); měření
@@ -189,8 +190,7 @@ function onModelOffline(ev: Event): void {
 	void (async () => {
 		let cards: Array<{ s: string; n: string; t: string; v: number; e: string }> = [];
 		try {
-			const r = await fetch(`/api/online/${network}/?cards=8`, { signal: AbortSignal.timeout(6000) });
-			cards = ((await r.json()) as { cards?: typeof cards })?.cards ?? [];
+			cards = ((await fetchOnline(network))?.cards ?? []).slice(0, 8);
 		} catch { /* feed nedojel — spadne to na hlášku */ }
 
 		// BongaCams nemá adresu ve feedu (4,4 MB) — čerstvá pro max. 3 modelky

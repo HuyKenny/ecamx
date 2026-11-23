@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // `ecamx-live` — assets-only Worker with the live snapshot as static JSON
+  // (D95). No `main`: no script ever runs, so its requests are free and do not
+  // count against the account's 100k Worker requests/day (Workers Free).
+  // Files come from `scripts/live-publish.ts`, deployed by
+  // `.github/workflows/live.yml` every ~5 min (only changed files upload).
+  //
+  // The route on a PATH of ecamx.com wins over the web Worker's custom domain
+  // (verified 23. 11. 2026), so the data is same-origin: no CORS, CSP
+  // `connect-src 'self'` covers it. The web Worker reads the same files through
+  // the service binding `LIVE_DATA` (a same-zone `fetch()` would skip the route).
+  "name": "ecamx-live",
+  "compatibility_date": "2026-08-01",
+  "assets": {
+    "directory": "./live-out",
+    "not_found_handling": "none",
+    "html_handling": "none"
+  },
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "ecamx.com/livedata/*", "zone_name": "ecamx.com" }]
+}
