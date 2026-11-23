@@ -1,0 +1,192 @@
+/**
+ * Logika catch-all routy (`src/pages/[...path].ts`, D95: vytažená do knihovny,
+ * aby ji `src/worker.ts` uměl zavolat bez Astra).
+ *
+ * Catch-all pro cesty, na které neexistuje statický soubor.
+ *
+ * **Proč to je nejdůležitější route na webu:** do 19. 8. 2026 tady nebylo nic
+ * a stránky modelek, které přestaly existovat, vracely tvrdou 404. Změřeno
+ * v GSC: 729 z 837 stránek modelek, které kdy měly imprese, byla 404 — 2 185
+ * z 2 474 impresí (89 %). A nebyla to jen historie: modelka pod prahem
+ * `INDEX_MIN_DAYS` (5 878 z 8 168 živých) dostala stránku, dokud vysílala,
+ * a v momentě, kdy skončila, se z URL stala 404 — `/live/shena-nomy/` zmizela
+ * během dvou hodin. Google to čte jako nedůvěryhodný web; odtud „Crawled –
+ * currently not indexed" u prakticky celého `/live/`.
+ *
+ * Statické soubory obsluhuje **assets layer PŘED Workerem**, takže se sem
+ * dostane jen to, co soubor nemá. Když se modelka vrátí, její stránka je znovu
+ * statický soubor a tahle route ji vůbec neuvidí.
+ *
+ * ⚠️ NESMÍ zastínit `/go/` ani `/api/` — to jsou vydělávající a datové routy
+ * a mají vlastní, konkrétnější soubory. Astro dává přednost konkrétnější
+ * routě, ale hlídá to i guard v CI („Verify /go/ redirects earn money").
+ *
+ * Viz docs/DECISIONS.md D35.
+ */
+import { ALLOWED_FACETS, NETWORK_IDS } from './live-grid';
+import { redirectFor, type ShardLoader } from './gone';
+import { liveByPath, safeDecode } from './live-data';
+import { renderWatch } from './watch-render';
+import { withSecurityHeaders } from './security-headers';
+
+
+/**
+ * Hodnotu doplní `scripts/build-csp.ts` po buildu — složí ji z toho, co
+ * postavený web reálně načítá, a stejný řetězec zapíše do `_headers`.
+ * Tady musí být zástupný text, protože Worker se sestavuje dřív, než ta
+ * měření existují. Když by náhrada neproběhla, build-csp spadne.
+ */
+const CSP = '__ECAMX_CSP__';
+
+
+/**
+ * 302, ne 301. Modelka se běžně vrátí za pár hodin a její stránka se znovu
+ * postaví — u 301 by si prohlížeč i Google pamatovali přesměrování dál
+ * a URL, která zase žije, by nikdo nenavštívil. Trvale přesunutá je jen
+ * legacy WP struktura, a ta jede přes `_redirects` jako 301.
+ */
+const STATUS = 302;
+
+/**
+ * Cache shardů mapy přesměrování **v rámci isolate**.
+ *
+ * Mapa má 195 706 slugů (6,0 MB) a do 23. 9. 2026 byla vložená v bundlu jako
+ * JS literál — 87 % jeho velikosti, kterou zaplatil každý studený start, i když
+ * se přesměrování týká jen cest bez statického souboru (D76). Teď leží
+ * v `public/gone/{a–z,0–9,_}.json` a stahuje se jen shard, který je potřeba.
+ *
+ * Cache je bez evikce schválně: shardů je 36, takže strop je 36 záznamů
+ * a isolate je stejně nedrží věčně. Ukládá se **Promise**, ne výsledek — dva
+ * souběžné requesty na tentýž shard tak vyvolají jeden fetch, ne dva.
+ */
+const shards = new Map<string, Promise<Record<string, string> | null>>();
+
+function shardLoader(assets: { fetch(req: Request): Promise<Response> } | undefined, url: URL): ShardLoader {
+	return async (shard) => {
+		let p = shards.get(shard);
+		if (!p) {
+			p = (async () => {
+				if (!assets) return null;
+				try {
+					// `shard` už je klíč z `shardOf()` — `gone.ts` ho tak posílá.
+					const res = await assets.fetch(new Request(new URL(`/gone/${shard}.json`, url)));
+					return res.ok ? await res.json() as Record<string, string> : null;
+				} catch {
+					// Výpadek shardu nesmí shodit přesměrování — vrátí se `null`
+					// a `gone.ts` spadne na záložní adresář (D53: nikdy 404).
+					return null;
+				}
+			})();
+			shards.set(shard, p);
+		}
+		return p;
+	};
+}
+
+/**
+ * Stránkování mřížek zrušené 17. 11. 2026 (D83): mřížka se plní živě ze
+ * snímku, takže „stránka 2" statického výpisu by ukazovala modelky, které
+ * dávno nevysílají. Staré adresy (`/cams/x/2/`, `/page/3/` …) byly noindex,
+ * ale crawler je zná — trvale na první stránku, ne 404.
+ */
+const PAGED = /^\/(page|girls|guys|couples|trans|(?:cams|country|site)\/[a-z0-9-]+)\/\d{1,3}\/?$/;
+
+export type Assets = { fetch(req: Request): Promise<Response> };
+
+/**
+ * The whole catch-all. Called by the Astro route `src/pages/[...path].ts` and,
+ * for `/live/*`, straight from the Worker entry `src/worker.ts` (D95) — that
+ * path skips Astro's app/manifest start-up, which made a cold `/live/{gone}/`
+ * redirect cost 15–25 ms CPU (Workers Free: 10 ms).
+ */
+export async function catchAll(url: URL, assets: Assets | undefined): Promise<Response> {
+	/**
+	 * Živá modelka bez statické stránky (D82) → dynamická stránka ze snímku.
+	 * Musí to být PŘED mapou zaniklých stránek: modelka, která se vrátila,
+	 * má přednost před svým starým přesměrováním.
+	 *
+	 * D95: snímek je statický (`/livedata/w/{shard}.json`, služba `LIVE_DATA`),
+	 * stránka je předrenderovaná kostra `/watch-shell/` doplněná přes
+	 * `HTMLRewriter` — žádný Astro render ve Workeru (10 ms CPU).
+	 */
+	const live = /^\/live\/([^/]+)\/?$/.exec(url.pathname);
+	if (live && assets) {
+		const p = safeDecode(live[1]!);
+		const rec = p === null ? null : await liveByPath(p);
+		if (rec) {
+			// Edge cache 60 s (D85). Klíč je kanonická `/live/` adresa.
+			let cache: Cache | null = null;
+			const key = new Request(`${url.origin}/live/${live[1]}/`);
+			try {
+				cache = (caches as any)?.default ?? null;
+				const hit = cache ? await cache.match(key) : null;
+				if (hit) return hit;
+			} catch { cache = null; }
+			const res = await renderWatch(rec, assets, url, CSP);
+			if (res) {
+				if (cache) {
+					try { await cache.put(key, res.clone()); } catch { /* cache je bonus */ }
+				}
+				return res;
+			}
+		}
+	}
+	// Stará adresa dynamické stránky (D82–D94) → kanonická `/live/` (D85).
+	const watch = /^\/watch\/([^/]+)\/?$/.exec(url.pathname);
+	if (watch) {
+		return new Response(null, { status: 301, headers: { location: `/live/${watch[1]}/`, 'cache-control': 'public, max-age=86400' } });
+	}
+	const paged = PAGED.exec(url.pathname);
+	if (paged) {
+		const to = paged[1] === 'page' ? '/' : `/${paged[1]}/`;
+		return new Response(null, { status: 301, headers: { location: to, 'cache-control': 'public, max-age=86400' } });
+	}
+	// Network × facet page that dropped below its threshold (D89) — it may come
+	// back next build, so 302 to the closest page that always exists.
+	const pair = /^\/site\/([a-z0-9]+)\/([a-z0-9-]+)\/?$/.exec(url.pathname);
+	if (pair && NETWORK_IDS.has(pair[1]!)) {
+		const slug = pair[2]!;
+		const gender = ({ men: '/guys/', couples: '/couples/', trans: '/trans/' } as Record<string, string>)[slug];
+		const isCat = ['t', 'm', 'e', 'h', 'b'].some((p) => ALLOWED_FACETS.has(`${p}:${slug}`));
+		const to = gender ?? (isCat ? `/cams/${slug}/` : `/site/${pair[1]}/`);
+		return new Response(null, { status: 302, headers: { location: to, 'cache-control': 'public, max-age=300' } });
+	}
+	const target = await redirectFor(url.pathname, shardLoader(assets, url));
+	if (target) {
+		return new Response(null, {
+			// Legacy WP struktura je trvale zaniklá → 301. Stránka modelky
+			// zůstává 302 (viz výš).
+			status: target.permanent ? 301 : STATUS,
+			headers: {
+				location: target.to,
+				// Krátce, ať se vrácená stránka projeví. Bez toho by 302 viselo
+				// v edge cache i po tom, co modelka zase začne vysílat.
+				'cache-control': 'public, max-age=300',
+				'referrer-policy': 'strict-origin-when-cross-origin',
+			},
+		});
+	}
+
+	// Neznámá cesta → naše 404 stránka, ne prázdné tělo. Nabízí rozcestník,
+	// takže i špatná adresa má kam pokračovat.
+	if (assets) {
+		const res = await assets.fetch(new Request(new URL('/404.html', url)));
+		if (res.ok) {
+			return new Response(res.body, {
+				status: 404,
+				// `_headers` na Worker routu neplatí (je to Worker, ne asset),
+				// takže tahle 404 byla jediná HTML odpověď na webu bez
+				// bezpečnostních hlaviček — dala se zarámovat do cizí stránky.
+				// Držet v souladu s `public/_headers`. Viz D63.
+				headers: withSecurityHeaders(new Headers({
+					'content-type': 'text/html; charset=utf-8',
+					'cache-control': 'public, max-age=300',
+				}), CSP),
+			});
+		}
+	}
+	return new Response('Not found', {
+		status: 404,
+		headers: withSecurityHeaders(new Headers({ 'content-type': 'text/plain; charset=utf-8' })),
+	});
+}

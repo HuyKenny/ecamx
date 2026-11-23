@@ -4,6 +4,10 @@
   "compatibility_date": "2026-08-01",
   "compatibility_flags": ["nodejs_compat"],
 
+  // Vlastní vstup (D95): `/live/*` jde rovnou do `src/lib/catch-all.ts` bez
+  // startu Astra (10 ms CPU na Workers Free), zbytek líně do handleru adaptéru.
+  "main": "./src/worker.ts",
+
   // POZOR (poučka z vian/docs/DEPLOYMENT.md): @astrojs/cloudflare v14 negeneruje
   // deploy z tohoto souboru. Build vyrobí dist/server/wrangler.json (sloučený
   // config) a deployuje/preview se TEN:
