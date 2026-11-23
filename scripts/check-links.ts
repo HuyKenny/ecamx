@@ -44,7 +44,8 @@ console.log(`[links] ${html.length} HTML souborů, ${files.size} souborů celkem
  */
 // `/status/` = SSR stránky živého stavu sítí (D91): soubor v `dist/client`
 // nemají, obsluhuje je Worker ze snímku. Do sitemapy patří (indexovatelné).
-const WORKER_ROUTES = ['/go/', '/api/', '/status/'];
+// `/livedata/` = assets-only Worker `ecamx-live` (D95), not in dist/.
+const WORKER_ROUTES = ['/go/', '/api/', '/status/', '/livedata/'];
 
 /** `/cams/asian/` → `/cams/asian/index.html`; `/robots.txt` → sám sebou. */
 function resolves(href: string): boolean {
