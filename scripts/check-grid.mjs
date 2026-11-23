@@ -39,7 +39,7 @@
  * jen na homepage, na rozcestníku se přeskočí:
  *   node scripts/check-grid.mjs https://ecamx.com /site/cam4/
  *
- * Proti statickému serveru chybí `/api/online/`, takže se výměna nezmění —
+ * Proti statickému serveru chybí `/livedata/`, takže se výměna nezmění —
  * pro body 3–5 to stačí. Plné měření (bod 1 a 2) dává smysl proti produkci:
  *   node scripts/check-grid.mjs https://ecamx.com
  */
@@ -151,7 +151,7 @@ const m = await p.evaluate(() => ({
 
 // 1) kdy dopadla oprava
 if (m.swap === null) {
-	console.log(`  ~  k výměně karet nedošlo${LIVE ? '' : ' (statický server nemá /api/online/)'}`);
+	console.log(`  ~  k výměně karet nedošlo${LIVE ? '' : ' (statický server nemá /livedata/)'}`);
 } else if (m.swap <= FIX_BUDGET_MS) ok(`oprava mřížky dopadla za ${Math.round(m.swap)} ms`);
 else fail(`oprava mřížky dopadla až za ${Math.round(m.swap)} ms (rozpočet ${FIX_BUDGET_MS})`);
 
@@ -219,11 +219,13 @@ if (!LIVE) {
 		const out = {};
 		await Promise.all(nets.map(async (n) => {
 			try {
-				const r = await fetch(`/api/online/${n}/?probe=${Date.now()}`);
+				// D95: statický `/livedata/online/{síť}.json` (dřív `/api/online/`).
+				const r = await fetch(`/livedata/online/${n}.json?probe=${Date.now()}`);
 				const d = await r.json();
-				// `absenceUnproven` rozhoduje, jestli chybějící modelka něco
-				// dokazuje — je to tatáž vlastnost, podle které se řídí web.
-				if (d?.online) out[n] = { online: d.online, unproven: !!d.absenceUnproven };
+				// Chybějící modelka něco dokazuje jen u čerstvé, úspěšně stažené
+				// sítě — tatáž podmínka jako `fetchOnline()` v `live-client.ts`.
+				const fresh = d?.ok && Date.now() - d.ts < 30 * 60_000 && Date.now() - d.nts < 30 * 60_000;
+				if (d?.online) out[n] = { online: d.online, unproven: !fresh };
 			} catch { /* síť bez feedu: nedokazuje nic */ }
 		}));
 		return out;
