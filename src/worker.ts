@@ -62,6 +62,15 @@ export default {
 					return goRedirect({ network, user }, url, request, env, (p) => ctx.waitUntil(p));
 				}
 			}
+			// Everything else without a static file ends in `[...path].ts` → `catchAll()` (no middleware, no
+			// other on-demand route), so call it directly (D98): scanner 404s and old URLs cost 12–19 ms
+			// through Astro. Only trailing-slash paths and file-like paths (`/.env`, `/x.php`): Astro answers
+			// `/foo` with its own trailing-slash 301 first, so those still go through it.
+			const p = url.pathname;
+			if (!p.startsWith('/api/') && !p.startsWith('/go/') && !p.startsWith('/status/')
+				&& (p.endsWith('/') || /\.[^/]*$/.test(p.slice(p.lastIndexOf('/'))))) {
+				return catchAll(url, env.ASSETS);
+			}
 		}
 		astro ??= import('@astrojs/cloudflare/handler') as Promise<Handler>;
 		return (await astro).handle(request, env, ctx);
