@@ -9,7 +9,7 @@
  * well inside the 10 ms CPU of Workers Free.
  */
 import { env } from 'cloudflare:workers';
-import { LIVE_BASE, W_DIR, metaFresh, shardOf, FRESH_MS, type LiveMeta, type WRec, type PFile } from './live-static.ts';
+import { LIVE_BASE, W_DIR, shardOf, type LiveMeta, type WRec, type PFile } from './live-static.ts';
 
 type Fetcher = { fetch(req: Request): Promise<Response> };
 const binding = (): Fetcher | undefined => (env as unknown as { LIVE_DATA?: Fetcher }).LIVE_DATA;
@@ -47,11 +47,8 @@ export async function liveByPath(p: string): Promise<WRec | null | undefined> {
 	return Object.prototype.hasOwnProperty.call(shard, p) ? shard[p]! : null;
 }
 
-/** Network has a fresh, complete list in the snapshot. */
-export function netFresh(meta: LiveMeta, network: string, now = Date.now()): boolean {
-	const n = meta.nets[network];
-	return !!n && n.ok && metaFresh(meta.ts, now) && now - n.ts < FRESH_MS;
-}
+/** Network has a fresh, complete list in the snapshot (pure, lives in `live-static.ts`). */
+export { netFresh } from './live-static.ts';
 
 /** Bezpečný `decodeURIComponent` — rozbitá sekvence (`%C0%80`) je `null`, ne HTTP 500. */
 export function safeDecode(s: string): string | null {

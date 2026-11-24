@@ -163,6 +163,12 @@ export function metaFresh(ts: number, now = Date.now()): boolean {
 	return now - ts < FRESH_MS;
 }
 
+/** Network has a fresh, complete list in the snapshot (re-exported by `live-data.ts`). */
+export function netFresh(meta: LiveMeta, network: string, now = Date.now()): boolean {
+	const n = meta.nets[network];
+	return !!n && n.ok && metaFresh(meta.ts, now) && now - n.ts < FRESH_MS;
+}
+
 /** Up to 2 category slugs a card may link to (pages that exist). */
 export function categoryTags(f: readonly string[], category: ReadonlySet<string>): string[] {
 	const tg: string[] = [];

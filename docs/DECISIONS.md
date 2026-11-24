@@ -4433,3 +4433,23 @@ Statistiky (`first/last/seen/peak/hours`) zůstávají, takže historie i práh
 **Cena.** Offline modelka bez stránky přestane být kandidátem archivu
 (podmínka `!!e.snap`), dokud znovu nevysílá — pak se snapshot uloží znovu.
 Stránky s poptávkou to nemění (vstupují do archivu i bez snapshotu, D40).
+
+## D98 — `/status/` bez Astra: předrenderované kostry + HTMLRewriter (24. 11. 2026)
+
+**Proč.** Workers Free = 10 ms CPU na volání. SSR `/status/{síť}/` stál přes Astro 10–32 ms
+(audit 23. 11.), většinou start Astra ve studeném isolate — na Free občas chyba 1102.
+
+**Jak.** Stejný vzor jako `/watch-shell/` (D95):
+- `src/pages/status-shell/[network].astro` + `index.astro` = předrenderované kostry (prerender),
+  `Layout` dostane `path="/status/…"`, takže canonical, og:url, hreflang i stav navigace jsou
+  jako na skutečné adrese. Dynamická místa jsou prázdné sloty `data-s` (`top`, `others`, `rows`, `ld`).
+- `src/lib/status-parts.ts` (čistý modul) skládá markup slotů — tytéž hodnoty, escapování
+  (Astro `escapeHTML` / `toAttributeString`) a pořadí jako SSR stránky.
+- `src/lib/status-render.ts` načte kostru z ASSETS + `meta.json`/`p/all.json` přes `LIVE_DATA`
+  a sloty doplní `HTMLRewriter`em; `src/worker.ts` volá jen pro kanonické URL (malá písmena,
+  známá síť). `/status/Chaturbate/` (301), neznámá síť (404) a chybějící kostra jdou dál do Astra.
+- SSR stránky v `src/pages/status/` zůstávají jako fallback — **měnit obě místa spolu**.
+
+**Ověření.** `scripts/check-status-parts.ts` (z Maliny) postaví sloty z živého snímku a hledá je
+doslova ve stránce; `--save`/`--compare` porovná zbytek stránky (kostru) před a po. Před nasazením
+prošlo 9/9 stránek proti SSR výstupu.

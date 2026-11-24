@@ -41,6 +41,11 @@ interface Props {
 	built?: string;
 	/** Jazyk stránky (D94). Default podle cesty: `/es/…` = es. */
 	lang?: Lang;
+	/**
+	 * URL path the page is served at, when it differs from the rendered one: the prerendered
+	 * shells `/status-shell/…` are served at `/status/…` (D98) and need its canonical, og:url and nav state.
+	 */
+	path?: string;
 }
 
 const { title, description, noindex = false, image, imageAlt, ogType = 'website', liveQuery, built } = Astro.props;
@@ -51,18 +56,19 @@ const { title, description, noindex = false, image, imageAlt, ogType = 'website'
  */
 const livePreloads = [...new Set((liveQuery ?? '').split(',').map((p) => p.split('~')[0]!).filter(Boolean)
 	.map((k) => fileFor(k, false)))];
-const lang: Lang = Astro.props.lang ?? langOf(Astro.url.pathname);
+const urlPath = Astro.props.path ?? Astro.url.pathname;
+const lang: Lang = Astro.props.lang ?? langOf(urlPath);
 const u = UI[lang];
 const es = lang === 'es';
 // hreflang jen na párových stránkách (D94) a jen u indexovatelných.
-const alternates = noindex ? [] : alternatesFor(Astro.url.pathname);
+const alternates = noindex ? [] : alternatesFor(urlPath);
 const otherLang = alternates.find((a) => a.hreflang === (es ? 'en' : 'es'));
 const esRail = ES_ROUTES.filter((r) => r.slug).map((r) => ({ href: esPath(r.slug), label: ES_PAGES[r.slug]?.label ?? r.slug }));
-const canonical = canonicalUrl(Astro.url.pathname);
+const canonical = canonicalUrl(urlPath);
 // Brandovaný OG obrázek záměrně: adult náhled se na sociálních sítích blokuje
 // a navíc expiruje (Cam4 podepsané URL).
 const ogImage = image ?? new URL('/og-default.png', SITE_URL).toString();
-const path = Astro.url.pathname;
+const path = urlPath;
 const current = (href: string) => (href === '/' ? path === '/' : path.startsWith(href)) ? 'page' : undefined;
 
 type Facet = { slug: string; label: string; count: number };

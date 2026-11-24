@@ -1,0 +1,23 @@
+---
+/**
+ * Prerendered shell of `/status/` (D98) — see `[network].astro` next to it. Slot `rows` is filled by
+ * `src/lib/status-render.ts`; the SSR original is `src/pages/status/index.astro` (change both together).
+ */
+import Layout from '../../layouts/Layout.astro';
+import { SITE_NAME } from '../../lib/site';
+
+export const prerender = true;
+---
+<Layout title={`Cam Site Status – Is Chaturbate or Stripchat Down? | ${SITE_NAME}`}
+	description="Live status of the big cam sites from our own check every five minutes: which sites answer, how many rooms are live, and when we last checked."
+	path="/status/">
+	<div class="mx-auto max-w-3xl">
+		<nav aria-label="Breadcrumb" class="mb-4 text-sm text-ink-400"><a href="/" class="hover:text-white">Home</a> › <span>Site status</span></nav>
+		<h1 class="text-2xl font-extrabold sm:text-3xl">Cam site status</h1>
+		<p class="mt-2 text-ink-400">
+			eCamx checks the public live feed of every site below every five minutes. This is that
+			check — not user reports.
+		</p>
+		<div data-s="rows"></div>
+	</div>
+</Layout>

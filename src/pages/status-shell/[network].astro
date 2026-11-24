@@ -1,0 +1,47 @@
+---
+/**
+ * Prerendered shell of `/status/{network}/` (D98, Workers Free 10 ms CPU).
+ *
+ * Through Astro the status page cost 10–32 ms CPU per request (measured 23. 11. 2026), most of it Astro's
+ * start-up. `src/worker.ts` now serves `/status/{network}/` from this shell: `src/lib/status-render.ts` fills the
+ * `data-s` slots with HTMLRewriter from `/livedata/meta.json` + `p/all.json` — same markup as the SSR page
+ * `src/pages/status/[network].astro` (kept as the fallback for odd paths; change both together).
+ *
+ * Linked from nowhere, `Disallow`ed in robots.txt; `path` makes canonical, og:url and nav match `/status/…`.
+ */
+import Layout from '../../layouts/Layout.astro';
+import { NETWORK_IDS } from '../../lib/live-grid';
+import { NETWORK_LABELS } from '../../lib/labels';
+import { SITE_NAME } from '../../lib/site';
+
+export const prerender = true;
+export function getStaticPaths() {
+	return [...NETWORK_IDS].map((network) => ({ params: { network } }));
+}
+const net = Astro.params.network!;
+const label = NETWORK_LABELS[net] ?? net;
+const title = `Is ${label} Down? Live Status, Checked Every 5 Minutes | ${SITE_NAME}`;
+const description = `Is ${label} down right now? Our own check of ${label}'s live rooms every 5 minutes — when it last worked, how many rooms are live, and what to try if it won't load.`;
+---
+<Layout title={title} description={description} path={`/status/${net}/`}>
+	<script type="application/ld+json" slot="head" is:inline data-s="ld" set:html="{}" />
+	<div class="mx-auto max-w-3xl">
+		<nav aria-label="Breadcrumb" class="mb-4 text-sm text-ink-400"><a href="/" class="hover:text-white">Home</a> › <a href="/status/" class="hover:text-white">Site status</a> › <span>{label}</span></nav>
+		<h1 class="text-2xl font-extrabold sm:text-3xl">Is {label} down right now?</h1>
+
+		<div data-s="top"></div>
+
+		<section class="prose-ecamx mt-8 space-y-3 text-ink-200" aria-labelledby="why-h">
+			<h2 id="why-h">If {label} won't load for you</h2>
+			<ul>
+				<li><strong>Age verification.</strong> Some US states and countries require it before you can watch — that screen is part of the site, not an outage.</li>
+				<li><strong>Your network blocks it.</strong> Work, school and some mobile networks filter adult sites. Try another connection.</li>
+				<li><strong>Old cache or a bad extension.</strong> Open the site in a private window.</li>
+				<li><strong>A look-alike address.</strong> Type the domain carefully — typo domains are a common trap.</li>
+			</ul>
+			<p>How this works: eCamx fetches the public live feed of every site we cover every five minutes. This page shows the result of that check, not reports from users.</p>
+		</section>
+
+		<div data-s="others"></div>
+	</div>
+</Layout>

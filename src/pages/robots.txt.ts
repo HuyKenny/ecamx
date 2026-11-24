@@ -40,6 +40,7 @@ export const GET: APIRoute = () => {
 		'Disallow: /gone/',
 		'Disallow: /livedata/',
 		'Disallow: /watch-shell/',
+		'Disallow: /status-shell/',
 		'',
 		'User-agent: *',
 		'Allow: /',
@@ -53,6 +54,8 @@ export const GET: APIRoute = () => {
 		'Disallow: /livedata/',
 		// Kostra dynamické stránky modelky (D95), sama o sobě bez obsahu.
 		'Disallow: /watch-shell/',
+		// Kostry stránek /status/ (D98), plní je Worker.
+		'Disallow: /status-shell/',
 		'',
 		`Sitemap: ${SITE_URL}/sitemap.xml`,
 		'',

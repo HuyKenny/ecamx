@@ -20,10 +20,16 @@
 import { isPrerender } from 'virtual:astro-cloudflare:config';
 import { catchAll, type Assets } from './lib/catch-all';
 import { goRedirect } from './lib/go';
+import { NETWORK_IDS } from './lib/live-grid';
+import { renderStatus, renderStatusIndex } from './lib/status-render';
 
 type Handler = { handle(request: Request, env: unknown, ctx: ExecutionContext): Promise<Response> };
 let astro: Promise<Handler> | null = null;
 const GO = /^\/go\/([^/]+)\/([^/]+)\/$/;
+/** Canonical status URLs only; `/status/Chaturbate/` (301) and unknown networks (404) still go through Astro. */
+const STATUS = /^\/status\/(?:([a-z0-9]+)\/)?$/;
+/** Replaced after the build by `scripts/build-csp.ts` (same value as `_headers`). */
+const CSP = '__ECAMX_CSP__';
 
 function safeDecode(s: string): string | null {
 	try {
@@ -38,6 +44,14 @@ export default {
 		if (!isPrerender && (request.method === 'GET' || request.method === 'HEAD')) {
 			const url = new URL(request.url);
 			if (url.pathname.startsWith('/live/')) return catchAll(url, env.ASSETS);
+			const st = STATUS.exec(url.pathname);
+			if (st && env.ASSETS && (!st[1] || NETWORK_IDS.has(st[1]))) {
+				const res = st[1]
+					? await renderStatus(st[1], NETWORK_IDS, env.ASSETS, url, CSP)
+					: await renderStatusIndex(NETWORK_IDS, env.ASSETS, url, CSP);
+				// No shell (e.g. during a deploy) → the SSR page below.
+				if (res) return res;
+			}
 			// Same shape Astro matches (trailingSlash: 'always'); anything else
 			// (no slash, extra segments) still goes through Astro.
 			const go = GO.exec(url.pathname);
